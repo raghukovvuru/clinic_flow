@@ -122,7 +122,12 @@ def start_session(
 	else:
 		# Unscheduled — caller provides times and optional capacity
 		session_cap = int(capacity) if capacity else 20
-		first_name = (prac.practitioner_name or "Doctor").split()[0]
+		_honorifics = {"dr", "mr", "ms", "mrs", "prof", "sr", "jr"}
+		_parts = (prac.practitioner_name or "Doctor").split()
+		first_name = next(
+			(p for p in _parts if p.rstrip(".").lower() not in _honorifics),
+			_parts[-1] if _parts else "Doctor",
+		)
 		session_name = f"Unscheduled · {first_name} · {date_str}"
 
 	session_doc = frappe.get_doc({

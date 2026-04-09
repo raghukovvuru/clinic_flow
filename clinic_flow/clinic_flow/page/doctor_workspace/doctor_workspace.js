@@ -47,7 +47,7 @@ function get_workspace_html() {
 			<!-- Patient token banner -->
 			<div id="ws-patient-banner" style="display:none;background:var(--bg-color);border:1px solid var(--border-color);border-radius:6px;padding:12px 16px;margin:12px 0;">
 				<div style="display:flex;align-items:center;gap:16px;">
-					<div id="ws-token-badge" style="font-size:22px;font-weight:700;color:var(--text-on-color);background:var(--primary);padding:6px 14px;border-radius:6px;letter-spacing:1px;"></div>
+					<div id="ws-token-badge" style="font-size:22px;font-weight:700;color:#fff;background:var(--primary);padding:6px 14px;border-radius:6px;letter-spacing:1px;"></div>
 					<div>
 						<div id="ws-patient-name" style="font-size:16px;font-weight:500;"></div>
 						<div id="ws-patient-meta" style="font-size:12px;color:var(--text-muted);margin-top:2px;"></div>
@@ -62,14 +62,15 @@ function get_workspace_html() {
 				<!-- Symptoms -->
 				<div class="ws-section">
 					<div class="ws-section-title">Symptoms / Chief Complaint</div>
-					<textarea id="ws-symptoms" class="form-control" rows="3" placeholder="Enter presenting complaints..."></textarea>
+					<textarea id="ws-symptoms" class="form-control" rows="3" placeholder="Enter presenting complaints..." list="ws-complaint-list"></textarea>
+					<datalist id="ws-complaint-list"></datalist>
 				</div>
 
 				<!-- Diagnosis -->
 				<div class="ws-section">
 					<div class="ws-section-title">Diagnosis</div>
-					<div id="ws-diagnosis-wrapper">
-						<input type="text" id="ws-diagnosis-input" class="form-control" placeholder="Search diagnosis code (ICD-10)...">
+					<div id="ws-diagnosis-wrapper" style="position:relative;">
+						<input type="text" id="ws-diagnosis-input" class="form-control" placeholder="Search diagnosis (ICD-10)..." autocomplete="off">
 						<div id="ws-diagnosis-tags" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;"></div>
 					</div>
 				</div>
@@ -82,29 +83,29 @@ function get_workspace_html() {
 
 				<!-- Medication -->
 				<div class="ws-section">
-					<div class="ws-section-title" style="cursor:pointer;" onclick="ws_toggle_section('medications')">
+					<div class="ws-section-title ws-collapsible" data-section="medications" style="cursor:pointer;">
 						Medication Request <span class="section-toggle">▸</span>
 					</div>
 					<div id="ws-section-medications" style="display:none;">
 						<div id="ws-drug-rows"></div>
-						<button class="btn btn-xs btn-default" onclick="ws_add_drug_row()">+ Add Medication</button>
+						<button class="btn btn-xs btn-default" data-action="add-drug">+ Add Medication</button>
 					</div>
 				</div>
 
-				<!-- Lab Orders -->
+				<!-- Lab / Observation Orders -->
 				<div class="ws-section">
-					<div class="ws-section-title" style="cursor:pointer;" onclick="ws_toggle_section('lab')">
-						Lab Orders <span class="section-toggle">▸</span>
+					<div class="ws-section-title ws-collapsible" data-section="lab" style="cursor:pointer;">
+						Lab / Observation Orders <span class="section-toggle">▸</span>
 					</div>
 					<div id="ws-section-lab" style="display:none;">
 						<div id="ws-lab-rows"></div>
-						<button class="btn btn-xs btn-default" onclick="ws_add_lab_row()">+ Add Lab Order</button>
+						<button class="btn btn-xs btn-default" data-action="add-lab">+ Add Order</button>
 					</div>
 				</div>
 
 				<!-- Referral -->
 				<div class="ws-section">
-					<div class="ws-section-title" style="cursor:pointer;" onclick="ws_toggle_section('referral')">
+					<div class="ws-section-title ws-collapsible" data-section="referral" style="cursor:pointer;">
 						Referral <span class="section-toggle">▸</span>
 					</div>
 					<div id="ws-section-referral" style="display:none;">
@@ -189,6 +190,7 @@ function get_workspace_html() {
 		.clinic-workspace { font-family: var(--font-stack); }
 		.ws-section { margin-bottom:16px; }
 		.ws-section-title { font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;padding:4px 0; }
+		.ws-collapsible:hover { color:var(--text-color); }
 		.summary-section { margin-bottom:10px; }
 		.summary-label { font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px; }
 		.summary-value { font-size:13px;color:var(--text-color); }
@@ -205,6 +207,12 @@ function get_workspace_html() {
 		.badge-prebooked { background:var(--blue-light);color:var(--blue); }
 		.badge-walkin { background:var(--green-light);color:var(--green); }
 		.badge-followup { background:var(--orange-light);color:var(--orange); }
+		.dx-tag { background:var(--blue-light);color:var(--blue);border-radius:12px;padding:2px 8px;font-size:12px;display:inline-flex;align-items:center;gap:4px; }
+		.dx-tag-remove { cursor:pointer;font-weight:700;opacity:.6; }
+		.dx-tag-remove:hover { opacity:1; }
+		#ws-dx-dropdown { position:absolute;z-index:1000;background:var(--modal-bg,#fff);border:1px solid var(--border-color);border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:220px;overflow-y:auto;min-width:260px;top:100%;left:0; }
+		.dx-option { padding:8px 12px;cursor:pointer;font-size:13px; }
+		.dx-option:hover { background:var(--bg-color); }
 	</style>
 	`;
 }
@@ -219,7 +227,10 @@ class DoctorWorkspace {
 			current_entry: null,
 			current_encounter: null,
 			diagnosis_list: [],
+			session_paused: false,
 		};
+		this._queue_poll = null;
+		this._autocomplete_ready = false;
 
 		this._init();
 	}
@@ -264,6 +275,10 @@ class DoctorWorkspace {
 		this._load_queue();
 		this._bind_events();
 		this._subscribe_realtime();
+
+		// Polling fallback — refreshes queue every 15 s in case realtime misses an event
+		if (this._queue_poll) clearInterval(this._queue_poll);
+		this._queue_poll = setInterval(() => this._load_queue(), 15000);
 	}
 
 	_show_start_session_prompt() {
@@ -457,6 +472,40 @@ class DoctorWorkspace {
 		$('#ws-btn-pause').on('click', () => self._pause_session());
 		$('#ws-btn-resume').on('click', () => self._resume_session());
 		$('#ws-btn-end-session').on('click', () => self._end_session());
+
+		// Section toggle — delegate from document so it works regardless of page eval scope
+		$(document).on('click.ws', '.ws-collapsible', function() {
+			const id = $(this).data('section');
+			const section = $(`#ws-section-${id}`);
+			section.toggle();
+			$(this).find('.section-toggle').text(section.is(':visible') ? '▾' : '▸');
+		});
+
+		// Add-row buttons
+		$(document).on('click.ws', '[data-action="add-drug"]', () => self._add_drug_row());
+		$(document).on('click.ws', '[data-action="add-lab"]',  () => self._add_lab_row());
+
+		// Remove individual drug / lab rows
+		$(document).on('click.ws', '[data-action="remove-drug"]', function() {
+			$(this).closest('.drug-row').remove();
+		});
+		$(document).on('click.ws', '[data-action="remove-lab"]', function() {
+			$(this).closest('.lab-row').remove();
+		});
+
+		// Diagnosis tag removal
+		$(document).on('click.ws', '.dx-tag-remove', function() {
+			const idx = parseInt($(this).data('idx'));
+			self.state.diagnosis_list.splice(idx, 1);
+			self._render_diagnosis_tags();
+		});
+
+		// Close diagnosis dropdown when clicking outside
+		$(document).on('click.ws-dx', (e) => {
+			if (!$(e.target).closest('#ws-diagnosis-wrapper').length) {
+				$('#ws-dx-dropdown').remove();
+			}
+		});
 	}
 
 	async _pause_session() {
@@ -548,7 +597,17 @@ class DoctorWorkspace {
 	}
 
 	_reset_workspace() {
-		this.state = { queue_session: null, current_entry: null, current_encounter: null, session_paused: false };
+		if (this._queue_poll) {
+			clearInterval(this._queue_poll);
+			this._queue_poll = null;
+		}
+		this.state = {
+			queue_session: null,
+			current_entry: null,
+			current_encounter: null,
+			diagnosis_list: [],
+			session_paused: false,
+		};
 		$('#ws-session-label').text('No session today');
 		$('#ws-empty-state').html(`
 			<div style="font-size:32px;margin-bottom:12px;">📋</div>
@@ -739,7 +798,6 @@ class DoctorWorkspace {
 			symptoms: $('#ws-symptoms').val(),
 			patient_note: $('#ws-patient-note').val(),
 			diagnosis: this.state.diagnosis_list,
-			// Drug and lab rows collected from dynamic row renderers
 			drug_prescription: this._collect_drug_rows(),
 			lab_test_prescription: this._collect_lab_rows(),
 		};
@@ -749,9 +807,9 @@ class DoctorWorkspace {
 		const rows = [];
 		$('#ws-drug-rows .drug-row').each(function() {
 			rows.push({
-				drug_name: $(this).find('.drug-name').val(),
-				dosage: $(this).find('.drug-dosage').val(),
-				period: $(this).find('.drug-period').val(),
+				drug_name:   $(this).find('.drug-name').val(),
+				dosage:      $(this).find('.drug-dosage').val(),
+				period:      $(this).find('.drug-period').val(),
 				dosage_form: $(this).find('.drug-form').val(),
 			});
 		});
@@ -761,9 +819,7 @@ class DoctorWorkspace {
 	_collect_lab_rows() {
 		const rows = [];
 		$('#ws-lab-rows .lab-row').each(function() {
-			rows.push({
-				lab_test_name: $(this).find('.lab-test-name').val(),
-			});
+			rows.push({ lab_test_name: $(this).find('.lab-test-name').val() });
 		});
 		return rows.filter(r => r.lab_test_name);
 	}
@@ -783,14 +839,14 @@ class DoctorWorkspace {
 		const type_colors = {
 			'EMERGENCY': '#dc3545',
 			'PRE_BOOKED': '#0d6efd',
-			'WALK_IN': '#198754',
-			'FOLLOW_UP': '#fd7e14',
+			'WALK_IN':    '#198754',
+			'FOLLOW_UP':  '#fd7e14',
 		};
 		const type_labels = {
 			'EMERGENCY': 'Emergency',
 			'PRE_BOOKED': 'Pre-booked',
-			'WALK_IN': 'Walk-in',
-			'FOLLOW_UP': 'Follow-up',
+			'WALK_IN':    'Walk-in',
+			'FOLLOW_UP':  'Follow-up',
 		};
 		const color = type_colors[entry.queue_type] || '#6c757d';
 		$('#ws-queue-type-badge')
@@ -806,22 +862,143 @@ class DoctorWorkspace {
 		$('#ws-symptoms').val(encounter.symptoms || '');
 		$('#ws-patient-note').val(encounter.patient_note || '');
 
-		// Render medication rows
+		// Restore diagnosis tags from saved encounter
+		this.state.diagnosis_list = (encounter.diagnosis || [])
+			.map(d => ({ diagnosis: d.diagnosis }))
+			.filter(d => d.diagnosis);
+		this._render_diagnosis_tags();
+
+		// Render medication and lab rows
 		this._render_drug_rows(encounter.drug_prescription || []);
 		this._render_lab_rows(encounter.lab_test_prescription || []);
+
+		// Wire up autocomplete (once per session)
+		if (!this._autocomplete_ready) {
+			this._setup_diagnosis_autocomplete();
+			this._setup_complaint_autocomplete();
+			this._autocomplete_ready = true;
+		}
 	}
 
 	_render_drug_rows(rows) {
-		const container = $('#ws-drug-rows');
-		container.empty();
-		rows.forEach(row => ws_add_drug_row(row));
+		$('#ws-drug-rows').empty();
+		rows.forEach(row => this._add_drug_row(row));
 	}
 
 	_render_lab_rows(rows) {
-		const container = $('#ws-lab-rows');
-		container.empty();
-		rows.forEach(row => ws_add_lab_row(row));
+		$('#ws-lab-rows').empty();
+		rows.forEach(row => this._add_lab_row(row));
 	}
+
+	_add_drug_row(data = {}) {
+		$('#ws-drug-rows').append(`
+			<div class="drug-row" style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:6px;margin-bottom:6px;align-items:center;">
+				<input class="form-control form-control-sm drug-name"   placeholder="Drug name"  value="${data.drug_name   || ''}">
+				<input class="form-control form-control-sm drug-dosage" placeholder="Dosage"     value="${data.dosage      || ''}">
+				<input class="form-control form-control-sm drug-period" placeholder="Duration"   value="${data.period      || ''}">
+				<input class="form-control form-control-sm drug-form"   placeholder="Form"       value="${data.dosage_form || ''}">
+				<button class="btn btn-xs btn-danger" data-action="remove-drug">✕</button>
+			</div>
+		`);
+	}
+
+	_add_lab_row(data = {}) {
+		$('#ws-lab-rows').append(`
+			<div class="lab-row" style="display:flex;gap:6px;margin-bottom:6px;align-items:center;">
+				<input class="form-control form-control-sm lab-test-name" placeholder="Observation Template / Test name" value="${data.lab_test_name || ''}" list="ws-obs-list">
+				<button class="btn btn-xs btn-danger" data-action="remove-lab">✕</button>
+			</div>
+		`);
+	}
+
+	// ── Diagnosis autocomplete ────────────────────────────────────────────────
+
+	_render_diagnosis_tags() {
+		const container = $('#ws-diagnosis-tags');
+		container.empty();
+		this.state.diagnosis_list.forEach((dx, idx) => {
+			container.append(`
+				<span class="dx-tag">
+					${frappe.utils.escape_html(dx.diagnosis)}
+					<span class="dx-tag-remove" data-idx="${idx}" title="Remove">×</span>
+				</span>
+			`);
+		});
+	}
+
+	_setup_diagnosis_autocomplete() {
+		const self = this;
+
+		$('#ws-diagnosis-input').on('keyup', frappe.utils.debounce(async function(e) {
+			if (e.key === 'Escape') {
+				$('#ws-dx-dropdown').remove();
+				return;
+			}
+			if (e.key === 'Enter') return; // handled by click
+
+			const q = $(this).val().trim();
+			if (q.length < 2) {
+				$('#ws-dx-dropdown').remove();
+				return;
+			}
+
+			const r = await frappe.call({
+				method: 'frappe.desk.search.search_link',
+				args: {
+					txt: q,
+					doctype: 'Diagnosis',
+					ignore_user_permissions: 1,
+					reference_doctype: 'Patient Encounter Diagnosis',
+				},
+			});
+
+			$('#ws-dx-dropdown').remove();
+			const results = (r.message || []).slice(0, 8);
+			if (!results.length) return;
+
+			const dropdown = $('<div id="ws-dx-dropdown"></div>');
+			results.forEach(item => {
+				const val = item.value || item;
+				const desc = item.description
+					? `<span style="color:var(--text-muted);font-size:11px;margin-left:6px;">${item.description}</span>`
+					: '';
+				const row = $(`<div class="dx-option">${frappe.utils.escape_html(val)}${desc}</div>`);
+				row.on('click', () => {
+					if (!self.state.diagnosis_list.find(d => d.diagnosis === val)) {
+						self.state.diagnosis_list.push({ diagnosis: val });
+						self._render_diagnosis_tags();
+					}
+					$('#ws-diagnosis-input').val('');
+					$('#ws-dx-dropdown').remove();
+				});
+				dropdown.append(row);
+			});
+			$('#ws-diagnosis-input').after(dropdown);
+		}, 300));
+	}
+
+	// ── Complaint autocomplete (datalist for the symptoms textarea) ───────────
+
+	async _setup_complaint_autocomplete() {
+		try {
+			const r = await frappe.call({
+				method: 'frappe.client.get_list',
+				args: { doctype: 'Complaint', fields: ['name'], limit: 200 },
+			});
+			const items = r.message || [];
+			if (!items.length) return;
+
+			const dl = $('#ws-complaint-list');
+			dl.empty();
+			items.forEach(c => {
+				if (c.name) dl.append(`<option value="${frappe.utils.escape_html(c.name)}">`);
+			});
+		} catch (_) {
+			// Complaint doctype not available — silently skip
+		}
+	}
+
+	// ── Patient summary ───────────────────────────────────────────────────────
 
 	_render_patient_summary(summary) {
 		if (!summary) return;
@@ -837,13 +1014,11 @@ class DoctorWorkspace {
 		$('#sum-queue-type').text(entry?.queue_type?.replace('_', ' ') || '—');
 		$('#sum-age-sex').text(`${demo.age || '?'} yrs · ${demo.sex || '?'}`);
 
-		// Vitals
 		const vitals_str = vitals.bp_systolic
 			? `BP: ${vitals.bp_systolic}/${vitals.bp_diastolic} · Pulse: ${vitals.pulse} · Temp: ${vitals.temperature}°C`
 			: 'No vitals recorded today';
 		$('#sum-vitals').text(vitals_str);
 
-		// Allergies
 		const allergies = summary.allergies || [];
 		$('#sum-allergies').text(
 			allergies.length ? allergies.map(a => a.allergy).join(', ') : 'None recorded'
@@ -852,7 +1027,6 @@ class DoctorWorkspace {
 			$('#sum-allergies').addClass('alert-text');
 		}
 
-		// Active medications
 		const meds = summary.active_medications || [];
 		$('#sum-meds').html(
 			meds.length
@@ -860,13 +1034,11 @@ class DoctorWorkspace {
 				: '<div>None</div>'
 		);
 
-		// Recent diagnoses
 		const dx = summary.recent_diagnoses || [];
 		$('#sum-diagnoses').html(
 			dx.slice(0, 5).map(d => `<div>• ${d.diagnosis}</div>`).join('') || '<div>None</div>'
 		);
 
-		// Fee validity
 		const fv = summary.fee_validity || {};
 		$('#sum-fee-validity').text(
 			fv.has_validity
@@ -874,7 +1046,6 @@ class DoctorWorkspace {
 				: 'No active validity'
 		);
 
-		// Lab results
 		const labs = summary.recent_lab_results || [];
 		$('#sum-lab-results').html(
 			labs.length
@@ -889,46 +1060,27 @@ class DoctorWorkspace {
 		$('#ws-btn-save-draft').prop('disabled', false);
 		$('#ws-btn-submit').prop('disabled', false);
 	}
-
-	_reset_workspace() {
-		this.state.current_entry = null;
-		this.state.current_encounter = null;
-		this.state.diagnosis_list = [];
-
-		$('#ws-patient-banner').hide();
-		$('#ws-encounter-editor').hide();
-		$('#ws-empty-state').show();
-		$('#ws-summary-empty').show();
-		$('#ws-summary-content').hide();
-
-		$('#ws-btn-recall, #ws-btn-skip, #ws-btn-save-draft, #ws-btn-submit').prop('disabled', true);
-
-		this._load_queue();
-	}
 }
 
-// ── Helper functions (module-scope, called from inline onclick) ────────────
-function ws_toggle_section(id) {
-	$(`#ws-section-${id}`).toggle();
-}
-
-function ws_add_drug_row(data = {}) {
-	$('#ws-drug-rows').append(`
-		<div class="drug-row" style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:6px;margin-bottom:6px;align-items:center;">
-			<input class="form-control form-control-sm drug-name" placeholder="Drug name" value="${data.drug_name || ''}">
-			<input class="form-control form-control-sm drug-dosage" placeholder="Dosage" value="${data.dosage || ''}">
-			<input class="form-control form-control-sm drug-period" placeholder="Period" value="${data.period || ''}">
-			<input class="form-control form-control-sm drug-form" placeholder="Form" value="${data.dosage_form || ''}">
-			<button class="btn btn-xs btn-danger" onclick="$(this).closest('.drug-row').remove()">✕</button>
-		</div>
-	`);
-}
-
-function ws_add_lab_row(data = {}) {
-	$('#ws-lab-rows').append(`
-		<div class="lab-row" style="display:flex;gap:6px;margin-bottom:6px;align-items:center;">
-			<input class="form-control form-control-sm lab-test-name" placeholder="Test name / Observation Template" value="${data.lab_test_name || ''}">
-			<button class="btn btn-xs btn-danger" onclick="$(this).closest('.lab-row').remove()">✕</button>
-		</div>
-	`);
-}
+// ── Observation Template datalist (shared, loaded once) ───────────────────
+// Populated lazily when the first lab row is added via the add-lab handler.
+(function _load_obs_templates() {
+	frappe.call({
+		method: 'frappe.client.get_list',
+		args: { doctype: 'Observation Template', fields: ['name'], limit: 500 },
+	}).then(r => {
+		const items = (r && r.message) || [];
+		if (!items.length) return;
+		let dl = document.getElementById('ws-obs-list');
+		if (!dl) {
+			dl = document.createElement('datalist');
+			dl.id = 'ws-obs-list';
+			document.body.appendChild(dl);
+		}
+		items.forEach(t => {
+			const opt = document.createElement('option');
+			opt.value = t.name;
+			dl.appendChild(opt);
+		});
+	}).catch(() => {});
+}());

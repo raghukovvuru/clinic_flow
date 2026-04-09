@@ -123,7 +123,7 @@ def get_next_token(queue_session: str) -> dict | None:
 # ── Realtime broadcast ───────────────────────────────────────────────────────
 
 def _broadcast_queue_update(queue_session: str) -> None:
-	"""Publish realtime event to all dashboard subscribers."""
+	"""Publish realtime event to dashboard subscribers and the practitioner's browser."""
 	session_doc = frappe.get_doc("Queue Session", queue_session)
 	waiting = frappe.get_all(
 		"Queue Entry",
@@ -138,6 +138,17 @@ def _broadcast_queue_update(queue_session: str) -> None:
 		"practitioner": session_doc.practitioner,
 		"dept_abbr": session_doc.dept_abbr,
 	}
+	# Send directly to the practitioner's browser (doctor workspace)
+	practitioner_user = frappe.db.get_value(
+		"Healthcare Practitioner", session_doc.practitioner, "user_id"
+	)
+	if practitioner_user:
+		frappe.publish_realtime(
+			event="queue_update",
+			message=payload,
+			user=practitioner_user,
+		)
+	# Also broadcast to room-based subscribers (TV display board)
 	frappe.publish_realtime(
 		event="queue_update",
 		message=payload,
