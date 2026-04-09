@@ -1,0 +1,208 @@
+{
+ "actions": [],
+ "autoname": "QS-.YYYY.-.#####",
+ "creation": "2026-04-03 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "session_name",
+  "department",
+  "dept_abbr",
+  "practitioner",
+  "session_date",
+  "start_time",
+  "end_time",
+  "status",
+  "session_capacity",
+  "slot_allocation_section",
+  "prebooked_total",
+  "prebooked_used",
+  "prebooked_released",
+  "walkin_total",
+  "walkin_used",
+  "emergency_total",
+  "emergency_used",
+  "counters_section",
+  "total_called",
+  "current_token",
+  "rr_state"
+ ],
+ "fields": [
+  {
+   "fieldname": "session_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Session Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "department",
+   "fieldtype": "Link",
+   "label": "Department",
+   "options": "Medical Department"
+  },
+  {
+   "fieldname": "dept_abbr",
+   "fieldtype": "Data",
+   "label": "Department Abbreviation",
+   "search_index": 1
+  },
+  {
+   "fieldname": "practitioner",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Practitioner",
+   "options": "Healthcare Practitioner",
+   "reqd": 1
+  },
+  {
+   "default": "Today",
+   "fieldname": "session_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Session Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "start_time",
+   "fieldtype": "Time",
+   "label": "Start Time",
+   "reqd": 1
+  },
+  {
+   "fieldname": "end_time",
+   "fieldtype": "Time",
+   "label": "End Time",
+   "reqd": 1
+  },
+  {
+   "default": "Scheduled",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Scheduled\nActive\nPaused\nCompleted\nCancelled"
+  },
+  {
+   "fieldname": "session_capacity",
+   "fieldtype": "Int",
+   "label": "Session Capacity (total patients)",
+   "reqd": 1,
+   "description": "How many patients this session can handle. Slot totals are derived from this number × the % settings in Slot Partition Config."
+  },
+  {
+   "fieldname": "slot_allocation_section",
+   "fieldtype": "Section Break",
+   "label": "Slot Allocation (auto-calculated from capacity)"
+  },
+  {
+   "fieldname": "prebooked_total",
+   "fieldtype": "Int",
+   "label": "Pre-Booked Slots Total"
+  },
+  {
+   "fieldname": "prebooked_used",
+   "fieldtype": "Int",
+   "label": "Pre-Booked Used",
+   "read_only": 1
+  },
+  {
+   "fieldname": "prebooked_released",
+   "fieldtype": "Check",
+   "label": "Pre-Booked Released",
+   "read_only": 1
+  },
+  {
+   "fieldname": "walkin_total",
+   "fieldtype": "Int",
+   "label": "Walk-In Slots Total"
+  },
+  {
+   "fieldname": "walkin_used",
+   "fieldtype": "Int",
+   "label": "Walk-In Used",
+   "read_only": 1
+  },
+  {
+   "fieldname": "emergency_total",
+   "fieldtype": "Int",
+   "label": "Emergency Slots Total"
+  },
+  {
+   "fieldname": "emergency_used",
+   "fieldtype": "Int",
+   "label": "Emergency Used",
+   "read_only": 1
+  },
+  {
+   "fieldname": "counters_section",
+   "fieldtype": "Section Break",
+   "label": "Counters"
+  },
+  {
+   "default": "0",
+   "fieldname": "total_called",
+   "fieldtype": "Int",
+   "label": "Total Called",
+   "read_only": 1
+  },
+  {
+   "fieldname": "current_token",
+   "fieldtype": "Data",
+   "label": "Current Token",
+   "read_only": 1
+  },
+  {
+   "fieldname": "rr_state",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "label": "Round-Robin State",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-04-03 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Clinic Flow",
+ "name": "Queue Session",
+ "naming_rule": "Expression (make_autoname)",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Queue Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Queue Viewer",
+   "share": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

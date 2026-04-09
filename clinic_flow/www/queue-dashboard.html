@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OPD Queue Display</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+        --bg:          #06060f;
+        --surface:     #0e0e1f;
+        --surface-2:   #161628;
+        --border:      #1f1f3a;
+        --border-glow: #2d2d5e;
+        --text-primary:   #eeeef5;
+        --text-secondary: #8888aa;
+        --text-muted:     #44445a;
+        --accent:         #7c6aff;
+        --accent-glow:    rgba(124,106,255,0.15);
+        --green:          #22d998;
+        --green-dim:      #0a3d2a;
+        --blue:           #4da6ff;
+        --blue-dim:       #0a1f3d;
+        --amber:          #ffb340;
+        --amber-dim:      #3d2500;
+        --red:            #ff5f5f;
+        --red-dim:        #3d0a0a;
+        --radius:         12px;
+    }
+
+    html, body { width:100%; height:100%; overflow:hidden; }
+
+    body {
+        background: var(--bg);
+        color: var(--text-primary);
+        font-family: 'DM Sans', system-ui, sans-serif;
+        display: grid;
+        grid-template-rows: 60px 1fr 72px;
+        grid-template-areas: "header" "main" "footer";
+    }
+
+    /* ── Header ── */
+    .hdr {
+        grid-area: header;
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0 32px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        z-index: 10;
+    }
+    .hdr-left  { display:flex; align-items:center; gap:12px; }
+    .hdr-pulse {
+        width:9px; height:9px; border-radius:50%;
+        background: var(--green);
+        box-shadow: 0 0 0 0 rgba(34,217,152,0.4);
+        animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+        0%  { box-shadow:0 0 0 0   rgba(34,217,152,0.5); }
+        70% { box-shadow:0 0 0 9px rgba(34,217,152,0); }
+        100%{ box-shadow:0 0 0 0   rgba(34,217,152,0); }
+    }
+    .hdr-title { font-size:14px; font-weight:600; letter-spacing:.3px; }
+    .hdr-dept  {
+        font-size:12px; color:var(--text-secondary);
+        background:var(--surface-2); border:1px solid var(--border);
+        padding:2px 11px; border-radius:20px;
+    }
+    .hdr-time  {
+        font-family:'DM Mono',monospace; font-size:20px; font-weight:500;
+        letter-spacing:2px; font-variant-numeric:tabular-nums;
+    }
+
+    /* ── Main area ── */
+    .main-area {
+        grid-area: main;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        padding: 20px 24px 12px;
+    }
+
+    /* ── Empty state ── */
+    .empty-state {
+        flex:1; display:flex; flex-direction:column;
+        align-items:center; justify-content:center;
+        gap:10px; color:var(--text-muted);
+    }
+    .empty-state-icon { font-size:44px; opacity:.25; }
+    .empty-state-text { font-size:18px; font-weight:300; }
+    .empty-state-sub  { font-size:13px; opacity:.5; }
+
+    /* ── Carousel ── */
+    .carousel-wrap {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        gap: 10px;
+    }
+
+    .carousel-viewport {
+        flex: 1;
+        overflow: hidden;
+        position: relative;
+    }
+
+    /* Always shows 2 side-by-side; .single = only 1 doctor */
+    .cards-pair {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        height: 100%;
+    }
+    .cards-pair.single {
+        grid-template-columns: minmax(0, 640px);
+        justify-content: center;
+    }
+
+    /* Slide animations */
+    @keyframes slideInRight {
+        from { opacity:0; transform:translateX(56px); }
+        to   { opacity:1; transform:translateX(0); }
+    }
+    @keyframes slideInLeft {
+        from { opacity:0; transform:translateX(-56px); }
+        to   { opacity:1; transform:translateX(0); }
+    }
+    .cards-pair.anim-forward { animation: slideInRight 0.45s cubic-bezier(0.25,0.46,0.45,0.94) both; }
+    .cards-pair.anim-back    { animation: slideInLeft  0.45s cubic-bezier(0.25,0.46,0.45,0.94) both; }
+    .cards-pair.anim-jump    { animation: slideInLeft  0.32s cubic-bezier(0.22,1,0.36,1)       both; }
+
+    /* ── Carousel footer ── */
+    .carousel-footer {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5px;
+        flex-shrink: 0;
+        padding-bottom: 2px;
+    }
+    .carousel-dots {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        min-height: 8px;
+    }
+    .carousel-dot {
+        height: 6px; width: 6px;
+        border-radius: 3px;
+        background: var(--border);
+        transition: width 0.3s ease, background 0.3s ease;
+    }
+    .carousel-dot.active {
+        width: 22px;
+        background: var(--accent);
+    }
+    .carousel-progress {
+        width: 140px; height: 2px;
+        background: var(--border);
+        border-radius: 1px;
+        overflow: hidden;
+    }
+    .carousel-progress-bar {
+        height: 100%;
+        background: var(--accent);
+        opacity: 0.55;
+        width: 0%;
+    }
+
+    /* ── Doctor card ── */
+    .doc-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        transition: border-color .3s, opacity .3s;
+        min-height: 0;
+    }
+    .doc-card.is-paused   { opacity:.55; border-color: var(--amber); }
+    .doc-card.is-emergency { border-color: var(--red); }
+
+    /* Card header */
+    .card-header {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 16px 18px 14px;
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+    }
+    .card-avatar {
+        width: 60px; height: 60px; border-radius: 50%;
+        background: var(--surface-2);
+        border: 2px solid var(--border-glow);
+        flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 20px; font-weight: 600; color: var(--accent);
+        overflow: hidden;
+    }
+    .card-avatar img { width:100%; height:100%; object-fit:cover; border-radius:50%; }
+    .card-identity { flex: 1; min-width: 0; }
+    .card-name {
+        font-size: clamp(15px, 1.6vw, 20px);
+        font-weight: 700;
+        letter-spacing: .1px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .card-unit {
+        display: inline-block;
+        margin-top: 5px;
+        font-size: 11px;
+        color: rgba(238,238,245,0.75);
+        background: var(--surface-2);
+        border: 1px solid var(--border-glow);
+        padding: 2px 9px;
+        border-radius: 20px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        max-width: 100%;
+    }
+    .card-status-pill {
+        font-size: 10px; font-weight: 600; letter-spacing: .5px;
+        padding: 2px 9px; border-radius: 10px;
+        text-transform: uppercase; flex-shrink: 0;
+    }
+    .pill-active    { background: var(--green-dim);  color: var(--green);  }
+    .pill-paused    { background: var(--amber-dim);  color: var(--amber);  }
+    .pill-ready     { background: var(--surface-2);  color: var(--text-secondary); border: 1px solid var(--border); }
+    .pill-emergency { background: var(--red-dim);    color: var(--red);    }
+
+    /* Now serving */
+    .card-serving {
+        padding: 16px;
+        display: flex; flex-direction: column; align-items: center; gap: 8px;
+        background: var(--surface-2);
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+    }
+    .serving-label {
+        font-size: 9px; font-weight: 600; text-transform: uppercase;
+        letter-spacing: 3px; color: var(--text-muted);
+    }
+    .serving-token-box {
+        border: 2px solid var(--border-glow);
+        border-radius: 10px;
+        padding: 8px 20px;
+        background: var(--surface);
+        text-align: center;
+        min-width: 120px;
+        transition: border-color .3s;
+    }
+    .doc-card.is-paused    .serving-token-box { border-color: var(--amber); }
+    .doc-card.is-emergency .serving-token-box { border-color: var(--red); }
+    .serving-token {
+        font-family: 'DM Mono', monospace;
+        font-size: clamp(24px, 3.2vw, 48px);
+        font-weight: 500;
+        letter-spacing: 6px;
+        color: var(--text-primary);
+        line-height: 1;
+        transition: color .3s;
+    }
+    .serving-token.flash-in {
+        animation: token-appear .4s cubic-bezier(.22,1,.36,1) both;
+    }
+    @keyframes token-appear {
+        from { opacity:0; transform:translateY(12px) scale(.95); }
+        to   { opacity:1; transform:none; }
+    }
+    .doc-card.is-emergency .serving-token { color: var(--red); }
+    .doc-card.is-paused    .serving-token { color: var(--amber); opacity:.7; }
+
+    .serving-type-badge {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 3px 12px; border-radius: 20px;
+        font-size: 11px; font-weight: 500; letter-spacing: .3px;
+        border: 1px solid transparent;
+    }
+    .badge-dot-sm { width:6px; height:6px; border-radius:50%; }
+    .badge-emergency { background:var(--red-dim);   color:var(--red);   border-color:rgba(255,95,95,.25); }
+    .badge-prebooked { background:var(--blue-dim);  color:var(--blue);  border-color:rgba(77,166,255,.25); }
+    .badge-walkin    { background:var(--green-dim); color:var(--green); border-color:rgba(34,217,152,.25); }
+    .badge-followup  { background:var(--amber-dim); color:var(--amber); border-color:rgba(255,179,64,.25); }
+    .badge-ready     { background:var(--surface);   color:var(--text-muted); border-color:var(--border); }
+    .badge-paused    { background:var(--amber-dim); color:var(--amber); border-color:rgba(255,179,64,.4); }
+    .dot-emergency { background:var(--red); }
+    .dot-prebooked { background:var(--blue); }
+    .dot-walkin    { background:var(--green); }
+    .dot-followup  { background:var(--amber); }
+
+    /* Next up */
+    .card-next {
+        padding: 12px 14px;
+        display: flex; flex-direction: column; gap: 7px;
+        flex: 1; min-height: 0; overflow: hidden;
+    }
+    .next-label-sm {
+        font-size: 9px; font-weight: 600; text-transform: uppercase;
+        letter-spacing: 3px; color: var(--text-muted); margin-bottom: 2px;
+        flex-shrink: 0;
+    }
+    .next-item {
+        display: flex; align-items: center; gap: 10px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 9px 12px;
+        flex-shrink: 0;
+    }
+    .next-item-token {
+        font-family: 'DM Mono', monospace;
+        font-size: clamp(15px, 1.6vw, 20px);
+        font-weight: 500; letter-spacing: 1px;
+        white-space: nowrap;
+    }
+    .next-item-name {
+        font-size: 13px;
+        color: var(--text-secondary);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        flex: 1;
+    }
+    .next-item-badge {
+        font-size: 10px; font-weight: 600; padding: 3px 9px;
+        border-radius: 10px; flex-shrink: 0;
+    }
+    .nb-emergency { background:var(--red-dim);   color:var(--red); }
+    .nb-prebooked { background:var(--blue-dim);  color:var(--blue); }
+    .nb-walkin    { background:var(--green-dim); color:var(--green); }
+    .nb-followup  { background:var(--amber-dim); color:var(--amber); }
+
+    /* ── Emergency overlay ── */
+    .emg-overlay {
+        position:fixed; inset:0; pointer-events:none; z-index:100;
+        border:3px solid var(--red); opacity:0;
+    }
+    .emg-overlay.flash { animation: border-flash 1.2s ease-in-out 3 forwards; }
+    @keyframes border-flash { 0%,100%{opacity:0;} 50%{opacity:1;} }
+
+    /* ── Footer ── */
+    .footer {
+        grid-area: footer;
+        display:flex; align-items:center; justify-content:space-between;
+        padding: 0 32px;
+        border-top: 1px solid var(--border);
+        background: var(--surface);
+    }
+    .footer-msg    { font-size:13px; color:var(--text-muted); }
+    .footer-ticker { font-size:11px; color:var(--text-muted); font-family:'DM Mono',monospace; }
+
+    /* TV scanline texture */
+    body::after {
+        content:''; position:fixed; inset:0;
+        background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.03) 2px,rgba(0,0,0,.03) 4px);
+        pointer-events:none; z-index:200;
+    }
+    </style>
+</head>
+<body>
+
+<div class="emg-overlay" id="emg-overlay"></div>
+
+<header class="hdr">
+    <div class="hdr-left">
+        <div class="hdr-pulse" id="hdr-pulse"></div>
+        <span class="hdr-title">OPD Queue</span>
+        <span class="hdr-dept" id="hdr-dept">All Departments</span>
+    </div>
+    <div class="hdr-time" id="hdr-time">00:00</div>
+</header>
+
+<div class="main-area" id="main-area">
+    <div class="empty-state" id="empty-state">
+        <div class="empty-state-icon">⏳</div>
+        <div class="empty-state-text" id="empty-text">Waiting for queue to start</div>
+        <div class="empty-state-sub"  id="empty-sub"></div>
+    </div>
+    <div class="carousel-wrap" id="carousel-wrap" style="display:none;">
+        <div class="carousel-viewport">
+            <div class="cards-pair" id="cards-pair"></div>
+        </div>
+        <div class="carousel-footer">
+            <div class="carousel-dots" id="carousel-dots"></div>
+            <div class="carousel-progress" id="carousel-progress" style="display:none;">
+                <div class="carousel-progress-bar" id="progress-bar"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<footer class="footer">
+    <span class="footer-msg"    id="footer-msg">Please wait for your token number to be called</span>
+    <span class="footer-ticker" id="footer-ticker">—</span>
+</footer>
+
+<script>
+(function () {
+    'use strict';
+
+    /* ── URL params ── */
+    const params = new URLSearchParams(window.location.search);
+    const dept   = params.get('dept') || 'all';
+    document.getElementById('hdr-dept').textContent =
+        dept === 'all' ? 'All Departments' : dept.toUpperCase();
+
+    /* ── Clock ── */
+    function tick() {
+        const n = new Date(), p = v => String(v).padStart(2,'0');
+        document.getElementById('hdr-time').textContent      = p(n.getHours())+':'+p(n.getMinutes());
+        document.getElementById('footer-ticker').textContent = p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds());
+    }
+    tick(); setInterval(tick, 1000);
+
+    /* ── Type config ── */
+    const TC = {
+        EMERGENCY:  { label:'Emergency',  badge:'badge-emergency', dot:'dot-emergency', nb:'nb-emergency' },
+        PRE_BOOKED: { label:'Pre-booked', badge:'badge-prebooked', dot:'dot-prebooked', nb:'nb-prebooked' },
+        WALK_IN:    { label:'Walk-in',    badge:'badge-walkin',    dot:'dot-walkin',    nb:'nb-walkin'    },
+        FOLLOW_UP:  { label:'Follow-up',  badge:'badge-followup',  dot:'dot-followup',  nb:'nb-followup'  },
+    };
+    function tc(t) { return TC[t] || TC.WALK_IN; }
+
+    /* ── Helpers ── */
+    function partialName(full) {
+        if (!full) return '';
+        const parts = full.trim().split(/\s+/);
+        if (parts.length === 1) return parts[0];
+        return parts[0] + ' ' + parts[parts.length - 1][0] + '.';
+    }
+
+    function initials(name) {
+        const words = (name || '').replace(/^Dr\.?\s*/i,'').trim().split(/\s+/);
+        return words.slice(0,2).map(w => w[0] || '').join('').toUpperCase() || '?';
+    }
+
+    function findSession(arr, sessionId) {
+        for (var i = 0; i < arr.length; i++) {
+            if (arr[i].session === sessionId) return arr[i];
+        }
+        return null;
+    }
+
+    /* ── Emergency alert ── */
+    function triggerEmergencyAlert() {
+        const el = document.getElementById('emg-overlay');
+        el.classList.remove('flash');
+        void el.offsetWidth;
+        el.classList.add('flash');
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            [880,1100,880].forEach(function(freq,i){
+                const osc=ctx.createOscillator(), g=ctx.createGain();
+                osc.connect(g); g.connect(ctx.destination);
+                osc.frequency.value=freq;
+                g.gain.setValueAtTime(.3, ctx.currentTime+i*.22);
+                g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime+i*.22+.18);
+                osc.start(ctx.currentTime+i*.22); osc.stop(ctx.currentTime+i*.22+.2);
+            });
+        } catch(e) {}
+    }
+
+    /* ── Build one doctor card ── */
+    function buildCard(s) {
+        const isPaused    = s.session_status === 'Paused';
+        const isEmergency = !isPaused && s.current_queue_type === 'EMERGENCY';
+        const hasToken    = !isPaused && !!s.current_token;
+
+        const card = document.createElement('div');
+        card.className = 'doc-card' +
+            (isPaused    ? ' is-paused'    : '') +
+            (isEmergency ? ' is-emergency' : '');
+        card.dataset.session = s.session;
+
+        const avatarEl = s.practitioner_image
+            ? `<div class="card-avatar"><img src="${s.practitioner_image}" alt=""></div>`
+            : `<div class="card-avatar">${initials(s.practitioner_name)}</div>`;
+
+        const statusPill = isPaused
+            ? `<span class="card-status-pill pill-paused">Away</span>`
+            : isEmergency
+            ? `<span class="card-status-pill pill-emergency">Emergency</span>`
+            : hasToken
+            ? `<span class="card-status-pill pill-active">Active</span>`
+            : `<span class="card-status-pill pill-ready">Ready</span>`;
+
+        const unitText = s.service_unit
+            ? s.service_unit.replace(/\s*-\s*[A-Z]+$/, '')
+            : '';
+
+        card.innerHTML =
+            `<div class="card-header">
+                ${avatarEl}
+                <div class="card-identity">
+                    <div class="card-name">${s.practitioner_name || s.practitioner}</div>
+                    ${unitText ? `<div class="card-unit">${unitText}</div>` : ''}
+                </div>
+                ${statusPill}
+            </div>
+            <div class="card-serving">
+                <div class="serving-label">${isPaused ? 'Unavailable' : 'Now Serving'}</div>
+                <div class="serving-token-box">
+                    <div class="serving-token${hasToken ? ' flash-in' : ''}">${
+                        isPaused ? '—' : (s.current_token || '—')
+                    }</div>
+                </div>
+                ${buildServingBadge(s, isPaused, hasToken)}
+            </div>
+            <div class="card-next">
+                <div class="next-label-sm">Up Next</div>
+                ${buildNextItems(s.next_tokens || [])}
+            </div>`;
+
+        return card;
+    }
+
+    function buildServingBadge(s, isPaused, hasToken) {
+        if (isPaused) {
+            return `<span class="serving-type-badge badge-paused">
+                        <span class="badge-dot-sm" style="background:var(--amber)"></span>
+                        Temporarily Unavailable
+                    </span>`;
+        }
+        if (!hasToken) {
+            return `<span class="serving-type-badge badge-ready">
+                        <span class="badge-dot-sm" style="background:var(--text-muted)"></span>
+                        Ready
+                    </span>`;
+        }
+        const cfg = tc(s.current_queue_type);
+        return `<span class="serving-type-badge ${cfg.badge}">
+                    <span class="badge-dot-sm ${cfg.dot}"></span>
+                    ${cfg.label}
+                </span>`;
+    }
+
+    function buildNextItems(tokens) {
+        if (!tokens.length) {
+            return `<div style="font-size:11px;color:var(--text-muted);padding:4px 0;">Queue is empty</div>`;
+        }
+        return tokens.slice(0,3).map(function(t) {
+            const cfg = tc(t.queue_type);
+            return `<div class="next-item">
+                        <span class="next-item-token">${t.token}</span>
+                        <span class="next-item-name">${partialName(t.patient_name)}</span>
+                        <span class="next-item-badge ${cfg.nb}">${cfg.label}</span>
+                    </div>`;
+        }).join('');
+    }
+
+    /* ══════════════════════════════════════════
+       CAROUSEL STATE
+       ══════════════════════════════════════════ */
+    var allSessions   = [];   // sorted active/paused doctors
+    var currentPage   = 0;
+    var carouselTimer = null;
+    var CAROUSEL_MS   = 8000;
+
+    function totalPages() {
+        return Math.max(1, Math.ceil(allSessions.length / 2));
+    }
+
+    /*
+     * Sort order:
+     *   1. Active before Paused
+     *   2. Among Active: most recently called first (last_called_at desc)
+     *   3. Tie-break: fewest waiting = busiest queue (needs attention soonest)
+     */
+    function sortSessions(sessions) {
+        return sessions.slice().sort(function(a, b) {
+            var pa = a.session_status === 'Active' ? 0 : 1;
+            var pb = b.session_status === 'Active' ? 0 : 1;
+            if (pa !== pb) return pa - pb;
+            var ta = a.last_called_at ? new Date(a.last_called_at).getTime() : 0;
+            var tb = b.last_called_at ? new Date(b.last_called_at).getTime() : 0;
+            if (ta !== tb) return tb - ta;
+            return (a.waiting_count || 0) - (b.waiting_count || 0);
+        });
+    }
+
+    /* ── Navigate to a carousel page ── */
+    function goToPage(page, anim) {
+        currentPage = Math.max(0, Math.min(page, totalPages() - 1));
+        var pair = document.getElementById('cards-pair');
+        renderPair(pair, anim);
+        updateDots();
+        resetCarouselTimer();
+    }
+
+    function renderPair(pair, anim) {
+        var idx    = currentPage * 2;
+        var s1     = allSessions[idx];
+        var s2     = allSessions[idx + 1];
+        var single = s1 && !s2;
+
+        pair.className = 'cards-pair' + (single ? ' single' : '');
+        void pair.offsetWidth;          // force reflow so animation re-triggers
+        if (anim) pair.classList.add('anim-' + anim);
+
+        pair.innerHTML = '';
+        if (s1) pair.appendChild(buildCard(s1));
+        if (s2) pair.appendChild(buildCard(s2));
+    }
+
+    function updateDots() {
+        var dotsEl = document.getElementById('carousel-dots');
+        var progEl = document.getElementById('carousel-progress');
+        if (!dotsEl) return;
+
+        var pages = totalPages();
+        if (pages <= 1) {
+            dotsEl.innerHTML = '';
+            if (progEl) progEl.style.display = 'none';
+            return;
+        }
+
+        var html = '';
+        for (var i = 0; i < pages; i++) {
+            html += '<div class="carousel-dot' + (i === currentPage ? ' active' : '') + '"></div>';
+        }
+        dotsEl.innerHTML = html;
+
+        if (progEl) {
+            progEl.style.display = '';
+            startProgress();
+        }
+    }
+
+    function startProgress() {
+        var bar = document.getElementById('progress-bar');
+        if (!bar) return;
+        bar.style.transition = 'none';
+        bar.style.width = '0%';
+        void bar.offsetWidth;
+        bar.style.transition = 'width ' + (CAROUSEL_MS / 1000) + 's linear';
+        bar.style.width = '100%';
+    }
+
+    function stopProgress() {
+        var bar = document.getElementById('progress-bar');
+        if (!bar) return;
+        bar.style.transition = 'none';
+        bar.style.width = '0%';
+    }
+
+    function resetCarouselTimer() {
+        if (carouselTimer) { clearInterval(carouselTimer); carouselTimer = null; }
+        if (allSessions.length <= 2) { stopProgress(); return; }
+        carouselTimer = setInterval(function() {
+            goToPage((currentPage + 1) % totalPages(), 'forward');
+        }, CAROUSEL_MS);
+    }
+
+    /* ── Empty state ── */
+    function showEmpty(text, sub) {
+        document.getElementById('carousel-wrap').style.display = 'none';
+        var es = document.getElementById('empty-state');
+        es.style.display = 'flex';
+        document.getElementById('empty-text').textContent = text || 'Waiting for queue to start';
+        document.getElementById('empty-sub').textContent  = sub  || '';
+        document.getElementById('footer-msg').textContent = 'Please wait for your token number to be called';
+        if (carouselTimer) { clearInterval(carouselTimer); carouselTimer = null; }
+        stopProgress();
+    }
+
+    /* ── Main update handler ── */
+    var lastEmergencyToken = null;
+
+    function handleQueueUpdate(data) {
+        if (!data.sessions || !data.sessions.length) {
+            showEmpty('Waiting for queue to start');
+            return;
+        }
+
+        var sorted = sortSessions(data.sessions);
+
+        /*
+         * Detect a newly called token on any session.
+         * We compare incoming current_token vs what we last knew.
+         * We pick the first match in priority order (sorted[0] is highest priority).
+         */
+        var newCallSession = null;
+        for (var i = 0; i < sorted.length; i++) {
+            var s    = sorted[i];
+            var prev = findSession(allSessions, s.session);
+            if (s.current_token && (!prev || s.current_token !== prev.current_token)) {
+                newCallSession = s;
+                break;
+            }
+        }
+
+        allSessions = sorted;
+
+        /* Clamp page if sessions list shrank */
+        if (currentPage >= totalPages()) currentPage = 0;
+
+        /* Show carousel */
+        document.getElementById('empty-state').style.display = 'none';
+        document.getElementById('carousel-wrap').style.display = 'flex';
+        document.getElementById('footer-msg').textContent = 'Please wait for your token number to be called';
+
+        if (newCallSession) {
+            /*
+             * A doctor just called a token.
+             * After sort, that doctor is at allSessions[0] (most-recently-called first).
+             * Jump carousel to page 0 so the patient immediately sees their token.
+             */
+            goToPage(0, 'jump');
+
+            /* Emergency alert (once per new emergency token) */
+            if (newCallSession.current_queue_type === 'EMERGENCY' &&
+                newCallSession.current_token !== lastEmergencyToken) {
+                lastEmergencyToken = newCallSession.current_token;
+                triggerEmergencyAlert();
+            }
+        } else {
+            /* Silent refresh: update current page content without animation */
+            var pair = document.getElementById('cards-pair');
+            if (pair) renderPair(pair, null);
+            updateDots();
+            /* Start carousel timer on very first load if needed */
+            if (!carouselTimer && allSessions.length > 2) resetCarouselTimer();
+        }
+    }
+
+    function handleSessionStatus() { poll(); }
+
+    function handleRecall(data) {
+        var selector = data && data.queue_session
+            ? '.doc-card[data-session="' + data.queue_session + '"]'
+            : '.doc-card[data-session]';
+        var card = document.querySelector(selector);
+        if (!card) return;
+        var tokenEl = card.querySelector('.serving-token');
+        if (tokenEl) {
+            tokenEl.style.opacity = '.3';
+            setTimeout(function(){ tokenEl.style.opacity = '1'; }, 350);
+        }
+    }
+
+    /* ── Polling ── */
+    var POLL_MS = 6000, pollTimer = null;
+
+    function poll() {
+        fetch('/api/method/clinic_flow.api.queue.get_queue_state_for_display'
+              + '?dept=' + encodeURIComponent(dept), { credentials:'same-origin' })
+            .then(function(r){ return r.json(); })
+            .then(function(r){ if (r.message) handleQueueUpdate(r.message); })
+            .catch(function(){});
+    }
+
+    function startPolling() { poll(); pollTimer = setInterval(poll, POLL_MS); }
+
+    /* ── Realtime upgrade (if frappe.js available) ── */
+    function tryRealtime() {
+        if (typeof frappe === 'undefined' || !frappe.realtime) return;
+        clearInterval(pollTimer);
+        frappe.realtime.on('queue_update',   handleQueueUpdate);
+        frappe.realtime.on('session_status', handleSessionStatus);
+        frappe.realtime.on('recall_patient', handleRecall);
+        poll();
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        startPolling();
+        setTimeout(tryRealtime, 2000);
+    });
+
+})();
+</script>
+</body>
+</html>

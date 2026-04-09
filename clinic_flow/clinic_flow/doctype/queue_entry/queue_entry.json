@@ -1,0 +1,216 @@
+{
+ "actions": [],
+ "autoname": "QE-.YYYY.-.#####",
+ "creation": "2026-04-03 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "token",
+  "queue_session",
+  "patient",
+  "patient_name",
+  "appointment",
+  "practitioner",
+  "department",
+  "dept_abbr",
+  "queue_type",
+  "status",
+  "queue_position",
+  "called_at",
+  "seen_at",
+  "done_at",
+  "wait_minutes",
+  "encounter_link_section",
+  "patient_encounter",
+  "issue_metadata_section",
+  "issued_by",
+  "issued_by_role",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "token",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Token",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "queue_session",
+   "fieldtype": "Link",
+   "label": "Queue Session",
+   "options": "Queue Session",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "patient",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Patient",
+   "options": "Patient",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "patient.patient_name",
+   "fieldname": "patient_name",
+   "fieldtype": "Data",
+   "label": "Patient Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "appointment",
+   "fieldtype": "Link",
+   "label": "Appointment",
+   "options": "Patient Appointment"
+  },
+  {
+   "fieldname": "practitioner",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Practitioner",
+   "options": "Healthcare Practitioner"
+  },
+  {
+   "fieldname": "department",
+   "fieldtype": "Link",
+   "label": "Department",
+   "options": "Medical Department"
+  },
+  {
+   "fieldname": "dept_abbr",
+   "fieldtype": "Data",
+   "label": "Dept Abbreviation",
+   "search_index": 1
+  },
+  {
+   "fieldname": "queue_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Queue Type",
+   "options": "PRE_BOOKED\nWALK_IN\nEMERGENCY\nFOLLOW_UP",
+   "reqd": 1
+  },
+  {
+   "default": "Waiting",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Waiting\nCalled\nWith Doctor\nDone\nSkipped\nNo Show"
+  },
+  {
+   "fieldname": "queue_position",
+   "fieldtype": "Int",
+   "label": "Queue Position",
+   "search_index": 1
+  },
+  {
+   "fieldname": "called_at",
+   "fieldtype": "Datetime",
+   "label": "Called At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "seen_at",
+   "fieldtype": "Datetime",
+   "label": "Seen At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "done_at",
+   "fieldtype": "Datetime",
+   "label": "Done At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "wait_minutes",
+   "fieldtype": "Int",
+   "label": "Wait Minutes",
+   "read_only": 1
+  },
+  {
+   "fieldname": "encounter_link_section",
+   "fieldtype": "Section Break",
+   "label": "Encounter Link"
+  },
+  {
+   "fieldname": "patient_encounter",
+   "fieldtype": "Link",
+   "label": "Patient Encounter",
+   "options": "Patient Encounter",
+   "read_only": 1
+  },
+  {
+   "fieldname": "issue_metadata_section",
+   "fieldtype": "Section Break",
+   "label": "Issue Metadata"
+  },
+  {
+   "default": "__user",
+   "fieldname": "issued_by",
+   "fieldtype": "Link",
+   "label": "Issued By",
+   "options": "User"
+  },
+  {
+   "fieldname": "issued_by_role",
+   "fieldtype": "Select",
+   "label": "Issued By Role",
+   "options": "Reception\nSystem\nQueue Manager"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "links": [],
+ "modified": "2026-04-03 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Clinic Flow",
+ "name": "Queue Entry",
+ "naming_rule": "Expression (make_autoname)",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Queue Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Queue Viewer",
+   "share": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

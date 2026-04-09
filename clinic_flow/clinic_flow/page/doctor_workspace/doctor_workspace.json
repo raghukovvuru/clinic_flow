@@ -1,0 +1,16 @@
+{
+ "creation": "2026-04-04 00:00:00.000000",
+ "doctype": "Page",
+ "module": "Clinic Flow",
+ "name": "doctor-workspace",
+ "page_name": "doctor-workspace",
+ "standard": "Yes",
+ "system_page": 0,
+ "title": "Doctor Workspace",
+ "roles": [
+  {"role": "Healthcare Practitioner"},
+  {"role": "Physician"},
+  {"role": "System Manager"},
+  {"role": "Queue Manager"}
+ ]
+}

@@ -1,0 +1,129 @@
+{
+ "actions": [],
+ "creation": "2026-04-03 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "default_slot_allocation_section",
+  "prebooked_pct",
+  "walkin_pct",
+  "followup_pct",
+  "dynamic_release_section",
+  "release_minutes_before",
+  "priority_ratio_section",
+  "weight_prebooked",
+  "weight_walkin",
+  "weight_followup",
+  "after_hours_section",
+  "after_session_action"
+ ],
+ "fields": [
+  {
+   "fieldname": "default_slot_allocation_section",
+   "fieldtype": "Section Break",
+   "label": "Default Slot Allocation (% of Session Capacity)",
+   "description": "Set how each slot type gets a share of the doctor's total session capacity. Emergency slots are unlimited — they jump the queue without consuming a pre-allocated share."
+  },
+  {
+   "default": "60",
+   "fieldname": "prebooked_pct",
+   "fieldtype": "Int",
+   "label": "Pre-Booked %",
+   "description": "% of session capacity reserved for advance bookings (e.g. 60 means 60% of total slots)"
+  },
+  {
+   "default": "30",
+   "fieldname": "walkin_pct",
+   "fieldtype": "Int",
+   "label": "Walk-In %",
+   "description": "% of session capacity reserved for walk-in patients"
+  },
+  {
+   "default": "10",
+   "fieldname": "followup_pct",
+   "fieldtype": "Int",
+   "label": "Follow-Up %",
+   "description": "% of session capacity reserved for follow-up patients"
+  },
+  {
+   "fieldname": "dynamic_release_section",
+   "fieldtype": "Section Break",
+   "label": "Dynamic Release"
+  },
+  {
+   "default": "60",
+   "fieldname": "release_minutes_before",
+   "fieldtype": "Int",
+   "label": "Release Pre-Booked Slots (mins before session)"
+  },
+  {
+   "fieldname": "priority_ratio_section",
+   "fieldtype": "Section Break",
+   "label": "Priority Ratio"
+  },
+  {
+   "default": "3",
+   "fieldname": "weight_prebooked",
+   "fieldtype": "Int",
+   "label": "Pre-Booked Weight"
+  },
+  {
+   "default": "1",
+   "fieldname": "weight_walkin",
+   "fieldtype": "Int",
+   "label": "Walk-In Weight"
+  },
+  {
+   "default": "1",
+   "fieldname": "weight_followup",
+   "fieldtype": "Int",
+   "label": "Follow-Up Weight"
+  },
+  {
+   "fieldname": "after_hours_section",
+   "fieldtype": "Section Break",
+   "label": "After-Hours Behaviour"
+  },
+  {
+   "fieldname": "after_session_action",
+   "fieldtype": "Select",
+   "label": "After Session Ends",
+   "options": "Hold for Next Session\nRedirect to On-Call\nScheduled Follow-Up"
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-04-03 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Clinic Flow",
+ "name": "Slot Partition Config",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Queue Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

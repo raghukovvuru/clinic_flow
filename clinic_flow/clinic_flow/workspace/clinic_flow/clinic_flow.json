@@ -1,0 +1,49 @@
+{
+ "charts": [],
+ "content": "[{\"id\":\"cf_hdr\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h2\\\">Clinic Flow</span>\",\"col\":12}},{\"id\":\"cf_shortcuts\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Doctor Workspace\",\"col\":4}}]",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "stroke-calendar",
+ "idx": 1,
+ "is_hidden": 0,
+ "label": "Clinic Flow",
+ "links": [],
+ "module": "Clinic Flow",
+ "name": "Clinic Flow",
+ "number_cards": [],
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [
+  {"role": "Physician"},
+  {"role": "Queue Manager"},
+  {"role": "Queue Viewer"}
+ ],
+ "sequence_id": 1.0,
+ "shortcuts": [
+  {
+   "color": "Blue",
+   "doc_view": "",
+   "icon": "stroke-calendar",
+   "label": "Doctor Workspace",
+   "link_to": "doctor-workspace",
+   "restrict_to_domain": "",
+   "stats_filter": "",
+   "type": "Page"
+  },
+  {
+   "color": "Green",
+   "doc_view": "",
+   "icon": "stroke-users",
+   "label": "Receptionist Workspace",
+   "link_to": "receptionist-workspace",
+   "restrict_to_domain": "",
+   "stats_filter": "",
+   "type": "Page"
+  }
+ ],
+ "title": "Clinic Flow"
+}

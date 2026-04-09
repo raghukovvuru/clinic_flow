@@ -3,250 +3,60 @@ app_title = "Clinic Flow"
 app_publisher = "Raghu"
 app_description = "Queue management and doctor workspace for Marley Health"
 app_email = "raghudevop9@gmail.com"
-app_license = "mit"
+app_license = "MIT"
 
-# Apps
-# ------------------
+required_apps = ["frappe", "healthcare"]
 
-# required_apps = []
+# ── v16: extend_doctype_class (preferred over doc_events for controller logic) ──
+# Adds on_update mixin to Patient Appointment without replacing Marley's controller.
+# Multiple apps can safely extend the same DocType this way.
+extend_doctype_class = {
+	"Patient Appointment": [
+		"clinic_flow.queue.appointment_mixin.QueueMixin"
+	]
+}
 
-# Each item in the list will be shown as an app in the apps page
-# add_to_apps_screen = [
-# 	{
-# 		"name": "clinic_flow",
-# 		"logo": "/assets/clinic_flow/logo.png",
-# 		"title": "Clinic Flow",
-# 		"route": "/clinic_flow",
-# 		"has_permission": "clinic_flow.api.permission.has_app_permission"
-# 	}
-# ]
+# ── Scheduled jobs ───────────────────────────────────────────────────────────
+scheduler_events = {
+	"cron": {
+		# Runs every 5 minutes — checks if any session needs pre-booked slots released
+		"*/5 * * * *": [
+			"clinic_flow.queue.scheduler.release_prebooked_slots"
+		]
+	}
+}
 
-# Includes in <head>
-# ------------------
+# ── Static assets injected into desk ────────────────────────────────────────
+app_include_css = []
+app_include_js = []
 
-# include js, css files in header of desk.html
-# app_include_css = "/assets/clinic_flow/css/clinic_flow.css"
-# app_include_js = "/assets/clinic_flow/js/clinic_flow.js"
+# ── Fixtures ─────────────────────────────────────────────────────────────────
+fixtures = [
+	{
+		"dt": "Custom Field",
+		"filters": [["module", "=", "Clinic Flow"]]
+	},
+	{
+		"dt": "Property Setter",
+		"filters": [["module", "=", "Clinic Flow"]]
+	},
+	{
+		"dt": "Role",
+		"filters": [["name", "in", ["Queue Manager", "Queue Viewer", "Lab Queue Trigger"]]]
+	},
+	{
+		"dt": "Workspace",
+		"filters": [["name", "=", "Clinic Flow"]]
+	},
+]
 
-# include js, css files in header of web template
-# web_include_css = "/assets/clinic_flow/css/clinic_flow.css"
-# web_include_js = "/assets/clinic_flow/js/clinic_flow.js"
+# ── Boot session: redirect doctors to their workspace ────────────────────────
+boot_session = "clinic_flow.api.boot.extend_boot"
 
-# include custom scss in every website theme (without file extension ".scss")
-# website_theme_scss = "clinic_flow/public/scss/website"
+# ── v16: enforce type annotations on all whitelisted API methods ─────────────
+require_type_annotated_api_methods = 1
 
-# include js, css files in header of web form
-# webform_include_js = {"doctype": "public/js/doctype.js"}
-# webform_include_css = {"doctype": "public/css/doctype.css"}
-
-# include js in page
-# page_js = {"page" : "public/js/file.js"}
-
-# include js in doctype views
-# doctype_js = {"doctype" : "public/js/doctype.js"}
-# doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
-# doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
-# doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
-
-# Svg Icons
-# ------------------
-# include app icons in desk
-# app_include_icons = "clinic_flow/public/icons.svg"
-
-# Home Pages
-# ----------
-
-# application home page (will override Website Settings)
-# home_page = "login"
-
-# website user home page (by Role)
-# role_home_page = {
-# 	"Role": "home_page"
-# }
-
-# Generators
-# ----------
-
-# automatically create page for each record of this doctype
-# website_generators = ["Web Page"]
-
-# automatically load and sync documents of this doctype from downstream apps
-# importable_doctypes = [doctype_1]
-
-# Jinja
-# ----------
-
-# add methods and filters to jinja environment
-# jinja = {
-# 	"methods": "clinic_flow.utils.jinja_methods",
-# 	"filters": "clinic_flow.utils.jinja_filters"
-# }
-
-# Installation
-# ------------
-
-# before_install = "clinic_flow.install.before_install"
-# after_install = "clinic_flow.install.after_install"
-
-# Uninstallation
-# ------------
-
-# before_uninstall = "clinic_flow.uninstall.before_uninstall"
-# after_uninstall = "clinic_flow.uninstall.after_uninstall"
-
-# Integration Setup
-# ------------------
-# To set up dependencies/integrations with other apps
-# Name of the app being installed is passed as an argument
-
-# before_app_install = "clinic_flow.utils.before_app_install"
-# after_app_install = "clinic_flow.utils.after_app_install"
-
-# Integration Cleanup
-# -------------------
-# To clean up dependencies/integrations with other apps
-# Name of the app being uninstalled is passed as an argument
-
-# before_app_uninstall = "clinic_flow.utils.before_app_uninstall"
-# after_app_uninstall = "clinic_flow.utils.after_app_uninstall"
-
-# Desk Notifications
-# ------------------
-# See frappe.core.notifications.get_notification_config
-
-# notification_config = "clinic_flow.notifications.get_notification_config"
-
-# Permissions
-# -----------
-# Permissions evaluated in scripted ways
-
-# permission_query_conditions = {
-# 	"Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",
-# }
-#
-# has_permission = {
-# 	"Event": "frappe.desk.doctype.event.event.has_permission",
-# }
-
-# Document Events
-# ---------------
-# Hook on document methods and events
-
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
-
-# Scheduled Tasks
-# ---------------
-
-# scheduler_events = {
-# 	"all": [
-# 		"clinic_flow.tasks.all"
-# 	],
-# 	"daily": [
-# 		"clinic_flow.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"clinic_flow.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"clinic_flow.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"clinic_flow.tasks.monthly"
-# 	],
-# }
-
-# Testing
-# -------
-
-# before_tests = "clinic_flow.install.before_tests"
-
-# Extend DocType Class
-# ------------------------------
-#
-# Specify custom mixins to extend the standard doctype controller.
-# extend_doctype_class = {
-# 	"Task": "clinic_flow.custom.task.CustomTaskMixin"
-# }
-
-# Overriding Methods
-# ------------------------------
-#
-# override_whitelisted_methods = {
-# 	"frappe.desk.doctype.event.event.get_events": "clinic_flow.event.get_events"
-# }
-#
-# each overriding function accepts a `data` argument;
-# generated from the base implementation of the doctype dashboard,
-# along with any modifications made in other Frappe apps
-# override_doctype_dashboards = {
-# 	"Task": "clinic_flow.task.get_dashboard_data"
-# }
-
-# exempt linked doctypes from being automatically cancelled
-#
-# auto_cancel_exempted_doctypes = ["Auto Repeat"]
-
-# Ignore links to specified DocTypes when deleting documents
-# -----------------------------------------------------------
-
-# ignore_links_on_delete = ["Communication", "ToDo"]
-
-# Request Events
-# ----------------
-# before_request = ["clinic_flow.utils.before_request"]
-# after_request = ["clinic_flow.utils.after_request"]
-
-# Job Events
-# ----------
-# before_job = ["clinic_flow.utils.before_job"]
-# after_job = ["clinic_flow.utils.after_job"]
-
-# User Data Protection
-# --------------------
-
-# user_data_fields = [
-# 	{
-# 		"doctype": "{doctype_1}",
-# 		"filter_by": "{filter_by}",
-# 		"redact_fields": ["{field_1}", "{field_2}"],
-# 		"partial": 1,
-# 	},
-# 	{
-# 		"doctype": "{doctype_2}",
-# 		"filter_by": "{filter_by}",
-# 		"partial": 1,
-# 	},
-# 	{
-# 		"doctype": "{doctype_3}",
-# 		"strict": False,
-# 	},
-# 	{
-# 		"doctype": "{doctype_4}"
-# 	}
-# ]
-
-# Authentication and authorization
-# --------------------------------
-
-# auth_hooks = [
-# 	"clinic_flow.auth.validate"
-# ]
-
-# Automatically update python controller files with type annotations for this app.
-# export_python_type_annotations = True
-
-# default_log_clearing_doctypes = {
-# 	"Logging DocType Name": 30  # days to retain logs
-# }
-
-# Translation
-# ------------
-# List of apps whose translatable strings should be excluded from this app's translations.
-# ignore_translatable_strings_from = []
-
+# ── Web pages ────────────────────────────────────────────────────────────────
+website_route_rules = [
+	{"from_route": "/queue-dashboard", "to_route": "queue-dashboard"},
+]
