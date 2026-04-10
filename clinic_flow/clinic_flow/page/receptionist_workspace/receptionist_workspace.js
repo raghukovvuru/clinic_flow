@@ -784,9 +784,10 @@ class ReceptionistWorkspace {
 	// ── BOOKING PANEL ─────────────────────────────────────────────────────────
 
 	_show_booking_panel() {
-		const slot    = this._booking_slot;
-		const d_obj   = new Date(slot.date + 'T00:00:00');
-		const d_label = d_obj.toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long' });
+		const slot      = this._booking_slot;
+		const d_obj     = new Date(slot.date + 'T00:00:00');
+		const d_label   = d_obj.toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long' });
+		const is_future = slot.date > frappe.datetime.get_today();
 		const TYPE_LABELS = { PRE_BOOKED:'Standard', FOLLOW_UP:'Follow-up', WALK_IN:'Walk-in' };
 
 		this._set_panel(
@@ -801,12 +802,13 @@ class ReceptionistWorkspace {
 				font-size:12px;display:flex;justify-content:space-between;align-items:center;">
 				<span style="color:var(--text-muted);">${_fmt_time(slot.from_time)} – ${_fmt_time(slot.to_time)}</span>
 				<span style="font-weight:600;">${slot.available} slots remaining</span>
+				${is_future ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">Future date — no payment today</span>` : ''}
 			</div>
 
 			<!-- Step indicator -->
 			<div class="rw-step-indicator" style="padding:12px 18px 0;">
 				<div class="rw-step active" id="step-0">1 · Patient</div>
-				<div class="rw-step" id="step-1">2 · Payment</div>
+				<div class="rw-step" id="step-1">${is_future ? '2 · Confirm' : '2 · Payment'}</div>
 				<div class="rw-step" id="step-2">3 · Done</div>
 			</div>
 
@@ -834,6 +836,7 @@ class ReceptionistWorkspace {
 
 	// Step 0: Patient
 	_render_patient_step(content) {
+		const is_future = this._booking_slot && this._booking_slot.date > frappe.datetime.get_today();
 		content.innerHTML = `
 			<div style="margin-bottom:4px;">
 				<label class="rw-label" style="display:block;margin-bottom:6px;">Patient</label>
@@ -875,7 +878,9 @@ class ReceptionistWorkspace {
 				</div>
 				<button class="rw-btn-primary" id="bk-create-patient-btn">Create Patient & Continue</button>
 			</div>
-			<button class="rw-btn-primary" id="bk-patient-next" style="display:none;margin-top:12px;">Continue to Payment →</button>`;
+			<button class="rw-btn-primary" id="bk-patient-next" style="display:none;margin-top:12px;">
+				${is_future ? 'Confirm Booking →' : 'Continue to Payment →'}
+			</button>`;
 
 		const $input    = $(content).find('#bk-patient-search');
 		const $results  = $(content).find('#bk-patient-results');
@@ -975,7 +980,8 @@ class ReceptionistWorkspace {
 	}
 
 	_create_appointment_then_payment() {
-		const slot = this._booking_slot;
+		const slot      = this._booking_slot;
+		const is_future = slot.date > frappe.datetime.get_today();
 		frappe.call({
 			method: 'clinic_flow.api.appointments.book_appointment',
 			args: {
@@ -990,7 +996,19 @@ class ReceptionistWorkspace {
 			callback: (r) => {
 				if (!r.message) return;
 				this._booking_appt = r.message.appointment;
-				this._load_payment_step();
+				if (is_future) {
+					// Future appointment: no payment today — show scheduled confirmation
+					this._booking_result = {
+						is_scheduled:     true,
+						appointment:      r.message.appointment,
+						patient_name:     this._booking_patient.patient_name,
+						appointment_date: slot.date,
+					};
+					this._render_booking_step(2);
+					this._load_availability();
+				} else {
+					this._load_payment_step();
+				}
 			},
 		});
 	}
@@ -1124,6 +1142,31 @@ class ReceptionistWorkspace {
 
 	_render_done_content(content, result) {
 		if (!result) return;
+
+		// Future appointment — no token, no payment
+		if (result.is_scheduled) {
+			const d_label = result.appointment_date
+				? new Date(result.appointment_date + 'T00:00:00').toLocaleDateString('en-GB',
+					{ weekday:'long', day:'numeric', month:'long', year:'numeric' })
+				: '';
+			content.innerHTML = `
+				<div style="text-align:center;padding:20px 0;">
+					<div style="font-size:38px;margin-bottom:10px;">📅</div>
+					<div style="font-size:18px;font-weight:700;color:#0f766e;margin-bottom:6px;">Appointment Scheduled</div>
+					<div style="font-size:13px;color:var(--text-muted);">${result.patient_name}</div>
+					<div style="font-size:14px;font-weight:600;margin-top:6px;">${d_label}</div>
+					<div style="font-size:11px;color:var(--text-muted);margin-top:8px;line-height:1.6;">
+						Payment will be collected on the day of visit.<br>
+						Check in the patient when they arrive to issue a queue token.
+					</div>
+				</div>
+				<button class="rw-btn-primary" id="bk-done-next" style="margin-top:10px;">
+					Done — Next Patient
+				</button>`;
+			$(content).find('#bk-done-next').on('click', () => this._show_board());
+			return;
+		}
+
 		const token     = result.token || '—';
 		const prac_name = result.practitioner_name || '';
 		const d_label   = result.appointment_date
@@ -1197,6 +1240,38 @@ class ReceptionistWorkspace {
 								padding:10px 12px;background:#fef2f2;border:1px solid #fca5a5;
 								border-radius:6px;align-items:center;justify-content:space-between;"></div>
 						</div>
+						<div id="emg-new-patient-section" style="display:none;margin-top:4px;
+							padding:14px;border:1px dashed var(--border-color);border-radius:8px;margin-bottom:12px;">
+							<div class="rw-label" style="margin-bottom:10px;">New Patient</div>
+							<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+								<div>
+									<label style="font-size:11px;color:var(--text-muted);">First Name *</label>
+									<input class="rw-panel-input" id="emg-first-name" style="margin-top:3px;">
+								</div>
+								<div>
+									<label style="font-size:11px;color:var(--text-muted);">Last Name</label>
+									<input class="rw-panel-input" id="emg-last-name" style="margin-top:3px;">
+								</div>
+							</div>
+							<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+								<div>
+									<label style="font-size:11px;color:var(--text-muted);">Mobile *</label>
+									<input class="rw-panel-input" id="emg-mobile" style="margin-top:3px;" type="tel">
+								</div>
+								<div>
+									<label style="font-size:11px;color:var(--text-muted);">Sex *</label>
+									<select class="rw-panel-input" id="emg-sex" style="margin-top:3px;">
+										<option>Male</option><option>Female</option><option>Other</option>
+									</select>
+								</div>
+							</div>
+							<div style="margin-bottom:8px;">
+								<label style="font-size:11px;color:var(--text-muted);">Date of Birth</label>
+								<input class="rw-panel-input" id="emg-dob" type="date" style="margin-top:3px;">
+							</div>
+							<button class="rw-btn-primary" id="emg-create-patient-btn"
+								style="background:#dc2626;">Create Patient</button>
+						</div>
 						<button class="rw-btn-primary" id="emg-go"
 							style="background:#dc2626;">Issue Emergency Token</button>
 					</div>`;
@@ -1238,10 +1313,46 @@ class ReceptionistWorkspace {
 									row.on('click', () => set_emg_patient(p));
 									$sr.append(row);
 								});
+								const add_row = $(`<div class="rw-search-row" style="color:#dc2626;font-weight:600;">
+									<span style="font-size:16px;margin-right:6px;">+</span>
+									<span>New patient "${q}"</span>
+								</div>`);
+								add_row.on('click', () => {
+									$sr.hide();
+									const is_mobile = /^\d/.test(q);
+									$('#emg-first-name').val(is_mobile ? '' : q.split(' ')[0]);
+									$('#emg-last-name').val(is_mobile ? '' : q.split(' ').slice(1).join(' '));
+									$('#emg-mobile').val(is_mobile ? q : '');
+									$(body).find('#emg-new-patient-section').show();
+								});
+								$sr.append(add_row);
 								$sr.show();
 							},
 						});
 					}, 250);
+				});
+
+				$(body).find('#emg-create-patient-btn').on('click', () => {
+					const first  = $('#emg-first-name').val().trim();
+					const mobile = $('#emg-mobile').val().trim();
+					if (!first)  { frappe.show_alert({ message: 'First name is required.', indicator: 'red' }, 3); return; }
+					if (!mobile) { frappe.show_alert({ message: 'Mobile is required.', indicator: 'red' }, 3); return; }
+					frappe.call({
+						method: 'clinic_flow.api.appointments.quick_create_patient',
+						args: {
+							first_name: first,
+							last_name:  $('#emg-last-name').val().trim(),
+							mobile,
+							dob:        $('#emg-dob').val(),
+							sex:        $('#emg-sex').val(),
+						},
+						callback: (r3) => {
+							if (!r3.message) return;
+							frappe.show_alert({ message: `Patient ${r3.message.patient_name} created`, indicator: 'green' }, 3);
+							set_emg_patient({ name: r3.message.patient, patient_name: r3.message.patient_name, mobile });
+							$(body).find('#emg-new-patient-section').hide();
+						},
+					});
 				});
 
 				$(body).find('#emg-go').on('click', () => {
