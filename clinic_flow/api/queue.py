@@ -73,23 +73,27 @@ def start_session(
 			frappe.PermissionError,
 		)
 
-	# ── Re-use today's active/scheduled session if one exists ──────────────
+	# ── Re-use today's active/paused/scheduled session if one exists ─────────
 	existing = frappe.get_all(
 		"Queue Session",
 		filters={
 			"practitioner": prac.name,
 			"session_date": today(),
-			"status": ["in", ["Scheduled", "Active"]],
+			"status": ["in", ["Scheduled", "Active", "Paused"]],
 		},
 		fields=["name", "status", "session_name", "dept_abbr"],
+		order_by="modified desc",
 		limit=1,
 	)
 	if existing:
 		s = existing[0]
 		if s.status == "Scheduled":
 			frappe.db.set_value("Queue Session", s.name, "status", "Active")
+			s.status = "Active"
+		# If Paused, return it as-is — the workspace will restore the paused UI state.
+		# Never create a second session while one already exists today.
 		return {"session": s.name, "session_name": s.session_name,
-				"dept_abbr": s.dept_abbr, "created": False}
+				"dept_abbr": s.dept_abbr, "status": s.status, "created": False}
 
 	# ── Dept abbr ─────────────────────────────────────────────────────────
 	dept_abbr = ""
@@ -154,7 +158,7 @@ def start_session(
 
 @frappe.whitelist()
 def get_session(queue_session: str) -> dict | None:
-	"""Verify a session is Active today AND belongs to the current user's practitioner."""
+	"""Verify a session is Active or Paused today AND belongs to the current user's practitioner."""
 	if not frappe.db.exists("Queue Session", queue_session):
 		return None
 	s = frappe.db.get_value(
@@ -162,7 +166,7 @@ def get_session(queue_session: str) -> dict | None:
 		["name", "session_name", "status", "session_date", "dept_abbr", "practitioner"],
 		as_dict=True,
 	)
-	if not (s and s.status == "Active" and str(s.session_date) == today()):
+	if not (s and s.status in ("Active", "Paused") and str(s.session_date) == today()):
 		return None
 	# Verify ownership — reject sessions that belong to a different practitioner
 	own_practitioner = frappe.db.get_value(
@@ -504,7 +508,7 @@ def get_queue_state(queue_session: str) -> dict:
 
 @frappe.whitelist()
 def get_active_session_for_user() -> dict | None:
-	"""Returns today's Active Queue Session for the logged-in practitioner."""
+	"""Returns today's Active or Paused Queue Session for the logged-in practitioner."""
 	practitioner = frappe.db.get_value(
 		"Healthcare Practitioner",
 		{"user_id": frappe.session.user},
@@ -515,8 +519,10 @@ def get_active_session_for_user() -> dict | None:
 
 	sessions = frappe.get_all(
 		"Queue Session",
-		filters={"practitioner": practitioner, "session_date": today(), "status": "Active"},
+		filters={"practitioner": practitioner, "session_date": today(),
+				 "status": ["in", ["Active", "Paused"]]},
 		fields=["name", "session_name", "dept_abbr", "status"],
+		order_by="modified desc",
 		limit=1,
 	)
 	return sessions[0] if sessions else None

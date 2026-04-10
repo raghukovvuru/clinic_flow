@@ -116,6 +116,26 @@ def submit_encounter(encounter: str) -> dict:
 	return {"status": "submitted", "name": enc.name}
 
 
+@frappe.whitelist()
+def get_observation_templates() -> list:
+	"""Returns observation template names for the lab order datalist. Bypasses role permissions."""
+	return [
+		t.name
+		for t in frappe.get_all("Observation Template", fields=["name"], order_by="name asc", ignore_permissions=True)
+	]
+
+
+@frappe.whitelist()
+def get_medication_form_data() -> dict:
+	"""Returns lookup lists for the medication order form. Loaded once and cached in the browser."""
+	return {
+		"medications": [m.name for m in frappe.get_all("Medication", fields=["name"], order_by="name asc", ignore_permissions=True)],
+		"dosage_forms": [d.name for d in frappe.get_all("Dosage Form", fields=["name"], order_by="name asc", ignore_permissions=True)],
+		"dosages": [d.name for d in frappe.get_all("Prescription Dosage", fields=["name"], ignore_permissions=True)],
+		"durations": [d.name for d in frappe.get_all("Prescription Duration", fields=["name"], ignore_permissions=True)],
+	}
+
+
 def _decrement_session_counter(queue_session: str, queue_type: str) -> None:
 	"""Track used slot counts on the session."""
 	field_map = {
