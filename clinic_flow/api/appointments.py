@@ -131,6 +131,10 @@ def get_availability(practitioner: str, queue_type: str) -> list:
 				release_threshold = add_to_date(now, minutes=release_mins)
 				within_release = session_start <= release_threshold
 
+			# Once a slot is within release window, it belongs to walk-in only
+			if within_release and queue_type != "WALK_IN":
+				continue
+
 			if within_release and queue_type == "WALK_IN":
 				for release_type, attr in [("PRE_BOOKED", "prebooked_pct"), ("FOLLOW_UP", "followup_pct")]:
 					rel_pct = getattr(config, attr, None) or (60 if release_type == "PRE_BOOKED" else 10)
@@ -345,10 +349,12 @@ def book_appointment(
 		"appointment_time":  appt_time,
 		"custom_queue_type": queue_type,
 		"appointment_type":  appointment_type,
-		"status":            "Open",
+		# duration=1 keeps the overlap check window to 1 minute; slot spacing >= 1 min avoids false conflicts.
+		# status is intentionally omitted — set_status() in validate() sets Open (today) or Scheduled (future).
+		"duration":          1,
 	})
 	appt.insert(ignore_permissions=True)
-	return {"appointment": appt.name, "patient": patient}
+	return {"appointment": appt.name, "patient": patient, "appointment_date": appointment_date}
 
 
 @frappe.whitelist()
