@@ -20,8 +20,8 @@
   "prebooked_released",
   "walkin_total",
   "walkin_used",
-  "emergency_total",
-  "emergency_used",
+  "followup_total",
+  "followup_used",
   "counters_section",
   "total_called",
   "current_token",
@@ -124,14 +124,14 @@
    "read_only": 1
   },
   {
-   "fieldname": "emergency_total",
+   "fieldname": "followup_total",
    "fieldtype": "Int",
-   "label": "Emergency Slots Total"
+   "label": "Follow-Up Slots Total"
   },
   {
-   "fieldname": "emergency_used",
+   "fieldname": "followup_used",
    "fieldtype": "Int",
-   "label": "Emergency Used",
+   "label": "Follow-Up Used",
    "read_only": 1
   },
   {

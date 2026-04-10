@@ -2,7 +2,7 @@ import math
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import today
+from frappe.utils import today, getdate, get_datetime, add_to_date, now_datetime
 
 
 class QueueMixin(Document):
@@ -54,14 +54,14 @@ class QueueMixin(Document):
 			"Queue Session",
 			{"practitioner": self.practitioner, "session_date": self.appointment_date,
 			 "status": ["in", ["Scheduled", "Active"]]},
-			["prebooked_total", "walkin_total", "emergency_total", "session_capacity"],
+			["prebooked_total", "walkin_total", "followup_total", "session_capacity", "start_time"],
 			as_dict=True,
 		)
 
 		field_map = {
 			"PRE_BOOKED": "prebooked_total",
 			"WALK_IN":    "walkin_total",
-			"FOLLOW_UP":  "emergency_total",
+			"FOLLOW_UP":  "followup_total",
 		}
 		session_field = field_map.get(self.custom_queue_type, "prebooked_total")
 		limit: int | None = None
@@ -90,6 +90,33 @@ class QueueMixin(Document):
 
 		if not limit:
 			return
+
+		# For same-day walk-in within the release window, expand limit by unused
+		# PRE_BOOKED and FOLLOW_UP slots — mirrors get_availability() release logic.
+		if self.custom_queue_type == "WALK_IN" and getdate(self.appointment_date) == getdate():
+			release_mins = config.release_minutes_before or 60
+			start_time = session_row.get("start_time") if session_row else None
+			if start_time:
+				session_start = get_datetime(f"{self.appointment_date} {start_time}")
+				within_release = session_start <= add_to_date(now_datetime(), minutes=release_mins)
+				if within_release:
+					cap = (session_row.session_capacity if session_row else 20) or 20
+					for release_type, pct_attr, total_field in [
+						("PRE_BOOKED", "prebooked_pct", "prebooked_total"),
+						("FOLLOW_UP",  "followup_pct",  "followup_total"),
+					]:
+						if session_row and session_row.get(total_field):
+							rel_limit = session_row[total_field]
+						else:
+							rel_pct = getattr(config, pct_attr, None) or (60 if release_type == "PRE_BOOKED" else 10)
+							rel_limit = math.ceil(cap * rel_pct / 100)
+						rel_used = frappe.db.count("Patient Appointment", {
+							"practitioner":     self.practitioner,
+							"appointment_date": self.appointment_date,
+							"custom_queue_type": release_type,
+							"status":           ["not in", ["Cancelled", "No Show"]],
+						})
+						limit += max(0, rel_limit - rel_used)
 
 		count = frappe.db.count("Patient Appointment", {
 			"practitioner":    self.practitioner,
@@ -228,8 +255,7 @@ def _increment_session_slot(queue_session: str, queue_type: str) -> None:
 	field_map = {
 		"PRE_BOOKED": "prebooked_used",
 		"WALK_IN":    "walkin_used",
-		"EMERGENCY":  "emergency_used",
-		"FOLLOW_UP":  "walkin_used",
+		"FOLLOW_UP":  "followup_used",
 	}
 	field = field_map.get(queue_type)
 	if field:

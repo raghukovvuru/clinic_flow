@@ -1,3 +1,4 @@
+import math
 import frappe
 from frappe import _
 from frappe.utils import now_datetime, today
@@ -73,6 +74,17 @@ def start_session(
 			frappe.PermissionError,
 		)
 
+	# ── Dept abbr + full name ─────────────────────────────────────────────
+	dept_abbr = ""
+	dept_name = prac.department or ""
+	if prac.department:
+		row = frappe.db.get_value(
+			"Medical Department", prac.department,
+			["custom_dept_abbr", "department"], as_dict=True,
+		) or {}
+		dept_abbr = row.get("custom_dept_abbr") or ""
+		dept_name = row.get("department") or prac.department
+
 	# ── Re-use today's active/paused/scheduled session if one exists ─────────
 	existing = frappe.get_all(
 		"Queue Session",
@@ -90,17 +102,15 @@ def start_session(
 		if s.status == "Scheduled":
 			frappe.db.set_value("Queue Session", s.name, "status", "Active")
 			s.status = "Active"
-		# If Paused, return it as-is — the workspace will restore the paused UI state.
-		# Never create a second session while one already exists today.
+		# Re-resolve dept_name from the existing session's dept_abbr (may differ from prac's current dept)
+		existing_dept_name = dept_name
+		if s.dept_abbr and s.dept_abbr != dept_abbr:
+			existing_dept_name = frappe.db.get_value(
+				"Medical Department", {"custom_dept_abbr": s.dept_abbr}, "department"
+			) or s.dept_abbr
 		return {"session": s.name, "session_name": s.session_name,
-				"dept_abbr": s.dept_abbr, "status": s.status, "created": False}
-
-	# ── Dept abbr ─────────────────────────────────────────────────────────
-	dept_abbr = ""
-	if prac.department:
-		dept_abbr = frappe.db.get_value(
-			"Medical Department", prac.department, "custom_dept_abbr"
-		) or ""
+				"dept_abbr": s.dept_abbr, "dept_name": existing_dept_name,
+				"status": s.status, "created": False}
 
 	date_str = formatdate(today(), "EEE dd MMM yyyy")  # e.g. "Sun 05 Apr 2026"
 
@@ -120,20 +130,13 @@ def start_session(
 		to_time   = str(slot.to_time)
 		session_cap = int(slot.maximum_appointments or 20)
 
-		# Strip practitioner name from schedule name for a cleaner label
-		label = schedule.replace(prac.practitioner_name or "", "").strip(" -·")
-		session_name = f"{label} · {date_str}"
+		session_name = f"{schedule} · {date_str}"
 	else:
 		# Unscheduled — caller provides times and optional capacity
 		session_cap = int(capacity) if capacity else 20
-		_honorifics = {"dr", "mr", "ms", "mrs", "prof", "sr", "jr"}
-		_parts = (prac.practitioner_name or "Doctor").split()
-		first_name = next(
-			(p for p in _parts if p.rstrip(".").lower() not in _honorifics),
-			_parts[-1] if _parts else "Doctor",
-		)
-		session_name = f"Unscheduled · {first_name} · {date_str}"
+		session_name = f"{prac.practitioner_name} · Unscheduled Session · {date_str}"
 
+	config = frappe.get_single("Slot Partition Config")
 	session_doc = frappe.get_doc({
 		"doctype":          "Queue Session",
 		"session_name":     session_name,
@@ -144,16 +147,17 @@ def start_session(
 		"dept_abbr":        dept_abbr,
 		"session_capacity": session_cap,
 		"status":           "Active",
+		"prebooked_total":  math.ceil(session_cap * (config.prebooked_pct or 60) / 100),
+		"walkin_total":     math.ceil(session_cap * (config.walkin_pct    or 30) / 100),
+		"followup_total":   math.ceil(session_cap * (config.followup_pct  or 10) / 100),
 	})
 	session_doc.insert(ignore_permissions=True)
 
-	# Inherit any Waiting entries that were checked in while the doctor was between
-	# sessions (i.e. while a prior session was Completed).  Re-parent them to this
-	# new session so the round-robin picks them up immediately.
 	_inherit_waiting_entries(prac.name, session_doc.name)
 
 	return {"session": session_doc.name, "session_name": session_name,
-			"dept_abbr": dept_abbr, "created": True}
+			"dept_abbr": dept_abbr, "dept_name": dept_name,
+			"status": "Active", "created": True}
 
 
 @frappe.whitelist()
@@ -168,12 +172,18 @@ def get_session(queue_session: str) -> dict | None:
 	)
 	if not (s and s.status in ("Active", "Paused") and str(s.session_date) == today()):
 		return None
-	# Verify ownership — reject sessions that belong to a different practitioner
 	own_practitioner = frappe.db.get_value(
 		"Healthcare Practitioner", {"user_id": frappe.session.user}, "name"
 	)
 	if own_practitioner and s.practitioner != own_practitioner:
 		return None
+	# Enrich with full department name
+	dept_name = ""
+	if s.dept_abbr:
+		dept_name = frappe.db.get_value(
+			"Medical Department", {"custom_dept_abbr": s.dept_abbr}, "department"
+		) or s.dept_abbr
+	s["dept_name"] = dept_name
 	return s
 
 
@@ -191,7 +201,7 @@ def get_slot_availability(practitioner: str, appointment_date: str) -> dict:
 		"Queue Session",
 		{"practitioner": practitioner, "session_date": appointment_date,
 		 "status": ["in", ["Scheduled", "Active"]]},
-		["prebooked_total", "walkin_total", "emergency_total", "session_capacity"],
+		["prebooked_total", "walkin_total", "followup_total", "session_capacity"],
 		as_dict=True,
 	)
 
@@ -200,7 +210,7 @@ def get_slot_availability(practitioner: str, appointment_date: str) -> dict:
 		limits = {
 			"PRE_BOOKED": session_row.prebooked_total,
 			"WALK_IN":    session_row.walkin_total or 0,
-			"FOLLOW_UP":  session_row.emergency_total or 0,
+			"FOLLOW_UP":  session_row.followup_total or 0,
 			"EMERGENCY":  9999,
 		}
 	else:
@@ -424,8 +434,7 @@ def _increment_session_slot_for(queue_session: str, queue_type: str) -> None:
 	field_map = {
 		"PRE_BOOKED": "prebooked_used",
 		"WALK_IN":    "walkin_used",
-		"EMERGENCY":  "emergency_used",
-		"FOLLOW_UP":  "walkin_used",
+		"FOLLOW_UP":  "followup_used",
 	}
 	field = field_map.get(queue_type)
 	if field:
@@ -525,7 +534,16 @@ def get_active_session_for_user() -> dict | None:
 		order_by="modified desc",
 		limit=1,
 	)
-	return sessions[0] if sessions else None
+	if not sessions:
+		return None
+	s = sessions[0]
+	dept_name = ""
+	if s.dept_abbr:
+		dept_name = frappe.db.get_value(
+			"Medical Department", {"custom_dept_abbr": s.dept_abbr}, "department"
+		) or s.dept_abbr
+	s["dept_name"] = dept_name
+	return s
 
 
 @frappe.whitelist(allow_guest=True)

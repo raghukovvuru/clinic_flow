@@ -808,7 +808,7 @@ class ReceptionistWorkspace {
 			<!-- Step indicator -->
 			<div class="rw-step-indicator" style="padding:12px 18px 0;">
 				<div class="rw-step active" id="step-0">1 · Patient</div>
-				<div class="rw-step" id="step-1">${is_future ? '2 · Confirm' : '2 · Payment'}</div>
+				<div class="rw-step" id="step-1">${(!is_future && (this._queue_type === 'WALK_IN' || this._queue_type === 'EMERGENCY')) ? '2 · Payment' : '2 · Confirm'}</div>
 				<div class="rw-step" id="step-2">3 · Done</div>
 			</div>
 
@@ -982,6 +982,10 @@ class ReceptionistWorkspace {
 	_create_appointment_then_payment() {
 		const slot      = this._booking_slot;
 		const is_future = slot.date > frappe.datetime.get_today();
+		// Walk-in and Emergency patients are physically present — collect payment now.
+		// Pre-booked and Follow-up patients may not have arrived yet; payment happens
+		// at check-in when the patient shows up at the counter.
+		const pay_now = (this._queue_type === 'WALK_IN' || this._queue_type === 'EMERGENCY') && !is_future;
 		frappe.call({
 			method: 'clinic_flow.api.appointments.book_appointment',
 			args: {
@@ -996,8 +1000,10 @@ class ReceptionistWorkspace {
 			callback: (r) => {
 				if (!r.message) return;
 				this._booking_appt = r.message.appointment;
-				if (is_future) {
-					// Future appointment: no payment today — show scheduled confirmation
+				if (pay_now) {
+					this._load_payment_step();
+				} else {
+					// No payment at booking — patient checks in on arrival
 					this._booking_result = {
 						is_scheduled:     true,
 						appointment:      r.message.appointment,
@@ -1006,8 +1012,6 @@ class ReceptionistWorkspace {
 					};
 					this._render_booking_step(2);
 					this._load_availability();
-				} else {
-					this._load_payment_step();
 				}
 			},
 		});

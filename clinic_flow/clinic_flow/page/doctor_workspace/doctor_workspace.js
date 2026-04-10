@@ -12,14 +12,10 @@ function get_workspace_html() {
 		<!-- HEADER -->
 		<div class="cw-header">
 			<div class="cw-header-left">
-				<div class="cw-session-info">
-					<div id="ws-session-dept" class="cw-dept-chip">—</div>
-					<div id="ws-session-label" class="cw-session-name">No session</div>
-				</div>
 				<div class="cw-action-group">
-					<button class="cw-btn-teal"  id="ws-btn-call-next">Call Next</button>
-					<button class="cw-btn-ghost" id="ws-btn-recall" disabled>Recall</button>
-					<button class="cw-btn-ghost" id="ws-btn-skip"   disabled>Skip</button>
+					<button class="cw-btn-call-next" id="ws-btn-call-next">▶ Call Next</button>
+					<button class="cw-btn-secondary-action" id="ws-btn-recall" disabled>↩ Recall</button>
+					<button class="cw-btn-secondary-action" id="ws-btn-skip"   disabled>⇥ Skip</button>
 				</div>
 			</div>
 			<div class="cw-header-center">
@@ -28,15 +24,18 @@ function get_workspace_html() {
 				</div>
 			</div>
 			<div class="cw-header-right">
-				<button class="cw-btn-ghost"   id="ws-btn-pause">⏸ Pause</button>
-				<button class="cw-btn-danger"  id="ws-btn-end-session">■ End</button>
+				<div class="cw-session-info">
+					<div id="ws-session-dept" class="cw-dept-chip">—</div>
+					<div id="ws-session-label" class="cw-session-name">No session</div>
+				</div>
+				<button class="cw-btn-pause-toggle" id="ws-btn-pause-toggle">⏸ Pause Session</button>
+				<button class="cw-btn-end-session"  id="ws-btn-end-session">■ End Session</button>
 			</div>
 		</div>
 
 		<!-- Pause bar -->
 		<div id="ws-session-status-bar" class="cw-pause-bar" style="display:none;">
-			⏸ Session paused — queue display shows "Temporarily Unavailable"
-			<button class="cw-btn-resume-inline" id="ws-btn-resume">▶ Resume</button>
+			⏸ Session paused — patients see "Temporarily Unavailable" on the queue display
 		</div>
 
 		<!-- BODY -->
@@ -179,44 +178,63 @@ function get_workspace_html() {
 		background:#134e4a; color:#fff;
 		padding:10px 16px; flex-shrink:0; min-height:80px; flex-wrap:wrap;
 	}
-	.cw-header-left   { display:flex; flex-direction:column; gap:8px; min-width:220px; }
+	.cw-header-left   { display:flex; align-items:center; min-width:220px; }
 	.cw-header-center { flex:1; overflow:hidden; min-width:0; }
-	.cw-header-right  { display:flex; gap:8px; align-items:center; flex-shrink:0; }
+	.cw-header-right  { display:flex; flex-direction:column; align-items:flex-end; gap:5px; flex-shrink:0; min-width:160px; }
 
-	.cw-session-info { display:flex; align-items:center; gap:8px; }
+	.cw-session-info { display:flex; align-items:center; gap:6px; justify-content:flex-end; max-width:100%; }
 	.cw-dept-chip {
 		background:rgba(255,255,255,.15); color:#fff; border-radius:4px;
-		padding:2px 8px; font-size:11px; font-weight:700; letter-spacing:.5px;
+		padding:2px 8px; font-size:11px; font-weight:700; letter-spacing:.5px; white-space:nowrap;
 	}
-	.cw-session-name { font-size:13px; font-weight:500; color:rgba(255,255,255,.85); }
+	.cw-session-name {
+		font-size:12px; font-weight:500; color:rgba(255,255,255,.8);
+		text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px;
+	}
 	.cw-action-group { display:flex; gap:6px; }
 
-	.cw-btn-teal {
-		background:#0f766e; color:#fff; border:none; border-radius:4px;
-		padding:5px 14px; font-size:13px; font-weight:600; cursor:pointer; transition:background .15s;
+	/* ── Header action buttons ── */
+	.cw-btn-call-next {
+		background:#fff; color:#0f766e; border:none; border-radius:5px;
+		padding:6px 16px; font-size:13px; font-weight:700; cursor:pointer;
+		transition:background .15s, box-shadow .15s;
+		box-shadow:0 1px 3px rgba(0,0,0,.2);
 	}
-	.cw-btn-teal:hover:not(:disabled) { background:#0d9488; }
-	.cw-btn-teal:disabled { opacity:.5; cursor:default; }
+	.cw-btn-call-next:hover:not(:disabled) { background:#f0fdfa; box-shadow:0 2px 6px rgba(0,0,0,.25); }
+	.cw-btn-call-next:disabled { opacity:.5; cursor:default; }
 
-	.cw-btn-ghost {
-		background:transparent; color:rgba(255,255,255,.85);
-		border:1px solid rgba(255,255,255,.3); border-radius:4px;
-		padding:5px 12px; font-size:13px; cursor:pointer; transition:background .15s, border-color .15s;
+	.cw-btn-secondary-action {
+		background:rgba(255,255,255,.12); color:#fff;
+		border:1px solid rgba(255,255,255,.35); border-radius:5px;
+		padding:6px 12px; font-size:13px; cursor:pointer;
+		transition:background .15s, border-color .15s;
 	}
-	.cw-btn-ghost:hover:not(:disabled) { background:rgba(255,255,255,.1); border-color:rgba(255,255,255,.6); }
-	.cw-btn-ghost:disabled { opacity:.4; cursor:default; }
+	.cw-btn-secondary-action:hover:not(:disabled) { background:rgba(255,255,255,.22); border-color:rgba(255,255,255,.65); }
+	.cw-btn-secondary-action:disabled { opacity:.4; cursor:default; }
 
-	.cw-btn-danger {
-		background:transparent; color:#fca5a5;
-		border:1px solid #fca5a5; border-radius:4px;
-		padding:5px 12px; font-size:13px; cursor:pointer; transition:background .15s;
+	/* Pause/Resume toggle — green outline by default, amber when paused */
+	.cw-btn-pause-toggle {
+		display:block; width:100%; background:rgba(255,255,255,.1); color:#fff;
+		border:1.5px solid rgba(255,255,255,.4); border-radius:5px;
+		padding:6px 10px; font-size:12px; font-weight:600; cursor:pointer;
+		transition:background .15s, border-color .15s, color .15s;
+		text-align:center;
 	}
-	.cw-btn-danger:hover { background:rgba(252,165,165,.15); }
+	.cw-btn-pause-toggle:hover { background:rgba(255,255,255,.2); border-color:rgba(255,255,255,.7); }
+	.cw-btn-pause-toggle.is-paused {
+		background:#d97706; color:#fff; border-color:#d97706;
+	}
+	.cw-btn-pause-toggle.is-paused:hover { background:#b45309; border-color:#b45309; }
 
-	.cw-btn-xs-outline {
-		background:transparent; color:#fff; border:1px solid rgba(255,255,255,.5);
-		border-radius:4px; padding:2px 8px; font-size:12px; cursor:pointer; margin-left:10px;
+	/* End session — red-tinted outline */
+	.cw-btn-end-session {
+		display:block; width:100%; background:transparent; color:#fca5a5;
+		border:1.5px solid rgba(252,165,165,.5); border-radius:5px;
+		padding:6px 10px; font-size:12px; font-weight:600; cursor:pointer;
+		transition:background .15s, border-color .15s;
+		text-align:center;
 	}
+	.cw-btn-end-session:hover { background:rgba(252,165,165,.12); border-color:#fca5a5; }
 
 	/* Queue token strip */
 	.cw-token-strip {
@@ -241,14 +259,6 @@ function get_workspace_html() {
 		padding:8px 16px; font-size:13px; color:#92400e;
 		display:flex; align-items:center; flex-shrink:0;
 	}
-	.cw-btn-resume-inline {
-		margin-left:14px; padding:3px 12px; border-radius:4px; font-size:12px;
-		font-weight:600; cursor:pointer;
-		background:#d97706; color:#fff; border:none;
-		transition:background .15s;
-	}
-	.cw-btn-resume-inline:hover { background:#b45309; }
-
 	/* Body */
 	.cw-body { display:flex; flex:1; min-height:0; }
 
@@ -527,7 +537,7 @@ class DoctorWorkspace {
 				});
 				if (v.message) {
 					this._activate_session(v.message.name, v.message.session_name,
-						v.message.dept_abbr, v.message.status);
+						v.message.dept_abbr, v.message.status, v.message.dept_name);
 					return;
 				}
 			} catch (_) {}
@@ -538,7 +548,7 @@ class DoctorWorkspace {
 			const r = await frappe.call({ method: 'clinic_flow.api.queue.get_active_session_for_user' });
 			if (r.message) {
 				this._activate_session(r.message.name, r.message.session_name,
-					r.message.dept_abbr, r.message.status);
+					r.message.dept_abbr, r.message.status, r.message.dept_name);
 				return;
 			}
 		} catch (_) {}
@@ -546,21 +556,22 @@ class DoctorWorkspace {
 		this._show_start_session_prompt();
 	}
 
-	_activate_session(session_name, label, dept_abbr, status) {
+	_activate_session(session_name, label, dept_abbr, status, dept_name) {
 		this.state.queue_session = session_name;
 		$('#ws-session-label').text(label || session_name);
-		if (dept_abbr) $('#ws-session-dept').text(dept_abbr);
+		const dept_display = dept_name || dept_abbr || '';
+		if (dept_display) $('#ws-session-dept').text(dept_display);
 		localStorage.setItem('clinic_flow_session', JSON.stringify({ name: session_name }));
 
 		// Restore paused state immediately so the UI is correct before the first poll
 		if (status === 'Paused') {
 			this.state.session_paused = true;
-			$('#ws-btn-pause').hide();
+			$('#ws-btn-pause-toggle').addClass('is-paused').text('▶ Resume Session');
 			$('#ws-btn-call-next').prop('disabled', true);
 			$('#ws-session-status-bar').show();
 		} else {
 			this.state.session_paused = false;
-			$('#ws-btn-pause').show();
+			$('#ws-btn-pause-toggle').removeClass('is-paused').text('⏸ Pause Session');
 			$('#ws-btn-call-next').prop('disabled', false);
 			$('#ws-session-status-bar').hide();
 		}
@@ -687,7 +698,7 @@ class DoctorWorkspace {
 						<div class="cw-empty-sub">${is_paused ? 'Session is paused — click Resume to continue' : 'Click "Call Next" to begin'}</div>
 					`);
 					this._activate_session(r.message.session, r.message.session_name,
-						r.message.dept_abbr, r.message.status);
+						r.message.dept_abbr, r.message.status, r.message.dept_name);
 					frappe.show_alert({
 						message: is_paused ? 'Existing paused session restored' : 'Consultation session started',
 						indicator: is_paused ? 'orange' : 'green',
@@ -732,9 +743,11 @@ class DoctorWorkspace {
 		$('#ws-btn-skip').on('click',      () => self._skip());
 		$('#ws-btn-save-draft').on('click',() => self._save_draft());
 		$('#ws-btn-submit').on('click',    () => self._submit_encounter());
-		$('#ws-btn-pause').on('click',     () => self._pause_session());
-		$('#ws-btn-resume').on('click',    () => self._resume_session());
-		$('#ws-btn-end-session').on('click',() => self._end_session());
+		$('#ws-btn-pause-toggle').on('click', () => {
+			if (self.state.session_paused) self._resume_session();
+			else self._pause_session();
+		});
+		$('#ws-btn-end-session').on('click', () => self._end_session());
 
 		// Tab switching
 		$(document).on('click.ws', '.cw-tab', function() {
@@ -811,7 +824,7 @@ class DoctorWorkspace {
 		});
 		if (r.message?.status === 'paused') {
 			this.state.session_paused = true;
-			$('#ws-btn-pause').hide();
+			$('#ws-btn-pause-toggle').addClass('is-paused').text('▶ Resume Session');
 			$('#ws-btn-call-next').prop('disabled', true);
 			$('#ws-session-status-bar').show();
 			frappe.show_alert({ message: 'Session paused.', indicator: 'orange' });
@@ -825,7 +838,7 @@ class DoctorWorkspace {
 		});
 		if (r.message?.status === 'active') {
 			this.state.session_paused = false;
-			$('#ws-btn-pause').show();
+			$('#ws-btn-pause-toggle').removeClass('is-paused').text('⏸ Pause Session');
 			$('#ws-btn-call-next').prop('disabled', false);
 			$('#ws-session-status-bar').hide();
 			frappe.show_alert({ message: 'Session resumed.', indicator: 'green' });
@@ -902,7 +915,7 @@ class DoctorWorkspace {
 			<div class="cw-empty-sub">Start a new session to continue</div>
 		`);
 		$('#ws-session-status-bar').hide();
-		$('#ws-btn-pause').show();
+		$('#ws-btn-pause-toggle').removeClass('is-paused').text('⏸ Pause Session');
 		$('#ws-btn-call-next').prop('disabled', false);
 		$('#ws-btn-recall').prop('disabled', true);
 		$('#ws-btn-skip').prop('disabled', true);
@@ -937,12 +950,12 @@ class DoctorWorkspace {
 			const sess_status = r.message.session?.status;
 			if (sess_status === 'Paused' && !this.state.session_paused) {
 				this.state.session_paused = true;
-				$('#ws-btn-pause').hide();
+				$('#ws-btn-pause-toggle').addClass('is-paused').text('▶ Resume Session');
 				$('#ws-btn-call-next').prop('disabled', true);
 				$('#ws-session-status-bar').show();
 			} else if (sess_status === 'Active' && this.state.session_paused) {
 				this.state.session_paused = false;
-				$('#ws-btn-pause').show();
+				$('#ws-btn-pause-toggle').removeClass('is-paused').text('⏸ Pause Session');
 				$('#ws-btn-call-next').prop('disabled', false);
 				$('#ws-session-status-bar').hide();
 			}

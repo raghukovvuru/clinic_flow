@@ -300,6 +300,25 @@ def book_appointment(
 		cap = int(slot_cap or 20)
 
 	limit = math.ceil(cap * pct_map.get(queue_type, 60) / 100)
+
+	# For same-day walk-in within the release window, expand limit by unused slots
+	# from PRE_BOOKED and FOLLOW_UP — mirrors the logic in get_availability().
+	if queue_type == "WALK_IN" and getdate(appointment_date) == getdate():
+		release_mins = config.release_minutes_before or 60
+		session_start = get_datetime(f"{appointment_date} {from_time}")
+		within_release = session_start <= add_to_date(now_datetime(), minutes=release_mins)
+		if within_release:
+			for release_type, attr in [("PRE_BOOKED", "prebooked_pct"), ("FOLLOW_UP", "followup_pct")]:
+				rel_pct = getattr(config, attr, None) or (60 if release_type == "PRE_BOOKED" else 10)
+				rel_limit = math.ceil(cap * rel_pct / 100)
+				rel_used = frappe.db.count("Patient Appointment", {
+					"practitioner": practitioner,
+					"appointment_date": appointment_date,
+					"custom_queue_type": release_type,
+					"status": ["not in", ["Cancelled", "No Show"]],
+				})
+				limit += max(0, rel_limit - rel_used)
+
 	used = frappe.db.count("Patient Appointment", {
 		"practitioner": practitioner,
 		"appointment_date": appointment_date,
@@ -342,16 +361,18 @@ def book_appointment(
 		appointment_type = result[0][0] if result else None
 
 	appt = frappe.get_doc({
-		"doctype":           "Patient Appointment",
-		"patient":           patient,
-		"practitioner":      practitioner,
-		"appointment_date":  appointment_date,
-		"appointment_time":  appt_time,
-		"custom_queue_type": queue_type,
-		"appointment_type":  appointment_type,
-		# duration=1 keeps the overlap check window to 1 minute; slot spacing >= 1 min avoids false conflicts.
-		# status is intentionally omitted — set_status() in validate() sets Open (today) or Scheduled (future).
-		"duration":          1,
+		"doctype":                      "Patient Appointment",
+		"patient":                      patient,
+		"practitioner":                 practitioner,
+		"appointment_date":             appointment_date,
+		"appointment_time":             appt_time,
+		"custom_queue_type":            queue_type,
+		"appointment_type":             appointment_type,
+		"duration":                     1,
+		# All clinic_flow appointments are queue-driven; appointment_time is only a
+		# uniqueness key, not a hard slot. Setting this flag tells Frappe Healthcare
+		# to skip the strict time-range overlap check.
+		"appointment_based_on_check_in": 1,
 	})
 	appt.insert(ignore_permissions=True)
 	return {"appointment": appt.name, "patient": patient, "appointment_date": appointment_date}

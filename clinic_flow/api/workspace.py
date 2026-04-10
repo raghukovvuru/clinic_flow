@@ -140,9 +140,8 @@ def _decrement_session_counter(queue_session: str, queue_type: str) -> None:
 	"""Track used slot counts on the session."""
 	field_map = {
 		"PRE_BOOKED": "prebooked_used",
-		"WALK_IN": "walkin_used",
-		"EMERGENCY": "emergency_used",
-		"FOLLOW_UP": "walkin_used",  # follow-ups share walk-in counter
+		"WALK_IN":    "walkin_used",
+		"FOLLOW_UP":  "followup_used",
 	}
 	field = field_map.get(queue_type)
 	if field:
