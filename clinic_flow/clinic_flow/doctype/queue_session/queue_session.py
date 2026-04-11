@@ -17,8 +17,8 @@ class QueueSession(Document):
 			self.prebooked_total = math.ceil(capacity * prebooked_pct / 100)
 		if not self.walkin_total:
 			self.walkin_total = math.ceil(capacity * walkin_pct / 100)
-		if not self.emergency_total:
-			self.emergency_total = math.ceil(capacity * followup_pct / 100)
+		if not self.followup_total:
+			self.followup_total = math.ceil(capacity * followup_pct / 100)
 
 	def validate(self) -> None:
 		if self.start_time >= self.end_time:
