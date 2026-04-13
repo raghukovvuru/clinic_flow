@@ -124,6 +124,30 @@ function get_dashboard_html() {
 	border-radius: 50%; animation: rd-spin .6s linear infinite;
 }
 @keyframes rd-spin { to { transform: rotate(360deg); } }
+
+/* token board cells */
+.rd-token-cell {
+	width: 44px; height: 44px; border-radius: 7px; border: 1.5px solid;
+	display: flex; flex-direction: column; align-items: center; justify-content: center;
+	font-size: 11px; font-weight: 700; cursor: default;
+	transition: transform .1s, box-shadow .1s; position: relative; flex-shrink: 0;
+}
+.rd-token-cell.clickable { cursor: pointer; }
+.rd-token-cell.clickable:hover { transform: scale(1.08); }
+.rd-token-cell.recommended {
+	box-shadow: 0 0 0 3px var(--primary) !important;
+}
+.rd-token-cell.override-selected {
+	box-shadow: 0 0 0 3px #16a34a !important;
+}
+.rd-token-cell .rd-cell-sub {
+	font-size: 8px; font-weight: 400; line-height: 1; margin-top: 1px;
+}
+
+/* detail drawer */
+.rd-drawer-section { margin-bottom: 14px; }
+.rd-drawer-section .rd-label { margin-bottom: 4px; }
+.rd-drawer-section .rd-val { font-size: 14px; font-weight: 600; }
 </style>
 
 <div id="rd-root" style="display:flex;flex-direction:column;height:calc(100vh - 60px);overflow:hidden;">
@@ -171,22 +195,37 @@ function get_dashboard_html() {
 			<div id="rd-admission-body" style="flex:1;overflow-y:auto;padding:14px 16px;"></div>
 		</div>
 
-		<!-- CENTER: Token Board (Phase 5 placeholder) ───────────────────── -->
+		<!-- CENTER: Token Board ─────────────────────────────────────────── -->
 		<div id="rd-center"
 			style="display:flex;flex-direction:column;overflow:hidden;
 				border-right:1px solid var(--border-color);">
-			<div style="padding:10px 16px;border-bottom:1px solid var(--border-color);flex-shrink:0;">
-				<span class="rd-label">Token Board</span>
+			<!-- Board header: session selector + refresh -->
+			<div style="padding:8px 12px;border-bottom:1px solid var(--border-color);
+				flex-shrink:0;display:flex;align-items:center;gap:8px;">
+				<span class="rd-label" style="flex-shrink:0;">Token Board</span>
+				<select id="rd-board-session" style="flex:1;padding:5px 8px;
+					border:1.5px solid var(--border-color);border-radius:6px;
+					font-size:12px;background:var(--input-bg);outline:none;">
+					<option value="">Select session…</option>
+				</select>
+				<button id="rd-board-refresh" title="Refresh"
+					style="border:none;background:transparent;cursor:pointer;
+						color:var(--text-muted);font-size:18px;line-height:1;
+						padding:0 4px;flex-shrink:0;">⟳</button>
 			</div>
-			<div id="rd-token-board"
-				style="flex:1;overflow-y:auto;padding:16px;
-					display:flex;align-items:center;justify-content:center;">
-				<div style="text-align:center;color:var(--text-muted);">
-					<div style="font-size:14px;font-weight:600;margin-bottom:6px;">
-						Token Board
-					</div>
-					<div style="font-size:12px;">Available in Phase 5</div>
-				</div>
+			<!-- Legend -->
+			<div id="rd-board-legend"
+				style="padding:5px 12px;border-bottom:1px solid var(--border-color);
+					flex-shrink:0;display:flex;gap:10px;flex-wrap:wrap;"></div>
+			<!-- Grid / drawer area -->
+			<div id="rd-board-main" style="flex:1;overflow:hidden;position:relative;">
+				<div id="rd-board-grid"
+					style="height:100%;overflow-y:auto;padding:12px;"></div>
+				<!-- Detail drawer overlays the grid -->
+				<div id="rd-board-drawer"
+					style="position:absolute;top:0;left:0;right:0;bottom:0;
+						background:var(--card-bg);overflow-y:auto;padding:16px;
+						display:none;"></div>
 			</div>
 		</div>
 
@@ -227,18 +266,22 @@ class ReceptionistDashboard {
 
 		// Admission state
 		this.state = {
-			step:         'search',    // search | guardian_found | guardian_not_found |
-			                           // register | child_selected | session_offered | confirmed
-			channel:      'walkin',    // walkin | phone | vip
-			mobile:       '',
-			guardian:     null,        // {name, guardian_name, mobile, relationship, notes}
-			children:     [],          // [{patient, patient_name, dob, age_display}]
-			child:        null,        // selected child object
-			visit_type:   null,        // result from get_visit_type
-			sessions:     [],          // result from get_suggested_sessions
-			session_idx:  0,           // which session in the list is being offered
-			booking:      null,        // result from confirm_booking
+			step:            'search',  // search | guardian_found | guardian_not_found |
+			                            // register | child_selected | session_offered | confirmed
+			channel:         'walkin',  // walkin | phone | vip
+			mobile:          '',
+			guardian:        null,      // {name, guardian_name, mobile, relationship, notes}
+			children:        [],        // [{patient, patient_name, dob, age_display}]
+			child:           null,      // selected child object
+			visit_type:      null,      // result from get_visit_type
+			sessions:        [],        // result from get_suggested_sessions
+			session_idx:     0,         // which session in the list is being offered
+			booking:         null,      // result from confirm_booking
+			override_token:  null,      // token selected by clicking a cell on the board
 		};
+
+		// Token board (center panel)
+		this.token_board = new TokenBoard(this, this.$root.find('#rd-center'));
 
 		this._bind_channel_tabs();
 		this.load_top_bar();
@@ -711,9 +754,13 @@ class ReceptionistDashboard {
 					return;
 				}
 
-				this.state.sessions   = r.message;
+				this.state.sessions    = r.message;
 				this.state.session_idx = 0;
+				this.state.override_token = null;
 				this.state.step = 'session_offered';
+				// Load the first offered session on the board
+				const first = r.message[0];
+				this.token_board.load(first.queue_session);
 				this.render_admission();
 			},
 		});
@@ -776,6 +823,20 @@ class ReceptionistDashboard {
 						&nbsp;·&nbsp;New: ${s.non_review_load_count}
 					</div>
 
+					${this.state.override_token ? `
+					<div style="margin-bottom:8px;padding:6px 10px;border-radius:6px;
+						background:#dcfce7;font-size:12px;font-weight:600;color:#15803d;">
+						Token ${frappe.utils.escape_html(String(this.state.override_token))} selected
+						<button id="rd-clear-override"
+							style="margin-left:8px;border:none;background:transparent;
+								cursor:pointer;color:#15803d;font-size:11px;text-decoration:underline;">
+							clear
+						</button>
+					</div>` : `
+					<div class="rd-caption" style="margin-bottom:8px;">
+						Token auto-assigned. Click any green cell on the board to override.
+					</div>`}
+
 					<button id="rd-confirm-btn" class="rd-btn-primary">
 						Confirm Booking
 					</button>
@@ -797,13 +858,24 @@ class ReceptionistDashboard {
 			this.state.step = 'child_selected';
 			this.render_admission();
 		});
+		this.$body.find('#rd-clear-override').on('click', () => {
+			this.state.override_token = null;
+			this.token_board.set_recommended(null);
+			this.render_admission();
+		});
 		this.$body.find('#rd-confirm-btn').on('click', () => this._do_confirm_booking(s));
 		this.$body.find('#rd-prev-session').on('click', () => {
 			this.state.session_idx--;
+			this.state.override_token = null;
+			const prev = this.state.sessions[this.state.session_idx];
+			this.token_board.load(prev.queue_session);
 			this.render_admission();
 		});
 		this.$body.find('#rd-next-session').on('click', () => {
 			this.state.session_idx++;
+			this.state.override_token = null;
+			const next = this.state.sessions[this.state.session_idx];
+			this.token_board.load(next.queue_session);
 			this.render_admission();
 		});
 	}
@@ -821,6 +893,7 @@ class ReceptionistDashboard {
 				channel:       this.state.channel,
 				load_class:    this.state.visit_type.load_class,
 				guardian:      this.state.guardian.name,
+				token_number:  this.state.override_token || null,
 			},
 			callback: (r) => {
 				if (!r.message) return;
@@ -828,6 +901,8 @@ class ReceptionistDashboard {
 				this.state.step = 'confirmed';
 				this.render_admission();
 				this.load_top_bar();
+				// Reload board to show confirmed token
+				this.token_board.load(session.queue_session, r.message.token_number);
 			},
 			error: () => {
 				$btn.prop('disabled', false).text('Confirm Booking');
@@ -948,17 +1023,420 @@ class ReceptionistDashboard {
 	// ── Reset helpers ─────────────────────────────────────────────────────────
 	_reset_to_search() {
 		this.state = {
-			step:         'search',
-			channel:      this.state.channel,
-			mobile:       '',
-			guardian:     null,
-			children:     [],
-			child:        null,
-			visit_type:   null,
-			sessions:     [],
-			session_idx:  0,
-			booking:      null,
+			step:           'search',
+			channel:        this.state.channel,
+			mobile:         '',
+			guardian:       null,
+			children:       [],
+			child:          null,
+			visit_type:     null,
+			sessions:       [],
+			session_idx:    0,
+			booking:        null,
+			override_token: null,
 		};
+		this.token_board.clear_highlight();
 		this.render_admission();
+	}
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Token Board component (center panel)
+// ─────────────────────────────────────────────────────────────────────────────
+class TokenBoard {
+	// Cell state → visual config
+	static CELL_STYLES = {
+		available:    { bg: '#f0fdf4', border: '#16a34a', color: '#15803d', sub: '' },
+		vip_buffer:   { bg: '#fef9c3', border: '#d97706', color: '#a16207', sub: 'VIP' },
+		booked:       { bg: '#fee2e2', border: '#dc2626', color: '#991b1b', sub: '' },
+		called:       { bg: '#dbeafe', border: '#1d4ed8', color: '#1e40af', sub: 'CALL' },
+		no_response:  { bg: '#ffedd5', border: '#ea580c', color: '#9a3412', sub: 'N/R' },
+		ready:        { bg: '#ede9fe', border: '#7c3aed', color: '#5b21b6', sub: 'RDY' },
+		with_doctor:  { bg: '#1d4ed8', border: '#1d4ed8', color: '#fff',    sub: 'DOC' },
+		completed:    { bg: '#f3f4f6', border: '#d1d5db', color: '#9ca3af', sub: '✓' },
+		pushed_to_end:{ bg: '#f3f4f6', border: '#d1d5db', color: '#d1d5db', sub: '↓' },
+	};
+
+	static LEGEND = [
+		{ state: 'available',    label: 'Available' },
+		{ state: 'vip_buffer',   label: 'VIP Buffer' },
+		{ state: 'booked',       label: 'Booked' },
+		{ state: 'called',       label: 'Called' },
+		{ state: 'no_response',  label: 'No Response' },
+		{ state: 'ready',        label: 'Ready' },
+		{ state: 'with_doctor',  label: 'With Doctor' },
+		{ state: 'completed',    label: 'Done' },
+	];
+
+	constructor(dashboard, $container) {
+		this.dashboard         = dashboard;
+		this.$container        = $container;
+		this.$session_select   = $container.find('#rd-board-session');
+		this.$refresh_btn      = $container.find('#rd-board-refresh');
+		this.$legend           = $container.find('#rd-board-legend');
+		this.$grid             = $container.find('#rd-board-grid');
+		this.$drawer           = $container.find('#rd-board-drawer');
+
+		this.current_session   = null;
+		this.board_data        = null;
+		this.recommended_token = null; // highlighted with a ring
+
+		this._render_legend();
+		this._load_session_list();
+		this._bind_events();
+		this._subscribe_realtime();
+	}
+
+	// ── Initialisation ────────────────────────────────────────────────────────
+	_render_legend() {
+		const items = TokenBoard.LEGEND.map(({ state, label }) => {
+			const s = TokenBoard.CELL_STYLES[state];
+			return `<span style="display:inline-flex;align-items:center;gap:4px;
+				font-size:10px;color:var(--text-muted);">
+				<span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;
+					background:${s.bg};border:1.5px solid ${s.border};"></span>
+				${label}
+			</span>`;
+		});
+		this.$legend.html(items.join(''));
+	}
+
+	_load_session_list() {
+		frappe.call({
+			method: 'frappe.client.get_list',
+			args: {
+				doctype: 'Queue Session',
+				filters: [
+					['session_date', '>=', frappe.datetime.get_today()],
+					['status', 'in', ['Scheduled', 'Active', 'Paused']],
+				],
+				fields: ['name', 'session_name', 'session_date', 'start_time', 'dept_abbr'],
+				order_by: 'session_date asc, start_time asc',
+				limit: 20,
+			},
+			callback: (r) => {
+				if (!r.message) return;
+				const opts = r.message.map(s =>
+					`<option value="${frappe.utils.escape_html(s.name)}">
+						${frappe.utils.escape_html(s.session_name || s.name)}
+						(${frappe.utils.escape_html(s.session_date)})
+					</option>`
+				).join('');
+				this.$session_select.html(
+					'<option value="">Select session…</option>' + opts
+				);
+				// Auto-select first active session if board is empty
+				if (!this.current_session && r.message.length) {
+					const active = r.message.find(s => s.status === 'Active') || r.message[0];
+					// Don't auto-load yet — wait for left panel or explicit selection
+				}
+			},
+		});
+	}
+
+	_bind_events() {
+		this.$session_select.on('change', () => {
+			const qs = this.$session_select.val();
+			if (qs) this.load(qs);
+			else { this._clear_board(); this.current_session = null; }
+		});
+
+		this.$refresh_btn.on('click', () => {
+			if (this.current_session) this.load(this.current_session);
+		});
+	}
+
+	_subscribe_realtime() {
+		frappe.realtime.on('queue_update', (data) => {
+			if (data && data.queue_session === this.current_session) {
+				this.load(this.current_session, this.recommended_token);
+			}
+		});
+	}
+
+	// ── Public API ────────────────────────────────────────────────────────────
+
+	/** Load (or reload) the board for a given session. Optionally highlight a token. */
+	load(queue_session, highlight_token = null) {
+		if (!queue_session) return;
+		this.current_session = queue_session;
+		if (highlight_token !== null) this.recommended_token = highlight_token;
+
+		// Sync the select element
+		if (this.$session_select.val() !== queue_session) {
+			this.$session_select.val(queue_session);
+			if (!this.$session_select.val()) {
+				// Option not in list yet — add it and re-select
+				this.$session_select.append(
+					`<option value="${frappe.utils.escape_html(queue_session)}">
+						${frappe.utils.escape_html(queue_session)}
+					</option>`
+				);
+				this.$session_select.val(queue_session);
+			}
+		}
+
+		frappe.call({
+			method: 'clinic_flow.api.admission.get_token_board',
+			args: { queue_session },
+			callback: (r) => {
+				if (!r.message) return;
+				this.board_data = r.message;
+				this._render_board();
+			},
+		});
+	}
+
+	/** Set/clear the recommended token ring without reloading from server. */
+	set_recommended(token_number) {
+		this.recommended_token = token_number;
+		if (this.board_data) this._render_board();
+	}
+
+	/** Remove all highlights (called on booking reset). */
+	clear_highlight() {
+		this.recommended_token = null;
+		if (this.board_data) this._render_board();
+	}
+
+	// ── Board rendering ───────────────────────────────────────────────────────
+	_clear_board() {
+		this.$grid.html(
+			'<div style="text-align:center;padding:40px 0;color:var(--text-muted);">' +
+			'Select a session to view the token board.</div>'
+		);
+	}
+
+	_render_board() {
+		const data           = this.board_data;
+		const entries_map    = {};                          // token_number → entry
+		(data.entries || []).forEach(e => {
+			if (e.token_number) entries_map[e.token_number] = e;
+		});
+		const vip_set        = new Set(data.vip_buffer_reserved || []);
+		const max_token      = data.max_token || 0;
+
+		if (max_token === 0) {
+			this.$grid.html(
+				'<div style="text-align:center;padding:40px 0;color:var(--text-muted);">' +
+				'No tokens in this session yet.</div>'
+			);
+			return;
+		}
+
+		const cells = [];
+		for (let n = 1; n <= max_token; n++) {
+			const entry = entries_map[n] || null;
+			const state = this._cell_state(n, entry, vip_set);
+			const style = TokenBoard.CELL_STYLES[state] || TokenBoard.CELL_STYLES.available;
+			const is_rec = (n === this.recommended_token);
+			const is_clickable = (state === 'available' || entry !== null);
+
+			const classes = [
+				'rd-token-cell',
+				is_clickable ? 'clickable' : '',
+				is_rec ? 'recommended' : '',
+			].filter(Boolean).join(' ');
+
+			const opacity = (state === 'pushed_to_end') ? 'opacity:.4;' : '';
+
+			cells.push(`
+				<div class="${classes}"
+					data-token="${n}"
+					data-state="${state}"
+					data-entry="${entry ? frappe.utils.escape_html(entry.name) : ''}"
+					style="background:${style.bg};border-color:${style.border};
+						color:${style.color};${opacity}">
+					<span>${n}</span>
+					${style.sub ? `<span class="rd-cell-sub">${style.sub}</span>` : ''}
+				</div>
+			`);
+		}
+
+		this.$grid.html(`
+			<div style="display:flex;flex-wrap:wrap;gap:5px;align-content:flex-start;">
+				${cells.join('')}
+			</div>
+		`);
+
+		this.$grid.off('click', '.rd-token-cell').on('click', '.rd-token-cell', (e) => {
+			const $cell = $(e.currentTarget);
+			const token_number = parseInt($cell.data('token'), 10);
+			const state = $cell.data('state');
+			const entry_name = $cell.data('entry');
+			this._on_cell_click(token_number, state, entry_name);
+		});
+	}
+
+	_cell_state(token_number, entry, vip_set) {
+		if (entry) {
+			const status_map = {
+				'Booked':           'booked',
+				'Waiting':          'booked',
+				'Called':           'called',
+				'No Response':      'no_response',
+				'Ready Near Doctor':'ready',
+				'With Doctor':      'with_doctor',
+				'Completed':        'completed',
+				'Done':             'completed',
+				'Pushed to End':    'pushed_to_end',
+				'Skipped':          'completed',
+				'No Show':          'completed',
+			};
+			return status_map[entry.status] || 'booked';
+		}
+		if (vip_set.has(token_number)) return 'vip_buffer';
+		return 'available';
+	}
+
+	// ── Cell click ────────────────────────────────────────────────────────────
+	_on_cell_click(token_number, state, entry_name) {
+		const db = this.dashboard;
+		const admission_step = db.state.step;
+
+		// Available cell during session_offered → override token selection
+		if (state === 'available' && admission_step === 'session_offered') {
+			db.state.override_token = token_number;
+			this.set_recommended(token_number);
+			// Mark cell with override-selected style
+			this.$grid.find(`.rd-token-cell[data-token="${token_number}"]`)
+				.addClass('override-selected').removeClass('recommended');
+			db.render_admission();
+			return;
+		}
+
+		// VIP buffer cell during VIP session_offered → select it
+		if (state === 'vip_buffer' && admission_step === 'session_offered'
+			&& db.state.channel === 'vip') {
+			db.state.override_token = token_number;
+			this.set_recommended(token_number);
+			db.render_admission();
+			return;
+		}
+
+		// Occupied / buffer cell → show detail drawer
+		if (entry_name) {
+			const entry = (this.board_data.entries || []).find(e => e.name === entry_name);
+			if (entry) this._show_detail(entry);
+		} else if (state === 'vip_buffer') {
+			this._show_vip_detail(token_number);
+		}
+	}
+
+	// ── Detail drawer ─────────────────────────────────────────────────────────
+	_show_detail(entry) {
+		const report_time = entry.report_by_time
+			? frappe.datetime.str_to_user(entry.report_by_time, true) : '—';
+		const pred_time = entry.predicted_doctor_time
+			? frappe.datetime.str_to_user(entry.predicted_doctor_time, true) : '—';
+
+		const status_colors = {
+			'Booked':           '#fee2e2',
+			'Called':           '#dbeafe',
+			'No Response':      '#ffedd5',
+			'Ready Near Doctor':'#ede9fe',
+			'With Doctor':      '#dbeafe',
+			'Completed':        '#f3f4f6',
+			'Done':             '#f3f4f6',
+			'Pushed to End':    '#f3f4f6',
+		};
+		const status_bg = status_colors[entry.status] || '#f3f4f6';
+
+		this.$drawer.html(`
+			<div>
+				<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+					<div style="font-size:22px;font-weight:900;color:var(--primary);">
+						${frappe.utils.escape_html(String(entry.token_number))}
+					</div>
+					<div style="flex:1;">
+						<div style="font-size:14px;font-weight:700;">
+							${frappe.utils.escape_html(entry.patient_name || entry.patient)}
+						</div>
+						<span style="padding:2px 8px;border-radius:999px;font-size:10px;
+							font-weight:700;background:${status_bg};">
+							${frappe.utils.escape_html(entry.status)}
+						</span>
+					</div>
+					<button id="rd-drawer-close" class="rd-btn-secondary"
+						style="padding:4px 10px;font-size:11px;">✕ Close</button>
+				</div>
+
+				<div class="rd-drawer-section">
+					<div class="rd-label">Load Class</div>
+					<div class="rd-val">
+						${entry.load_class === 'review_load'
+							? '<span class="rd-badge rd-badge-green">Review Patient</span>'
+							: '<span class="rd-badge rd-badge-blue">New Patient</span>'}
+					</div>
+				</div>
+
+				<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+					<div class="rd-drawer-section" style="margin-bottom:0;">
+						<div class="rd-label">Report By</div>
+						<div class="rd-val">${frappe.utils.escape_html(report_time)}</div>
+					</div>
+					<div class="rd-drawer-section" style="margin-bottom:0;">
+						<div class="rd-label">Est. Doctor</div>
+						<div class="rd-val">${frappe.utils.escape_html(pred_time)}</div>
+					</div>
+				</div>
+
+				${entry.called_to_reception_at ? `
+				<div class="rd-drawer-section">
+					<div class="rd-label">Called to Reception</div>
+					<div class="rd-caption">
+						${frappe.utils.escape_html(
+							frappe.datetime.str_to_user(entry.called_to_reception_at, true)
+						)}
+					</div>
+				</div>` : ''}
+
+				${entry.no_response_at ? `
+				<div class="rd-drawer-section">
+					<div class="rd-label">No Response Since</div>
+					<div class="rd-caption">
+						${frappe.utils.escape_html(
+							frappe.datetime.str_to_user(entry.no_response_at, true)
+						)}
+						${entry.hold_patients_count
+							? '&nbsp;·&nbsp;Hold count: '
+								+ frappe.utils.escape_html(String(entry.hold_patients_count))
+							: ''}
+					</div>
+				</div>` : ''}
+
+				<div class="rd-caption" style="margin-top:8px;color:var(--text-muted);">
+					Queue Entry: ${frappe.utils.escape_html(entry.name)}
+				</div>
+			</div>
+		`).show();
+
+		this.$drawer.find('#rd-drawer-close').on('click', () => this._hide_detail());
+	}
+
+	_show_vip_detail(token_number) {
+		this.$drawer.html(`
+			<div>
+				<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+					<div style="font-size:22px;font-weight:900;color:#d97706;">${token_number}</div>
+					<div style="flex:1;">
+						<div style="font-size:14px;font-weight:700;">VIP Buffer Slot</div>
+						<span class="rd-badge rd-badge-amber">Held for VIP</span>
+					</div>
+					<button id="rd-drawer-close" class="rd-btn-secondary"
+						style="padding:4px 10px;font-size:11px;">✕ Close</button>
+				</div>
+				<div class="rd-caption">
+					This token position is reserved as a VIP buffer slot.<br>
+					Use the VIP channel in the admission panel to assign it to a patient.
+				</div>
+			</div>
+		`).show();
+		this.$drawer.find('#rd-drawer-close').on('click', () => this._hide_detail());
+	}
+
+	_hide_detail() {
+		this.$drawer.hide().empty();
 	}
 }

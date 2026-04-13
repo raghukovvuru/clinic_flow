@@ -163,6 +163,9 @@ def get_token_board(queue_session: str) -> dict:
         fields=[
             "name", "token_number", "token", "patient", "patient_name",
             "load_class", "queue_type", "status", "queue_position",
+            "report_by_time", "predicted_doctor_time",
+            "called_to_reception_at", "reception_done_at",
+            "no_response_at", "hold_patients_count",
         ],
         order_by="token_number asc",
     )
@@ -170,11 +173,18 @@ def get_token_board(queue_session: str) -> dict:
     buffer_list = _parse_vip_positions(session.vip_buffer_positions)
     used_tokens = {e.token_number for e in entries if e.token_number}
 
+    # Compute max token to know how many cells to draw
+    max_token = max(
+        (session.stretch_capacity or session.planned_capacity or 0),
+        max((e.token_number for e in entries if e.token_number), default=0),
+    )
+
     return {
         "session": session,
         "entries": entries,
         "vip_buffer_available": [p for p in buffer_list if p not in used_tokens],
         "vip_buffer_reserved": buffer_list,
+        "max_token": max_token,
     }
 
 
@@ -190,12 +200,15 @@ def confirm_booking(
     load_class: str,
     guardian: str | None = None,
     notes: str = "",
+    token_number: int | None = None,
 ) -> dict:
     """
     Confirm a booking: assign a token number and create a QueueEntry.
 
     channel: 'phone' | 'walkin' | 'vip'
     load_class: 'review_load' | 'non_review_load'
+    token_number: optional override — receptionist selected a specific cell on the
+        token board. Validated against existing tokens and VIP buffer before use.
 
     VIP channel takes the nearest unassigned vip_buffer_position.
     Phone/walkin channel skips buffer positions when assigning sequential tokens.
@@ -252,8 +265,24 @@ def confirm_booking(
         )
     }
     buffer_list = _parse_vip_positions(session_doc.vip_buffer_positions)
+    buffer_set = set(buffer_list)
 
-    if channel == "vip":
+    if token_number is not None:
+        # Validate the override token
+        token_number = int(token_number)
+        if token_number in existing_tokens:
+            frappe.throw(_("Token {0} is already assigned in this session.").format(token_number))
+        if channel != "vip" and token_number in buffer_set:
+            frappe.throw(
+                _("Token {0} is a VIP buffer position. Use the VIP channel to assign it.").format(
+                    token_number
+                )
+            )
+        if channel == "vip" and token_number not in buffer_set:
+            frappe.throw(
+                _("Token {0} is not a VIP buffer position.").format(token_number)
+            )
+    elif channel == "vip":
         token_number = _next_vip_token(buffer_list, existing_tokens)
     else:
         token_number = _next_normal_token(buffer_list, existing_tokens)
