@@ -107,7 +107,7 @@ def get_suggested_sessions(
         if available <= 0:
             continue
 
-        result.append({
+        row = {
             "queue_session": s.name,
             "session_name": s.session_name,
             "session_date": str(s.session_date),
@@ -120,7 +120,21 @@ def get_suggested_sessions(
             "non_review_load_count": s.non_review_load_count or 0,
             "total_booked": total_booked,
             "load_ratio": _load_ratio(s),
-        })
+        }
+        # For VIP channel include the nearest available buffer position
+        if channel == "vip":
+            used_tokens = {
+                r[0]
+                for r in frappe.db.sql(
+                    "SELECT token_number FROM `tabQueue Entry` "
+                    "WHERE queue_session = %s AND token_number > 0",
+                    s.name,
+                )
+            }
+            avail_buffers = [p for p in _parse_vip_positions(s.vip_buffer_positions)
+                             if p not in used_tokens]
+            row["suggested_vip_token"] = avail_buffers[0] if avail_buffers else None
+        result.append(row)
 
     return result
 

@@ -148,6 +148,47 @@ function get_dashboard_html() {
 .rd-drawer-section { margin-bottom: 14px; }
 .rd-drawer-section .rd-label { margin-bottom: 4px; }
 .rd-drawer-section .rd-val { font-size: 14px; font-weight: 600; }
+
+/* live session panel */
+.rd-pipeline-section { margin-bottom: 14px; }
+.rd-pipeline-header {
+	font-size: 10px; font-weight: 700; text-transform: uppercase;
+	letter-spacing: 1px; color: var(--text-muted);
+	padding: 4px 0 6px; border-bottom: 1px solid var(--border-color);
+	margin-bottom: 6px;
+}
+.rd-patient-card {
+	border: 1px solid var(--border-color); border-radius: 8px;
+	padding: 8px 10px; margin-bottom: 6px; background: var(--card-bg);
+}
+.rd-patient-card.with-doctor {
+	border-color: #1d4ed8; background: #eff6ff;
+}
+.rd-patient-card.ready   { border-color: #7c3aed; background: #faf5ff; }
+.rd-patient-card.called  { border-color: #1d4ed8; background: #eff6ff; }
+.rd-patient-card.no-resp { border-color: #ea580c; background: #fff7ed; }
+.rd-action-btn {
+	padding: 4px 10px; border-radius: 5px; font-size: 11px; font-weight: 600;
+	cursor: pointer; border: 1.5px solid; transition: all .15s; white-space: nowrap;
+}
+.rd-action-btn:hover { opacity: .85; }
+.rd-action-btn-green  { border-color: #16a34a; color: #15803d; background: transparent; }
+.rd-action-btn-green:hover  { background: #16a34a; color: #fff; }
+.rd-action-btn-blue   { border-color: #1d4ed8; color: #1e40af; background: transparent; }
+.rd-action-btn-blue:hover   { background: #1d4ed8; color: #fff; }
+.rd-action-btn-orange { border-color: #ea580c; color: #9a3412; background: transparent; }
+.rd-action-btn-orange:hover { background: #ea580c; color: #fff; }
+.rd-action-btn-red    { border-color: #dc2626; color: #991b1b; background: transparent; }
+.rd-action-btn-red:hover    { background: #dc2626; color: #fff; }
+.rd-recep-form {
+	margin-top: 8px; padding: 8px; border-radius: 6px;
+	background: var(--bg-color); border: 1px solid var(--border-color);
+}
+.rd-recep-input {
+	padding: 6px 8px; border: 1.5px solid var(--border-color); border-radius: 5px;
+	font-size: 12px; outline: none; background: var(--input-bg); width: 100%;
+}
+.rd-recep-input:focus { border-color: var(--primary); }
 </style>
 
 <div id="rd-root" style="display:flex;flex-direction:column;height:calc(100vh - 60px);overflow:hidden;">
@@ -229,21 +270,29 @@ function get_dashboard_html() {
 			</div>
 		</div>
 
-		<!-- RIGHT: Live Session Panel (Phase 6 placeholder) ──────────────── -->
+		<!-- RIGHT: Live Session Panel ──────────────────────────────────────── -->
 		<div id="rd-right" style="display:flex;flex-direction:column;overflow:hidden;">
-			<div style="padding:10px 16px;border-bottom:1px solid var(--border-color);flex-shrink:0;">
-				<span class="rd-label">Live Session</span>
+			<!-- Header: session selector + refresh -->
+			<div style="padding:8px 10px;border-bottom:1px solid var(--border-color);
+				flex-shrink:0;display:flex;align-items:center;gap:6px;">
+				<span class="rd-label" style="flex-shrink:0;">Live Session</span>
+				<select id="rd-live-session-sel"
+					style="flex:1;padding:5px 8px;
+						border:1.5px solid var(--border-color);border-radius:6px;
+						font-size:12px;background:var(--input-bg);outline:none;">
+					<option value="">Select session…</option>
+				</select>
+				<button id="rd-live-refresh" title="Refresh"
+					style="border:none;background:transparent;cursor:pointer;
+						color:var(--text-muted);font-size:18px;line-height:1;
+						padding:0 4px;flex-shrink:0;">⟳</button>
 			</div>
-			<div id="rd-live-panel"
-				style="flex:1;overflow-y:auto;padding:16px;
-					display:flex;align-items:center;justify-content:center;">
-				<div style="text-align:center;color:var(--text-muted);">
-					<div style="font-size:14px;font-weight:600;margin-bottom:6px;">
-						Live Session Panel
-					</div>
-					<div style="font-size:12px;">Available in Phase 6</div>
-				</div>
-			</div>
+			<!-- Counts bar -->
+			<div id="rd-live-counts"
+				style="padding:5px 10px;border-bottom:1px solid var(--border-color);
+					flex-shrink:0;display:flex;gap:12px;"></div>
+			<!-- Pipeline body -->
+			<div id="rd-live-panel" style="flex:1;overflow-y:auto;padding:10px;"></div>
 		</div>
 
 	</div>
@@ -282,6 +331,9 @@ class ReceptionistDashboard {
 
 		// Token board (center panel)
 		this.token_board = new TokenBoard(this, this.$root.find('#rd-center'));
+
+		// Live session panel (right panel)
+		this.live_panel = new LiveSessionPanel(this, this.$root.find('#rd-right'));
 
 		this._bind_channel_tabs();
 		this.load_top_bar();
@@ -758,9 +810,11 @@ class ReceptionistDashboard {
 				this.state.session_idx = 0;
 				this.state.override_token = null;
 				this.state.step = 'session_offered';
-				// Load the first offered session on the board
+				// Load the first offered session on the board; for VIP pre-highlight suggested token
 				const first = r.message[0];
-				this.token_board.load(first.queue_session);
+				const vip_hint = (this.state.channel === 'vip' && first.suggested_vip_token)
+					? first.suggested_vip_token : null;
+				this.token_board.load(first.queue_session, vip_hint);
 				this.render_admission();
 			},
 		});
@@ -822,6 +876,15 @@ class ReceptionistDashboard {
 						Review: ${s.review_load_count}
 						&nbsp;·&nbsp;New: ${s.non_review_load_count}
 					</div>
+
+					${(this.state.channel === 'vip' && s.suggested_vip_token) ? `
+					<div style="padding:6px 10px;margin-bottom:10px;border-radius:6px;
+						background:#fef9c3;border:1px solid #d97706;
+						font-size:12px;font-weight:600;color:#a16207;">
+						Suggested VIP token:
+						<strong>${frappe.utils.escape_html(String(s.suggested_vip_token))}</strong>
+						&nbsp;(highlighted on board — click to confirm)
+					</div>` : ''}
 
 					${this.state.override_token ? `
 					<div style="margin-bottom:8px;padding:6px 10px;border-radius:6px;
@@ -1438,5 +1501,482 @@ class TokenBoard {
 
 	_hide_detail() {
 		this.$drawer.hide().empty();
+	}
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Live Session Panel (right panel)
+// ─────────────────────────────────────────────────────────────────────────────
+class LiveSessionPanel {
+	constructor(dashboard, $container) {
+		this.dashboard        = dashboard;
+		this.$container       = $container;
+		this.$session_sel     = $container.find('#rd-live-session-sel');
+		this.$counts          = $container.find('#rd-live-counts');
+		this.$panel           = $container.find('#rd-live-panel');
+		this.$refresh_btn     = $container.find('#rd-live-refresh');
+		this.current_session  = null;
+		this._expanding       = null; // queue_entry being expanded for reception form
+
+		this._load_session_list();
+		this._bind_events();
+		this._subscribe_realtime();
+		this._auto_detect_active();
+	}
+
+	// ── Setup ─────────────────────────────────────────────────────────────────
+	_load_session_list() {
+		frappe.call({
+			method: 'frappe.client.get_list',
+			args: {
+				doctype: 'Queue Session',
+				filters: [
+					['session_date', '=', frappe.datetime.get_today()],
+					['status', 'in', ['Scheduled', 'Active', 'Paused']],
+				],
+				fields: ['name', 'session_name', 'dept_abbr'],
+				order_by: 'start_time asc',
+				limit: 10,
+			},
+			callback: (r) => {
+				if (!r.message) return;
+				const opts = r.message.map(s =>
+					`<option value="${frappe.utils.escape_html(s.name)}">
+						${frappe.utils.escape_html(s.session_name || s.name)}
+						${s.dept_abbr ? '(' + frappe.utils.escape_html(s.dept_abbr) + ')' : ''}
+					</option>`
+				).join('');
+				this.$session_sel.html('<option value="">Select session…</option>' + opts);
+				if (!this.current_session && r.message.length === 1) {
+					this.$session_sel.val(r.message[0].name);
+					this.load(r.message[0].name);
+				}
+			},
+		});
+	}
+
+	_auto_detect_active() {
+		frappe.call({
+			method: 'clinic_flow.api.queue.get_queue_state_for_display',
+			args: { dept: 'all' },
+			callback: (r) => {
+				if (!r.message || !r.message.sessions || !r.message.sessions.length) return;
+				const active = r.message.sessions.find(s => s.session_status === 'Active');
+				if (active && !this.current_session) {
+					this.$session_sel.val(active.session);
+					this.load(active.session);
+				}
+			},
+		});
+	}
+
+	_bind_events() {
+		this.$session_sel.on('change', () => {
+			const qs = this.$session_sel.val();
+			if (qs) this.load(qs);
+			else { this.$panel.html(''); this.$counts.html(''); this.current_session = null; }
+		});
+		this.$refresh_btn.on('click', () => {
+			if (this.current_session) this.load(this.current_session);
+		});
+	}
+
+	_subscribe_realtime() {
+		frappe.realtime.on('queue_update', (data) => {
+			if (data && data.queue_session === this.current_session) {
+				this.load(this.current_session);
+			}
+		});
+	}
+
+	// ── Load and render ───────────────────────────────────────────────────────
+	load(queue_session) {
+		this.current_session = queue_session;
+		frappe.call({
+			method: 'clinic_flow.api.queue.get_live_session_state',
+			args: { queue_session },
+			callback: (r) => {
+				if (!r.message) return;
+				this._render(r.message);
+			},
+		});
+	}
+
+	_render(data) {
+		this._expanding = null;
+		this._render_counts(data.counts);
+		this._render_pipeline(data);
+	}
+
+	_render_counts(counts) {
+		this.$counts.html(`
+			<span class="rd-caption">
+				<strong>${counts.completed_today}</strong> done
+			</span>
+			<span class="rd-caption">
+				<strong>${counts.remaining}</strong> remaining
+			</span>
+			<span class="rd-caption">
+				<strong>${counts.total_booked}</strong> total
+			</span>
+		`);
+	}
+
+	_render_pipeline(data) {
+		const sections = [];
+
+		// WITH DOCTOR
+		if (data.with_doctor.length) {
+			sections.push(this._section_with_doctor(data.with_doctor[0]));
+		}
+
+		// READY NEAR DOCTOR
+		if (data.ready.length) {
+			sections.push(this._section_ready(data.ready));
+		}
+
+		// AT RECEPTION (Called)
+		if (data.called.length) {
+			sections.push(this._section_called(data.called));
+		}
+
+		// DUE SOON
+		if (data.due_soon.length) {
+			sections.push(this._section_due_soon(data.due_soon));
+		}
+
+		// NO RESPONSE
+		if (data.no_response.length) {
+			sections.push(this._section_no_response(data.no_response));
+		}
+
+		if (!sections.length) {
+			this.$panel.html(`
+				<div style="text-align:center;padding:32px 0;color:var(--text-muted);">
+					<div style="font-size:13px;font-weight:600;margin-bottom:4px;">
+						Queue is empty
+					</div>
+					<div class="rd-caption">No active patients in this session.</div>
+				</div>
+			`);
+			return;
+		}
+
+		this.$panel.html(sections.join(''));
+		this._bind_action_buttons();
+	}
+
+	// ── Section builders ──────────────────────────────────────────────────────
+	_section_with_doctor(e) {
+		const since = e.seen_at ? frappe.datetime.str_to_user(e.seen_at, true) : '';
+		return `
+		<div class="rd-pipeline-section">
+			<div class="rd-pipeline-header" style="color:#1d4ed8;">
+				▶ With Doctor
+			</div>
+			<div class="rd-patient-card with-doctor">
+				<div style="display:flex;align-items:center;gap:8px;">
+					<span style="font-size:18px;font-weight:900;color:#1d4ed8;">
+						${frappe.utils.escape_html(String(e.token_number))}
+					</span>
+					<div style="flex:1;">
+						<div style="font-size:13px;font-weight:700;">
+							${frappe.utils.escape_html(e.patient_name || e.patient)}
+						</div>
+						<div class="rd-caption">
+							${e.load_class === 'review_load'
+								? '<span class="rd-badge rd-badge-green" style="font-size:9px;">Review</span>'
+								: '<span class="rd-badge rd-badge-blue" style="font-size:9px;">New</span>'}
+							${since ? '&nbsp;· Since ' + frappe.utils.escape_html(since) : ''}
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>`;
+	}
+
+	_section_ready(entries) {
+		const cards = entries.map(e => `
+			<div class="rd-patient-card ready" style="display:flex;align-items:center;gap:8px;">
+				<span style="font-size:14px;font-weight:800;color:#7c3aed;min-width:28px;">
+					${frappe.utils.escape_html(String(e.token_number))}
+				</span>
+				<div style="flex:1;">
+					<div style="font-size:12px;font-weight:600;">
+						${frappe.utils.escape_html(e.patient_name || e.patient)}
+					</div>
+					${e.weight_recorded ? `<div class="rd-caption">${e.weight_recorded} kg</div>` : ''}
+				</div>
+			</div>
+		`).join('');
+
+		return `
+		<div class="rd-pipeline-section">
+			<div class="rd-pipeline-header" style="color:#7c3aed;">
+				Ready Near Doctor (${entries.length})
+			</div>
+			${cards}
+		</div>`;
+	}
+
+	_section_called(entries) {
+		const cards = entries.map(e => {
+			const call_time = e.called_to_reception_at
+				? frappe.datetime.str_to_user(e.called_to_reception_at, true) : '';
+			const is_expanding = (this._expanding === e.name);
+
+			return `
+			<div class="rd-patient-card called" data-entry="${frappe.utils.escape_html(e.name)}">
+				<div style="display:flex;align-items:center;gap:8px;margin-bottom:${is_expanding ? '8px' : '0'};">
+					<span style="font-size:14px;font-weight:800;color:#1d4ed8;min-width:28px;">
+						${frappe.utils.escape_html(String(e.token_number))}
+					</span>
+					<div style="flex:1;">
+						<div style="font-size:12px;font-weight:600;">
+							${frappe.utils.escape_html(e.patient_name || e.patient)}
+						</div>
+						${call_time ? `<div class="rd-caption">Called ${frappe.utils.escape_html(call_time)}</div>` : ''}
+					</div>
+					<div style="display:flex;gap:4px;">
+						<button class="rd-action-btn rd-action-btn-green rd-complete-reception-btn"
+							data-entry="${frappe.utils.escape_html(e.name)}">
+							✓ Reception
+						</button>
+						<button class="rd-action-btn rd-action-btn-orange rd-no-response-btn"
+							data-entry="${frappe.utils.escape_html(e.name)}">
+							N/R
+						</button>
+					</div>
+				</div>
+
+				${is_expanding ? `
+				<div class="rd-recep-form">
+					<div style="font-size:11px;font-weight:700;margin-bottom:6px;color:var(--text-muted);">
+						COMPLETE RECEPTION
+					</div>
+					<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+						<select class="rd-recep-input rd-pay-mode">
+							<option value="">Payment mode</option>
+							<option value="Cash">Cash</option>
+							<option value="Card">Card</option>
+							<option value="UPI">UPI</option>
+							<option value="Insurance">Insurance</option>
+							<option value="Free">Free / Waived</option>
+						</select>
+						<input class="rd-recep-input rd-pay-amount" type="number"
+							placeholder="Amount ₹" min="0" step="0.01" />
+					</div>
+					<input class="rd-recep-input rd-weight" type="number"
+						placeholder="Weight (kg)" min="0" step="0.1"
+						style="margin-bottom:6px;" />
+					<div style="display:flex;gap:6px;">
+						<button class="rd-action-btn rd-action-btn-green rd-confirm-reception-btn"
+							style="flex:1;"
+							data-entry="${frappe.utils.escape_html(e.name)}">
+							Confirm &amp; Send to Doctor
+						</button>
+						<button class="rd-action-btn rd-action-btn-red rd-cancel-recep-btn"
+							data-entry="${frappe.utils.escape_html(e.name)}">
+							✕
+						</button>
+					</div>
+				</div>` : ''}
+			</div>`;
+		}).join('');
+
+		return `
+		<div class="rd-pipeline-section">
+			<div class="rd-pipeline-header" style="color:#1d4ed8;">
+				At Reception — Called (${entries.length})
+			</div>
+			${cards}
+		</div>`;
+	}
+
+	_section_due_soon(entries) {
+		const tokens = entries.map(e =>
+			`<span style="display:inline-block;padding:3px 8px;border-radius:5px;
+				background:var(--bg-color);border:1px solid var(--border-color);
+				font-size:12px;font-weight:700;cursor:pointer;"
+				class="rd-call-to-reception-inline"
+				data-entry="${frappe.utils.escape_html(e.name)}"
+				title="${frappe.utils.escape_html(e.patient_name || e.patient)}">
+				${frappe.utils.escape_html(String(e.token_number))}
+			</span>`
+		).join('');
+
+		return `
+		<div class="rd-pipeline-section">
+			<div class="rd-pipeline-header">Due Soon</div>
+			<div style="display:flex;gap:5px;flex-wrap:wrap;">${tokens}</div>
+		</div>`;
+	}
+
+	_section_no_response(entries) {
+		const config_threshold = 3; // matches server default
+		const cards = entries.map(e => {
+			const hold = e.hold_patients_count || 0;
+			const pct = Math.min(100, Math.round(hold / config_threshold * 100));
+			const nr_time = e.no_response_at
+				? frappe.datetime.str_to_user(e.no_response_at, true) : '';
+
+			return `
+			<div class="rd-patient-card no-resp">
+				<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+					<span style="font-size:14px;font-weight:800;color:#ea580c;min-width:28px;">
+						${frappe.utils.escape_html(String(e.token_number))}
+					</span>
+					<div style="flex:1;">
+						<div style="font-size:12px;font-weight:600;">
+							${frappe.utils.escape_html(e.patient_name || e.patient)}
+						</div>
+						${nr_time ? `<div class="rd-caption">Since ${frappe.utils.escape_html(nr_time)}</div>` : ''}
+					</div>
+					<button class="rd-action-btn rd-action-btn-red rd-push-end-btn"
+						data-entry="${frappe.utils.escape_html(e.name)}">
+						Push to End
+					</button>
+				</div>
+				<!-- Hold progress bar -->
+				<div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">
+					Hold: ${hold}/${config_threshold} patients
+				</div>
+				<div style="height:4px;border-radius:2px;background:var(--border-color);">
+					<div style="height:100%;border-radius:2px;width:${pct}%;
+						background:${pct >= 100 ? '#dc2626' : '#ea580c'};"></div>
+				</div>
+			</div>`;
+		}).join('');
+
+		return `
+		<div class="rd-pipeline-section">
+			<div class="rd-pipeline-header" style="color:#ea580c;">
+				No Response (${entries.length})
+			</div>
+			${cards}
+		</div>`;
+	}
+
+	// ── Action button wiring ──────────────────────────────────────────────────
+	_bind_action_buttons() {
+		// Due Soon token → call to reception
+		this.$panel.find('.rd-call-to-reception-inline').on('click', (e) => {
+			const entry = $(e.currentTarget).data('entry');
+			this._action_call_to_reception(entry);
+		});
+
+		// Called card → expand reception form
+		this.$panel.find('.rd-complete-reception-btn').on('click', (e) => {
+			const entry = $(e.currentTarget).data('entry');
+			if (this._expanding === entry) {
+				this._expanding = null;
+			} else {
+				this._expanding = entry;
+			}
+			if (this.current_session) this.load(this.current_session);
+		});
+
+		// Cancel reception form
+		this.$panel.find('.rd-cancel-recep-btn').on('click', () => {
+			this._expanding = null;
+			if (this.current_session) this.load(this.current_session);
+		});
+
+		// Confirm reception form
+		this.$panel.find('.rd-confirm-reception-btn').on('click', (e) => {
+			const $btn    = $(e.currentTarget);
+			const entry   = $btn.data('entry');
+			const $card   = $btn.closest('.rd-patient-card');
+			const mode    = $card.find('.rd-pay-mode').val();
+			const amount  = $card.find('.rd-pay-amount').val();
+			const weight  = $card.find('.rd-weight').val();
+			this._action_complete_reception(entry, mode, amount, weight, $btn);
+		});
+
+		// No Response
+		this.$panel.find('.rd-no-response-btn').on('click', (e) => {
+			const entry = $(e.currentTarget).data('entry');
+			this._action_no_response(entry);
+		});
+
+		// Push to end
+		this.$panel.find('.rd-push-end-btn').on('click', (e) => {
+			const entry = $(e.currentTarget).data('entry');
+			this._action_push_to_end(entry);
+		});
+	}
+
+	// ── Individual actions ────────────────────────────────────────────────────
+	_action_call_to_reception(queue_entry) {
+		frappe.call({
+			method: 'clinic_flow.api.queue.call_to_reception',
+			args: { queue_entry },
+			callback: (r) => {
+				if (r.message) {
+					frappe.show_alert({
+						message: `Token ${r.message.token || ''} called to reception`,
+						indicator: 'blue',
+					});
+					this.load(this.current_session);
+				}
+			},
+		});
+	}
+
+	_action_complete_reception(queue_entry, payment_mode, paid_amount, weight_kg, $btn) {
+		$btn.prop('disabled', true).html('<span class="rd-spinner"></span>');
+		frappe.call({
+			method: 'clinic_flow.api.queue.complete_reception',
+			args: {
+				queue_entry,
+				weight_kg:    weight_kg ? parseFloat(weight_kg) : null,
+				payment_mode: payment_mode || '',
+				paid_amount:  paid_amount ? parseFloat(paid_amount) : null,
+			},
+			callback: (r) => {
+				if (r.message) {
+					frappe.show_alert({ message: 'Patient ready near doctor', indicator: 'green' });
+					this._expanding = null;
+					this.load(this.current_session);
+					// Refresh token board too
+					this.dashboard.token_board.load(this.current_session);
+				}
+			},
+			error: () => { $btn.prop('disabled', false).text('Confirm & Send to Doctor'); },
+		});
+	}
+
+	_action_no_response(queue_entry) {
+		frappe.call({
+			method: 'clinic_flow.api.queue.mark_no_response',
+			args: { queue_entry },
+			callback: (r) => {
+				if (r.message) {
+					frappe.show_alert({ message: 'Marked No Response', indicator: 'orange' });
+					this.load(this.current_session);
+					this.dashboard.token_board.load(this.current_session);
+				}
+			},
+		});
+	}
+
+	_action_push_to_end(queue_entry) {
+		frappe.confirm(
+			'Push this patient to the end of the queue?',
+			() => {
+				frappe.call({
+					method: 'clinic_flow.api.queue.push_to_end',
+					args: { queue_entry },
+					callback: (r) => {
+						if (r.message) {
+							frappe.show_alert({ message: 'Pushed to end', indicator: 'orange' });
+							this.load(this.current_session);
+							this.dashboard.token_board.load(this.current_session);
+						}
+					},
+				});
+			}
+		);
 	}
 }

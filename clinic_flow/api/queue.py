@@ -734,11 +734,16 @@ def mark_no_response(queue_entry: str) -> dict:
 def complete_reception(
 	queue_entry: str,
 	weight_kg: float | None = None,
+	payment_mode: str = "",
+	paid_amount: float | None = None,
 ) -> dict:
 	"""
-	Patient has completed reception check-in (payment recorded, weight measured).
+	Patient has completed reception check-in (payment collected, weight measured).
 	Valid from: Called.
 	Sets status → Ready Near Doctor, records reception_done_at.
+
+	payment_mode / paid_amount are stored in notes for now; formal payment
+	recording against the healthcare Fee Validity is a later-phase concern.
 
 	Also increments hold_patients_count on all No Response entries in the same session,
 	so the auto-push-to-end rule can fire.
@@ -768,6 +773,13 @@ def complete_reception(
 	if weight_kg is not None:
 		update["weight_recorded"] = float(weight_kg)
 		update["weight_recorded_at"] = now_datetime()
+
+	if payment_mode or paid_amount is not None:
+		existing_notes = frappe.db.get_value("Queue Entry", queue_entry, "notes") or ""
+		payment_note = f"Payment: {payment_mode or 'unspecified'}"
+		if paid_amount is not None:
+			payment_note += f" | ₹{paid_amount}"
+		update["notes"] = (existing_notes + "\n" + payment_note).strip()
 
 	frappe.db.set_value("Queue Entry", queue_entry, update)
 
@@ -854,6 +866,88 @@ def _push_to_queue_end(queue_entry: str, queue_session: str) -> None:
 	)
 	last_pos: int = (result[0][0] or 0) if result else 0
 	frappe.db.set_value("Queue Entry", queue_entry, "queue_position", last_pos + 1)
+
+
+@frappe.whitelist()
+def get_live_session_state(queue_session: str) -> dict:
+	"""
+	Return the full pipeline state for the receptionist's right (live session) panel.
+
+	Groups Queue Entries by status bucket:
+	  with_doctor  — currently in consultation (max 1)
+	  ready        — Ready Near Doctor, ordered by queue_position asc
+	  called       — Called to reception, ordered by called_to_reception_at asc
+	  due_soon     — next 5 Booked entries, ordered by queue_position asc
+	  no_response  — No Response, ordered by no_response_at asc
+
+	Also returns session metadata and summary counts.
+	"""
+	if not queue_session:
+		frappe.throw(_("Queue Session is required."))
+
+	session = frappe.db.get_value(
+		"Queue Session",
+		queue_session,
+		[
+			"name", "session_name", "session_date", "start_time", "end_time",
+			"status", "dept_abbr", "practitioner",
+			"planned_capacity", "review_load_count", "non_review_load_count",
+			"phone_booked_count", "walkin_count",
+		],
+		as_dict=True,
+	)
+	if not session:
+		frappe.throw(_("Queue Session {0} not found.").format(queue_session))
+
+	_ENTRY_FIELDS = [
+		"name", "token_number", "token", "patient", "patient_name",
+		"load_class", "queue_type", "status", "queue_position",
+		"called_to_reception_at", "no_response_at", "hold_patients_count",
+		"reception_done_at", "weight_recorded",
+		"report_by_time", "predicted_doctor_time",
+		"seen_at",
+	]
+
+	def _fetch(statuses: list, order: str = "queue_position asc", limit: int = 0) -> list:
+		kwargs = dict(
+			filters={"queue_session": queue_session, "status": ["in", statuses]},
+			fields=_ENTRY_FIELDS,
+			order_by=order,
+		)
+		if limit:
+			kwargs["limit"] = limit
+		return frappe.get_all("Queue Entry", **kwargs)
+
+	with_doctor  = _fetch(["With Doctor"],        "seen_at desc", limit=1)
+	ready        = _fetch(["Ready Near Doctor"],   "queue_position asc")
+	called       = _fetch(["Called"],              "called_to_reception_at asc")
+	due_soon     = _fetch(["Booked", "Waiting"],   "queue_position asc", limit=5)
+	no_response  = _fetch(["No Response"],         "no_response_at asc")
+
+	total_booked    = frappe.db.count(
+		"Queue Entry",
+		{"queue_session": queue_session,
+		 "status": ["not in", ["No Show", "Skipped"]]}
+	)
+	completed_today = frappe.db.count(
+		"Queue Entry",
+		{"queue_session": queue_session,
+		 "status": ["in", ["Completed", "Done"]]}
+	)
+
+	return {
+		"session":         session,
+		"with_doctor":     with_doctor,
+		"ready":           ready,
+		"called":          called,
+		"due_soon":        due_soon,
+		"no_response":     no_response,
+		"counts": {
+			"total_booked":    total_booked,
+			"completed_today": completed_today,
+			"remaining":       max(0, total_booked - completed_today),
+		},
+	}
 
 
 # ---------------------------------------------------------------------------
