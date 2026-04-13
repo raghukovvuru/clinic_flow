@@ -15,51 +15,62 @@
   "weight_walkin",
   "weight_followup",
   "after_hours_section",
-  "after_session_action"
+  "after_session_action",
+  "v2_channel_section",
+  "phone_pct",
+  "release_hours_before",
+  "vip_buffer_section",
+  "vip_buffer_count",
+  "vip_buffer_interval",
+  "eta_defaults_section",
+  "default_review_consult_min",
+  "default_non_review_consult_min",
+  "reception_processing_min",
+  "ready_buffer_count",
+  "reporting_safety_min",
+  "rolling_avg_window_days",
+  "min_samples_for_live_avg"
  ],
  "fields": [
   {
    "fieldname": "default_slot_allocation_section",
    "fieldtype": "Section Break",
-   "label": "Default Slot Allocation (% of Session Capacity)",
-   "description": "Set how each slot type gets a share of the doctor's total session capacity. Emergency slots are unlimited — they jump the queue without consuming a pre-allocated share."
+   "label": "Slot Allocation — v1 (% of Session Capacity)",
+   "description": "Used by the legacy receptionist workspace."
   },
   {
    "default": "60",
    "fieldname": "prebooked_pct",
    "fieldtype": "Int",
-   "label": "Pre-Booked %",
-   "description": "% of session capacity reserved for advance bookings (e.g. 60 means 60% of total slots)"
+   "label": "Pre-Booked %"
   },
   {
    "default": "30",
    "fieldname": "walkin_pct",
    "fieldtype": "Int",
-   "label": "Walk-In %",
-   "description": "% of session capacity reserved for walk-in patients"
+   "label": "Walk-In %"
   },
   {
    "default": "10",
    "fieldname": "followup_pct",
    "fieldtype": "Int",
-   "label": "Follow-Up %",
-   "description": "% of session capacity reserved for follow-up patients"
+   "label": "Follow-Up %"
   },
   {
    "fieldname": "dynamic_release_section",
    "fieldtype": "Section Break",
-   "label": "Dynamic Release"
+   "label": "Dynamic Release — v1"
   },
   {
    "default": "60",
    "fieldname": "release_minutes_before",
    "fieldtype": "Int",
-   "label": "Release Pre-Booked Slots (mins before session)"
+   "label": "Release Pre-Booked Slots (mins before session — v1)"
   },
   {
    "fieldname": "priority_ratio_section",
    "fieldtype": "Section Break",
-   "label": "Priority Ratio"
+   "label": "Priority Ratio — v1"
   },
   {
    "default": "3",
@@ -89,11 +100,103 @@
    "fieldtype": "Select",
    "label": "After Session Ends",
    "options": "Hold for Next Session\nRedirect to On-Call\nScheduled Follow-Up"
+  },
+  {
+   "fieldname": "v2_channel_section",
+   "fieldtype": "Section Break",
+   "label": "Channel Allocation — v2",
+   "description": "Controls phone vs walk-in capacity split for the new admission flow."
+  },
+  {
+   "default": "60",
+   "fieldname": "phone_pct",
+   "fieldtype": "Int",
+   "label": "Phone Booking %",
+   "description": "% of planned capacity available for advance phone bookings."
+  },
+  {
+   "default": "2.5",
+   "fieldname": "release_hours_before",
+   "fieldtype": "Float",
+   "label": "Release Phone Slots (hours before session — v2)",
+   "description": "Unused phone slots convert to walk-in capacity this many hours before session start."
+  },
+  {
+   "fieldname": "vip_buffer_section",
+   "fieldtype": "Section Break",
+   "label": "VIP Buffer — v2"
+  },
+  {
+   "default": "10",
+   "fieldname": "vip_buffer_count",
+   "fieldtype": "Int",
+   "label": "VIP Buffer Tokens Per Session",
+   "description": "Total number of token positions to hold as VIP buffers per session."
+  },
+  {
+   "default": "15",
+   "fieldname": "vip_buffer_interval",
+   "fieldtype": "Int",
+   "label": "VIP Buffer Interval",
+   "description": "Place one VIP buffer token every N positions (e.g. 15 = positions 15, 30, 45...)."
+  },
+  {
+   "fieldname": "eta_defaults_section",
+   "fieldtype": "Section Break",
+   "label": "ETA Defaults — v2",
+   "description": "Used when insufficient live session data exists for rolling averages."
+  },
+  {
+   "default": "2.0",
+   "fieldname": "default_review_consult_min",
+   "fieldtype": "Float",
+   "label": "Default Review Consult (minutes)"
+  },
+  {
+   "default": "5.0",
+   "fieldname": "default_non_review_consult_min",
+   "fieldtype": "Float",
+   "label": "Default Non-Review Consult (minutes)"
+  },
+  {
+   "default": "3.0",
+   "fieldname": "reception_processing_min",
+   "fieldtype": "Float",
+   "label": "Reception Processing Time (minutes)",
+   "description": "Expected time for payment + weight + formalities at reception desk."
+  },
+  {
+   "default": "2",
+   "fieldname": "ready_buffer_count",
+   "fieldtype": "Int",
+   "label": "Ready Buffer Count",
+   "description": "How many patients should be ready near doctor ahead of current consultation."
+  },
+  {
+   "default": "15.0",
+   "fieldname": "reporting_safety_min",
+   "fieldtype": "Float",
+   "label": "Reporting Safety Margin (minutes)",
+   "description": "Extra buffer subtracted from report_by_time to account for variance."
+  },
+  {
+   "default": "7",
+   "fieldname": "rolling_avg_window_days",
+   "fieldtype": "Int",
+   "label": "Rolling Average Window (days)",
+   "description": "How many past days of session data to use for live ETA averages."
+  },
+  {
+   "default": "5",
+   "fieldname": "min_samples_for_live_avg",
+   "fieldtype": "Int",
+   "label": "Minimum Samples for Live Average",
+   "description": "Fall back to defaults if fewer than this many consultations have completed today."
   }
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-04-03 00:00:00.000000",
+ "modified": "2026-04-13 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Clinic Flow",
  "name": "Slot Partition Config",

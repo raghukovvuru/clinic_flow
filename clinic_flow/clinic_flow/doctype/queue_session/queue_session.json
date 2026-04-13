@@ -14,6 +14,8 @@
   "end_time",
   "status",
   "session_capacity",
+  "planned_capacity",
+  "stretch_capacity",
   "slot_allocation_section",
   "prebooked_total",
   "prebooked_used",
@@ -22,6 +24,15 @@
   "walkin_used",
   "followup_total",
   "followup_used",
+  "load_tracking_section",
+  "review_load_count",
+  "non_review_load_count",
+  "weighted_load_total",
+  "phone_booked_count",
+  "walkin_count",
+  "vip_buffer_section",
+  "vip_buffer_positions",
+  "vip_buffer_used",
   "counters_section",
   "total_called",
   "current_token",
@@ -86,14 +97,25 @@
   {
    "fieldname": "session_capacity",
    "fieldtype": "Int",
-   "label": "Session Capacity (total patients)",
-   "reqd": 1,
-   "description": "How many patients this session can handle. Slot totals are derived from this number × the % settings in Slot Partition Config."
+   "label": "Session Capacity (legacy)",
+   "description": "Legacy capacity field used by v1 slot allocation. Use planned_capacity for v2."
+  },
+  {
+   "fieldname": "planned_capacity",
+   "fieldtype": "Int",
+   "label": "Planned Capacity",
+   "description": "Normal target intake for this session."
+  },
+  {
+   "fieldname": "stretch_capacity",
+   "fieldtype": "Int",
+   "label": "Stretch Capacity",
+   "description": "Hidden overflow cushion beyond planned capacity. Session accepts bookings up to this limit."
   },
   {
    "fieldname": "slot_allocation_section",
    "fieldtype": "Section Break",
-   "label": "Slot Allocation (auto-calculated from capacity)"
+   "label": "Slot Allocation (v1 — auto-calculated)"
   },
   {
    "fieldname": "prebooked_total",
@@ -135,6 +157,68 @@
    "read_only": 1
   },
   {
+   "fieldname": "load_tracking_section",
+   "fieldtype": "Section Break",
+   "label": "Load Tracking (v2)"
+  },
+  {
+   "default": "0",
+   "fieldname": "review_load_count",
+   "fieldtype": "Int",
+   "label": "Review Load Count",
+   "read_only": 1,
+   "description": "Number of review_load bookings confirmed in this session."
+  },
+  {
+   "default": "0",
+   "fieldname": "non_review_load_count",
+   "fieldtype": "Int",
+   "label": "Non-Review Load Count",
+   "read_only": 1,
+   "description": "Number of non_review_load bookings confirmed in this session."
+  },
+  {
+   "default": "0",
+   "fieldname": "weighted_load_total",
+   "fieldtype": "Float",
+   "label": "Weighted Load Total (minutes)",
+   "read_only": 1,
+   "description": "Sum of expected consultation durations for all booked patients."
+  },
+  {
+   "default": "0",
+   "fieldname": "phone_booked_count",
+   "fieldtype": "Int",
+   "label": "Phone Booked Count",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "walkin_count",
+   "fieldtype": "Int",
+   "label": "Walk-In Count",
+   "read_only": 1
+  },
+  {
+   "fieldname": "vip_buffer_section",
+   "fieldtype": "Section Break",
+   "label": "VIP Buffer (v2)"
+  },
+  {
+   "fieldname": "vip_buffer_positions",
+   "fieldtype": "Small Text",
+   "label": "VIP Buffer Positions",
+   "read_only": 1,
+   "description": "JSON list of token positions reserved as VIP buffers. e.g. [15, 30, 45, 60]"
+  },
+  {
+   "default": "0",
+   "fieldname": "vip_buffer_used",
+   "fieldtype": "Int",
+   "label": "VIP Buffer Used",
+   "read_only": 1
+  },
+  {
    "fieldname": "counters_section",
    "fieldtype": "Section Break",
    "label": "Counters"
@@ -161,7 +245,7 @@
   }
  ],
  "links": [],
- "modified": "2026-04-03 00:00:00.000000",
+ "modified": "2026-04-13 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Clinic Flow",
  "name": "Queue Session",
