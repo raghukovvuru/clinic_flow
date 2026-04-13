@@ -649,6 +649,200 @@ def get_queue_state_for_display(dept: str = "all") -> dict:
 	}
 
 
+# ---------------------------------------------------------------------------
+# v2 reception state transitions
+# ---------------------------------------------------------------------------
+
+@frappe.whitelist()
+def call_to_reception(queue_entry: str) -> dict:
+	"""
+	Receptionist calls a patient to the desk.
+	Valid from: Waiting, Booked.
+	Sets status → Called, records called_to_reception_at.
+	"""
+	frappe.only_for(["Queue Manager", "System Manager"])
+
+	entry = frappe.db.get_value(
+		"Queue Entry", queue_entry,
+		["name", "status", "queue_session", "token", "patient_name"],
+		as_dict=True,
+	)
+	if not entry:
+		frappe.throw(_("Queue Entry {0} not found.").format(queue_entry))
+
+	if entry.status not in ("Waiting", "Booked"):
+		frappe.throw(
+			_("Cannot call to reception: patient status is '{0}' (expected Waiting or Booked).").format(
+				entry.status
+			),
+			frappe.ValidationError,
+		)
+
+	frappe.db.set_value("Queue Entry", queue_entry, {
+		"status": "Called",
+		"called_to_reception_at": now_datetime(),
+	})
+	_broadcast_queue_update(entry.queue_session)
+
+	return {"status": "Called", "token": entry.token, "patient_name": entry.patient_name}
+
+
+@frappe.whitelist()
+def mark_no_response(queue_entry: str) -> dict:
+	"""
+	Patient did not respond to the reception call.
+	Valid from: Called.
+	Sets status → No Response, records no_response_at.
+	"""
+	frappe.only_for(["Queue Manager", "System Manager"])
+
+	entry = frappe.db.get_value(
+		"Queue Entry", queue_entry,
+		["name", "status", "queue_session", "token"],
+		as_dict=True,
+	)
+	if not entry:
+		frappe.throw(_("Queue Entry {0} not found.").format(queue_entry))
+
+	if entry.status != "Called":
+		frappe.throw(
+			_("Cannot mark No Response: patient status is '{0}' (expected Called).").format(
+				entry.status
+			),
+			frappe.ValidationError,
+		)
+
+	frappe.db.set_value("Queue Entry", queue_entry, {
+		"status": "No Response",
+		"no_response_at": now_datetime(),
+	})
+	_broadcast_queue_update(entry.queue_session)
+
+	return {"status": "No Response", "token": entry.token}
+
+
+@frappe.whitelist()
+def complete_reception(
+	queue_entry: str,
+	weight_kg: float | None = None,
+) -> dict:
+	"""
+	Patient has completed reception check-in (payment recorded, weight measured).
+	Valid from: Called.
+	Sets status → Ready Near Doctor, records reception_done_at.
+
+	Also increments hold_patients_count on all No Response entries in the same session,
+	so the auto-push-to-end rule can fire.
+	"""
+	frappe.only_for(["Queue Manager", "System Manager"])
+
+	entry = frappe.db.get_value(
+		"Queue Entry", queue_entry,
+		["name", "status", "queue_session", "token"],
+		as_dict=True,
+	)
+	if not entry:
+		frappe.throw(_("Queue Entry {0} not found.").format(queue_entry))
+
+	if entry.status != "Called":
+		frappe.throw(
+			_("Cannot complete reception: patient status is '{0}' (expected Called).").format(
+				entry.status
+			),
+			frappe.ValidationError,
+		)
+
+	update = {
+		"status": "Ready Near Doctor",
+		"reception_done_at": now_datetime(),
+	}
+	if weight_kg is not None:
+		update["weight_recorded"] = float(weight_kg)
+		update["weight_recorded_at"] = now_datetime()
+
+	frappe.db.set_value("Queue Entry", queue_entry, update)
+
+	# Increment hold counter on all No Response entries in this session
+	config = frappe.get_single("Slot Partition Config")
+	hold_threshold: int = getattr(config, "no_response_hold_count", 3)
+
+	no_response_entries = frappe.get_all(
+		"Queue Entry",
+		filters={
+			"queue_session": entry.queue_session,
+			"status": "No Response",
+			"name": ["!=", queue_entry],
+		},
+		fields=["name", "hold_patients_count"],
+	)
+
+	for nr in no_response_entries:
+		new_count = (nr.hold_patients_count or 0) + 1
+		if new_count >= hold_threshold:
+			# Auto-push to end
+			frappe.db.set_value("Queue Entry", nr.name, {
+				"hold_patients_count": new_count,
+				"status": "Pushed to End",
+			})
+			_push_to_queue_end(nr.name, entry.queue_session)
+		else:
+			frappe.db.set_value("Queue Entry", nr.name, "hold_patients_count", new_count)
+
+	_broadcast_queue_update(entry.queue_session)
+
+	return {"status": "Ready Near Doctor", "token": entry.token}
+
+
+@frappe.whitelist()
+def push_to_end(queue_entry: str, reason: str = "") -> dict:
+	"""
+	Manually push a No Response patient to the end of the queue.
+	Sets status → Pushed to End and reassigns queue_position to last.
+	"""
+	frappe.only_for(["Queue Manager", "System Manager"])
+
+	entry = frappe.db.get_value(
+		"Queue Entry", queue_entry,
+		["name", "status", "queue_session", "token"],
+		as_dict=True,
+	)
+	if not entry:
+		frappe.throw(_("Queue Entry {0} not found.").format(queue_entry))
+
+	if entry.status not in ("No Response", "Called"):
+		frappe.throw(
+			_("Cannot push to end: patient status is '{0}'.").format(entry.status),
+			frappe.ValidationError,
+		)
+
+	update = {"status": "Pushed to End"}
+	if reason:
+		existing_notes = frappe.db.get_value("Queue Entry", queue_entry, "notes") or ""
+		update["notes"] = (existing_notes + "\n" + reason).strip()
+
+	frappe.db.set_value("Queue Entry", queue_entry, update)
+	_push_to_queue_end(queue_entry, entry.queue_session)
+
+	_broadcast_queue_update(entry.queue_session)
+
+	return {"status": "Pushed to End", "token": entry.token}
+
+
+def _push_to_queue_end(queue_entry: str, queue_session: str) -> None:
+	"""Assign the next available queue_position (max + 1) to the given entry."""
+	result = frappe.db.sql(
+		"SELECT MAX(queue_position) FROM `tabQueue Entry` "
+		"WHERE queue_session = %s AND status != 'No Show'",
+		(queue_session,),
+	)
+	last_pos: int = (result[0][0] or 0) if result else 0
+	frappe.db.set_value("Queue Entry", queue_entry, "queue_position", last_pos + 1)
+
+
+# ---------------------------------------------------------------------------
+# patient encounter helper
+# ---------------------------------------------------------------------------
+
 def _get_or_create_encounter(entry: dict, queue_session: str) -> str:
 	"""Find an existing Draft encounter or create one. Returns encounter name."""
 	session_doc = frappe.get_doc("Queue Session", queue_session)
