@@ -8,6 +8,18 @@ from frappe import _
 from frappe.utils import getdate, today
 
 
+def _set_patient_name_fields(patient, full_name: str) -> None:
+    """
+    Patient doctype (Marley Healthcare) requires first_name separately.
+    Split 'Rohan Sharma' → first_name='Rohan', last_name='Sharma'.
+    Single-word names go entirely into first_name.
+    """
+    parts = full_name.strip().split(None, 1)
+    patient.first_name = parts[0]
+    if len(parts) > 1:
+        patient.last_name = parts[1]
+
+
 @frappe.whitelist()
 def search_guardian(mobile: str) -> dict:
     """
@@ -78,7 +90,7 @@ def register_guardian_and_child(
 
     # Create patient
     patient = frappe.new_doc("Patient")
-    patient.patient_name = patient_name
+    _set_patient_name_fields(patient, patient_name)
     patient.sex = sex
     if dob:
         patient.dob = getdate(dob)
@@ -112,10 +124,10 @@ def add_child_to_guardian(
 
     Returns the new patient name.
     """
-    guardian_name_input = (patient_name or "").strip()
+    patient_name = (patient_name or "").strip()
     if not guardian:
         frappe.throw(_("Guardian is required."))
-    if not guardian_name_input:
+    if not patient_name:
         frappe.throw(_("Patient (child) name is required."))
 
     if not frappe.db.exists("Patient Guardian", guardian):
@@ -123,7 +135,7 @@ def add_child_to_guardian(
 
     # Create patient
     patient = frappe.new_doc("Patient")
-    patient.patient_name = patient_name
+    _set_patient_name_fields(patient, patient_name)
     patient.sex = sex
     if dob:
         patient.dob = getdate(dob)
