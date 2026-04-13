@@ -292,6 +292,11 @@ def call_next(queue_session: str) -> dict:
 		"patient_encounter": encounter_name,
 	})
 
+	# Recalculate downstream ETAs if the actual pace has drifted significantly
+	from clinic_flow.api.eta import check_pace_deviation, recalculate_downstream_etas
+	if check_pace_deviation(queue_session):
+		recalculate_downstream_etas(queue_session)
+
 	from clinic_flow.api.workspace import get_workspace_payload
 	return get_workspace_payload(entry.patient, encounter_name, entry.name)
 
@@ -718,6 +723,10 @@ def mark_no_response(queue_entry: str) -> dict:
 	})
 	_broadcast_queue_update(entry.queue_session)
 
+	# No Response patient no longer blocks the queue — refresh ETAs
+	from clinic_flow.api.eta import recalculate_downstream_etas
+	recalculate_downstream_etas(entry.queue_session)
+
 	return {"status": "No Response", "token": entry.token}
 
 
@@ -790,6 +799,10 @@ def complete_reception(
 
 	_broadcast_queue_update(entry.queue_session)
 
+	# Recalculate ETAs — one fewer pending patient changes everyone's estimate
+	from clinic_flow.api.eta import recalculate_downstream_etas
+	recalculate_downstream_etas(entry.queue_session)
+
 	return {"status": "Ready Near Doctor", "token": entry.token}
 
 
@@ -824,6 +837,10 @@ def push_to_end(queue_entry: str, reason: str = "") -> dict:
 	_push_to_queue_end(queue_entry, entry.queue_session)
 
 	_broadcast_queue_update(entry.queue_session)
+
+	# Recalculate ETAs — pushed patient no longer blocks others
+	from clinic_flow.api.eta import recalculate_downstream_etas
+	recalculate_downstream_etas(entry.queue_session)
 
 	return {"status": "Pushed to End", "token": entry.token}
 

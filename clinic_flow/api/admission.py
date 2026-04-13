@@ -312,6 +312,18 @@ def confirm_booking(
         frappe.db.set_value("Queue Session", queue_session, update_fields)
         frappe.db.commit()
 
+    # Calculate and persist ETA for this entry, then refresh the whole session
+    from clinic_flow.api.eta import estimate, recalculate_downstream_etas
+
+    eta = estimate(queue_session, token_number, load_class)
+    frappe.db.set_value("Queue Entry", entry.name, {
+        "predicted_doctor_time": eta["predicted_doctor_time"],
+        "report_by_time": eta["report_by_time"],
+    })
+
+    # Refresh downstream ETAs (new booking shifts everyone after it)
+    recalculate_downstream_etas(queue_session)
+
     return {
         "queue_entry": entry.name,
         "token_number": token_number,
@@ -319,6 +331,9 @@ def confirm_booking(
         "queue_position": queue_position,
         "load_class": load_class,
         "channel": channel,
+        "predicted_doctor_time": eta["predicted_doctor_time"],
+        "report_by_time": eta["report_by_time"],
+        "estimated_window_end": eta["estimated_window_end"],
     }
 
 

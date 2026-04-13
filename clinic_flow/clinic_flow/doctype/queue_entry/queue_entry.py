@@ -11,7 +11,7 @@ class QueueEntry(Document):
 				self.called_at = now
 			elif self.status == "With Doctor" and not self.seen_at:
 				self.seen_at = now
-			elif self.status == "Done":
+			elif self.status in ("Done", "Completed"):
 				if not self.done_at:
 					self.done_at = now
 				if self.called_at:

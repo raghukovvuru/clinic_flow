@@ -104,6 +104,7 @@ def submit_encounter(encounter: str) -> dict:
 		filters={"patient_encounter": encounter},
 		fields=["name", "queue_session"],
 	)
+	sessions_to_recalculate = set()
 	for entry in entries:
 		frappe.db.set_value("Queue Entry", entry.name, {
 			"status": "Done",
@@ -112,6 +113,12 @@ def submit_encounter(encounter: str) -> dict:
 		# Update session type counter
 		entry_doc = frappe.get_doc("Queue Entry", entry.name)
 		_decrement_session_counter(entry.queue_session, entry_doc.queue_type)
+		sessions_to_recalculate.add(entry.queue_session)
+
+	# Recalculate ETAs — completed consultation changes pace reference for everyone
+	from clinic_flow.api.eta import recalculate_downstream_etas
+	for qs in sessions_to_recalculate:
+		recalculate_downstream_etas(qs)
 
 	return {"status": "submitted", "name": enc.name}
 
