@@ -662,7 +662,7 @@ def get_queue_state_for_display(dept: str = "all") -> dict:
 def call_to_reception(queue_entry: str) -> dict:
 	"""
 	Receptionist calls a patient to the desk.
-	Valid from: Waiting, Booked.
+	Valid from: Waiting, Booked, Pushed to End.
 	Sets status → Called, records called_to_reception_at.
 	"""
 	frappe.only_for(["Queue Manager", "System Manager"])
@@ -675,9 +675,9 @@ def call_to_reception(queue_entry: str) -> dict:
 	if not entry:
 		frappe.throw(_("Queue Entry {0} not found.").format(queue_entry))
 
-	if entry.status not in ("Waiting", "Booked"):
+	if entry.status not in ("Waiting", "Booked", "Pushed to End"):
 		frappe.throw(
-			_("Cannot call to reception: patient status is '{0}' (expected Waiting or Booked).").format(
+			_("Cannot call to reception: patient status is '{0}' (expected Waiting, Booked, or Pushed to End).").format(
 				entry.status
 			),
 			frappe.ValidationError,

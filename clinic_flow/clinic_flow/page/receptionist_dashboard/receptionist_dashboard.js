@@ -1566,8 +1566,10 @@ class LiveSessionPanel {
 		this.$counts          = $container.find('#rd-live-counts');
 		this.$panel           = $container.find('#rd-live-panel');
 		this.$refresh_btn     = $container.find('#rd-live-refresh');
-		this.current_session  = null;
-		this._expanding       = null; // queue_entry being expanded for reception form
+		this.current_session       = null;
+		this._expanding            = null; // queue_entry being expanded for reception form
+		this._fee_data             = {};   // cache: entry name → {covered, charge, validity_till}
+		this._session_practitioner = null;
 
 		this._load_session_list();
 		this._bind_events();
@@ -1654,7 +1656,10 @@ class LiveSessionPanel {
 	}
 
 	_render(data) {
-		this._expanding = null;
+		// Preserve _expanding so an open reception form is not collapsed
+		// by background reloads or resume actions.
+		// _expanding is only cleared explicitly by cancel or confirm.
+		this._session_practitioner = (data.session && data.session.practitioner) || null;
 		this._render_counts(data.counts);
 		this._render_pipeline(data);
 	}
@@ -1756,7 +1761,9 @@ class LiveSessionPanel {
 	}
 
 	_section_ready(entries) {
-		const cards = entries.map(e => `
+		const cards = entries.map(e => {
+			const is_review = e.load_class === 'review_load';
+			return `
 			<div class="rd-patient-card ready" style="display:flex;align-items:center;gap:8px;">
 				<span style="font-size:14px;font-weight:800;color:#7c3aed;min-width:28px;">
 					${frappe.utils.escape_html(String(e.token_number))}
@@ -1764,6 +1771,9 @@ class LiveSessionPanel {
 				<div style="flex:1;">
 					<div style="font-size:12px;font-weight:600;">
 						${frappe.utils.escape_html(e.patient_name || e.patient)}
+						${is_review
+							? '<span class="rd-badge rd-badge-green" style="font-size:9px;margin-left:4px;">Review</span>'
+							: '<span class="rd-badge rd-badge-blue" style="font-size:9px;margin-left:4px;">New</span>'}
 					</div>
 					${e.reception_done_at
 						? `<div class="rd-caption">Ready since ${frappe.utils.escape_html(frappe.datetime.str_to_user(e.reception_done_at, true))}</div>`
@@ -1774,8 +1784,8 @@ class LiveSessionPanel {
 					data-entry="${frappe.utils.escape_html(e.name)}">
 					→ Doctor
 				</button>
-			</div>
-		`).join('');
+			</div>`;
+		}).join('');
 
 		return `
 		<div class="rd-pipeline-section">
@@ -1793,7 +1803,9 @@ class LiveSessionPanel {
 			const is_expanding = (this._expanding === e.name);
 
 			return `
-			<div class="rd-patient-card called" data-entry="${frappe.utils.escape_html(e.name)}">
+			<div class="rd-patient-card called"
+				data-entry="${frappe.utils.escape_html(e.name)}"
+				data-patient="${frappe.utils.escape_html(e.patient || '')}">
 				<div style="display:flex;align-items:center;gap:8px;margin-bottom:${is_expanding ? '8px' : '0'};">
 					<span style="font-size:14px;font-weight:800;color:#1d4ed8;min-width:28px;">
 						${frappe.utils.escape_html(String(e.token_number))}
@@ -1816,11 +1828,34 @@ class LiveSessionPanel {
 					</div>
 				</div>
 
-				${is_expanding ? `
+				${is_expanding ? (() => {
+					const fd = this._fee_data[e.name];
+					let fee_html = '';
+					if (!fd) {
+						fee_html = `<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">
+							Checking fee validity…</div>`;
+					} else if (fd.covered) {
+						fee_html = `<div style="font-size:11px;font-weight:600;color:#16a34a;
+							background:#f0fdf4;border:1px solid #bbf7d0;border-radius:5px;
+							padding:4px 8px;margin-bottom:6px;">
+							✓ Fee Validity — Covered
+							${fd.validity_till ? `<span style="font-weight:400;color:var(--text-muted);">
+								(valid till ${frappe.datetime.str_to_user(fd.validity_till)})</span>` : ''}
+						</div>`;
+					} else {
+						const amt = fd.charge ? `₹${fd.charge}` : '—';
+						fee_html = `<div style="font-size:11px;font-weight:600;color:#b45309;
+							background:#fffbeb;border:1px solid #fde68a;border-radius:5px;
+							padding:4px 8px;margin-bottom:6px;">
+							Payment Due: ${amt}
+						</div>`;
+					}
+					return `
 				<div class="rd-recep-form">
 					<div style="font-size:11px;font-weight:700;margin-bottom:6px;color:var(--text-muted);">
 						COMPLETE RECEPTION
 					</div>
+					${fee_html}
 					<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
 						<select class="rd-recep-input rd-pay-mode">
 							<option value="">Payment mode</option>
@@ -1831,7 +1866,8 @@ class LiveSessionPanel {
 							<option value="Free">Free / Waived</option>
 						</select>
 						<input class="rd-recep-input rd-pay-amount" type="number"
-							placeholder="Amount ₹" min="0" step="0.01" />
+							placeholder="Amount ₹" min="0" step="0.01"
+							${fd && !fd.covered && fd.charge ? `value="${fd.charge}"` : ''} />
 					</div>
 					<input class="rd-recep-input rd-weight" type="number"
 						placeholder="Weight (kg)" min="0" step="0.1"
@@ -1847,7 +1883,8 @@ class LiveSessionPanel {
 							✕
 						</button>
 					</div>
-				</div>` : ''}
+				</div>`;
+				})() : ''}
 			</div>`;
 		}).join('');
 
@@ -1957,6 +1994,27 @@ class LiveSessionPanel {
 		</div>`;
 	}
 
+	// ── Fee validity fetch ────────────────────────────────────────────────────
+	_fetch_fee_validity(queue_entry, patient) {
+		if (!patient || !this._session_practitioner) return;
+		frappe.call({
+			method: 'clinic_flow.api.appointments.get_consultation_charge',
+			args: { practitioner: this._session_practitioner, patient },
+			callback: (r) => {
+				if (!r.message) return;
+				this._fee_data[queue_entry] = {
+					covered:       r.message.covered_by_validity,
+					charge:        r.message.charge,
+					validity_till: r.message.validity_till,
+				};
+				// Only re-render the live panel if this entry is still expanding
+				if (this._expanding === queue_entry && this.current_session) {
+					this.load(this.current_session);
+				}
+			},
+		});
+	}
+
 	// ── Action button wiring ──────────────────────────────────────────────────
 	_bind_action_buttons() {
 		// Due Soon token → call to reception
@@ -1965,19 +2023,29 @@ class LiveSessionPanel {
 			this._action_call_to_reception(entry);
 		});
 
-		// Called card → expand reception form
+		// Called card → expand reception form + fetch fee validity
 		this.$panel.find('.rd-complete-reception-btn').on('click', (e) => {
-			const entry = $(e.currentTarget).data('entry');
+			const $btn   = $(e.currentTarget);
+			const entry  = $btn.data('entry');
+			const $card  = $btn.closest('.rd-patient-card');
+			const patient = $card.data('patient') || null;
 			if (this._expanding === entry) {
 				this._expanding = null;
+				if (this.current_session) this.load(this.current_session);
 			} else {
 				this._expanding = entry;
+				if (this.current_session) this.load(this.current_session);
+				// Fetch fee validity in background; re-render when data arrives
+				if (patient && this._session_practitioner) {
+					this._fetch_fee_validity(entry, patient);
+				}
 			}
-			if (this.current_session) this.load(this.current_session);
 		});
 
 		// Cancel reception form
-		this.$panel.find('.rd-cancel-recep-btn').on('click', () => {
+		this.$panel.find('.rd-cancel-recep-btn').on('click', (e) => {
+			const entry = $(e.currentTarget).data('entry');
+			if (entry) delete this._fee_data[entry];
 			this._expanding = null;
 			if (this.current_session) this.load(this.current_session);
 		});
@@ -2060,6 +2128,7 @@ class LiveSessionPanel {
 			callback: (r) => {
 				if (r.message) {
 					frappe.show_alert({ message: 'Patient ready near doctor', indicator: 'green' });
+					delete this._fee_data[queue_entry];
 					this._expanding = null;
 					this.load(this.current_session);
 					// Refresh token board too
@@ -2109,12 +2178,24 @@ class LiveSessionPanel {
 			args: { queue_entry },
 			callback: (r) => {
 				if (r.message) {
-					frappe.show_alert({
-						message: `Token ${r.message.token || ''} resumed — process at reception`,
-						indicator: 'blue',
-					});
-					this.load(this.current_session);
-					this.dashboard.token_board.load(this.current_session);
+					const token_label = r.message.token || '';
+					if (this._expanding) {
+						// A reception form is already open — don't collapse it.
+						// Just inform the receptionist; they'll handle this patient next.
+						frappe.show_alert({
+							message: `Token ${token_label} resumed. Finish current reception first, then call them.`,
+							indicator: 'blue',
+						}, 7);
+						// Only refresh the token board so their status updates visually
+						this.dashboard.token_board.load(this.current_session);
+					} else {
+						frappe.show_alert({
+							message: `Token ${token_label} resumed — process at reception`,
+							indicator: 'blue',
+						});
+						this.load(this.current_session);
+						this.dashboard.token_board.load(this.current_session);
+					}
 				}
 			},
 		});
