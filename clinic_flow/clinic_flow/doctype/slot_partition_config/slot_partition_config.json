@@ -29,7 +29,9 @@
   "ready_buffer_count",
   "reporting_safety_min",
   "rolling_avg_window_days",
-  "min_samples_for_live_avg"
+  "min_samples_for_live_avg",
+  "live_queue_section",
+  "no_response_hold_count"
  ],
  "fields": [
   {
@@ -192,6 +194,18 @@
    "fieldtype": "Int",
    "label": "Minimum Samples for Live Average",
    "description": "Fall back to defaults if fewer than this many consultations have completed today."
+  },
+  {
+   "fieldname": "live_queue_section",
+   "fieldtype": "Section Break",
+   "label": "Live Queue — v2"
+  },
+  {
+   "default": "3",
+   "fieldname": "no_response_hold_count",
+   "fieldtype": "Int",
+   "label": "No-Response Grace Count",
+   "description": "Number of later patients that must complete reception before a No Response token is auto-pushed to end."
   }
  ],
  "issingle": 1,

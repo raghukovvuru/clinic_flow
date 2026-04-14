@@ -1701,6 +1701,11 @@ class LiveSessionPanel {
 			sections.push(this._section_no_response(data.no_response));
 		}
 
+		// PUSHED TO END
+		if (data.pushed_to_end && data.pushed_to_end.length) {
+			sections.push(this._section_pushed_to_end(data.pushed_to_end));
+		}
+
 		if (!sections.length) {
 			this.$panel.html(`
 				<div style="text-align:center;padding:32px 0;color:var(--text-muted);">
@@ -1741,6 +1746,10 @@ class LiveSessionPanel {
 							${since ? '&nbsp;· Since ' + frappe.utils.escape_html(since) : ''}
 						</div>
 					</div>
+					<button class="rd-action-btn rd-action-btn-green rd-mark-completed-btn"
+						data-entry="${frappe.utils.escape_html(e.name)}">
+						✓ Done
+					</button>
 				</div>
 			</div>
 		</div>`;
@@ -1756,8 +1765,15 @@ class LiveSessionPanel {
 					<div style="font-size:12px;font-weight:600;">
 						${frappe.utils.escape_html(e.patient_name || e.patient)}
 					</div>
+					${e.reception_done_at
+						? `<div class="rd-caption">Ready since ${frappe.utils.escape_html(frappe.datetime.str_to_user(e.reception_done_at, true))}</div>`
+						: ''}
 					${e.weight_recorded ? `<div class="rd-caption">${e.weight_recorded} kg</div>` : ''}
 				</div>
+				<button class="rd-action-btn rd-action-btn-blue rd-with-doctor-btn"
+					data-entry="${frappe.utils.escape_html(e.name)}">
+					→ Doctor
+				</button>
 			</div>
 		`).join('');
 
@@ -1883,10 +1899,16 @@ class LiveSessionPanel {
 						</div>
 						${nr_time ? `<div class="rd-caption">Since ${frappe.utils.escape_html(nr_time)}</div>` : ''}
 					</div>
-					<button class="rd-action-btn rd-action-btn-red rd-push-end-btn"
-						data-entry="${frappe.utils.escape_html(e.name)}">
-						Push to End
-					</button>
+					<div style="display:flex;gap:4px;">
+						<button class="rd-action-btn rd-action-btn-green rd-resume-btn"
+							data-entry="${frappe.utils.escape_html(e.name)}">
+							Resume
+						</button>
+						<button class="rd-action-btn rd-action-btn-red rd-push-end-btn"
+							data-entry="${frappe.utils.escape_html(e.name)}">
+							Push to End
+						</button>
+					</div>
 				</div>
 				<!-- Hold progress bar -->
 				<div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">
@@ -1903,6 +1925,33 @@ class LiveSessionPanel {
 		<div class="rd-pipeline-section">
 			<div class="rd-pipeline-header" style="color:#ea580c;">
 				No Response (${entries.length})
+			</div>
+			${cards}
+		</div>`;
+	}
+
+	_section_pushed_to_end(entries) {
+		const cards = entries.map(e => `
+			<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;
+				border-radius:5px;background:var(--bg-color);margin-bottom:4px;">
+				<span style="font-size:12px;font-weight:700;color:var(--text-muted);min-width:24px;">
+					${frappe.utils.escape_html(String(e.token_number))}
+				</span>
+				<span style="font-size:12px;color:var(--text-muted);flex:1;">
+					${frappe.utils.escape_html(e.patient_name || e.patient)}
+				</span>
+				<button class="rd-action-btn rd-action-btn-blue rd-call-pushed-btn"
+					data-entry="${frappe.utils.escape_html(e.name)}"
+					title="Call this patient to reception again">
+					Call Now
+				</button>
+			</div>
+		`).join('');
+
+		return `
+		<div class="rd-pipeline-section">
+			<div class="rd-pipeline-header" style="color:var(--text-muted);">
+				Pushed to End (${entries.length})
 			</div>
 			${cards}
 		</div>`;
@@ -1954,6 +2003,30 @@ class LiveSessionPanel {
 		this.$panel.find('.rd-push-end-btn').on('click', (e) => {
 			const entry = $(e.currentTarget).data('entry');
 			this._action_push_to_end(entry);
+		});
+
+		// Resume held token
+		this.$panel.find('.rd-resume-btn').on('click', (e) => {
+			const entry = $(e.currentTarget).data('entry');
+			this._action_resume(entry);
+		});
+
+		// Move to With Doctor
+		this.$panel.find('.rd-with-doctor-btn').on('click', (e) => {
+			const entry = $(e.currentTarget).data('entry');
+			this._action_move_to_with_doctor(entry);
+		});
+
+		// Mark Completed
+		this.$panel.find('.rd-mark-completed-btn').on('click', (e) => {
+			const entry = $(e.currentTarget).data('entry');
+			this._action_mark_completed(entry);
+		});
+
+		// Call pushed-to-end patient again
+		this.$panel.find('.rd-call-pushed-btn').on('click', (e) => {
+			const entry = $(e.currentTarget).data('entry');
+			this._action_call_to_reception(entry);
 		});
 	}
 
@@ -2028,5 +2101,56 @@ class LiveSessionPanel {
 				});
 			}
 		);
+	}
+
+	_action_resume(queue_entry) {
+		frappe.call({
+			method: 'clinic_flow.api.queue.resume_held_token',
+			args: { queue_entry },
+			callback: (r) => {
+				if (r.message) {
+					frappe.show_alert({
+						message: `Token ${r.message.token || ''} resumed — process at reception`,
+						indicator: 'blue',
+					});
+					this.load(this.current_session);
+					this.dashboard.token_board.load(this.current_session);
+				}
+			},
+		});
+	}
+
+	_action_move_to_with_doctor(queue_entry) {
+		frappe.call({
+			method: 'clinic_flow.api.queue.move_to_with_doctor',
+			args: { queue_entry },
+			callback: (r) => {
+				if (r.message) {
+					frappe.show_alert({
+						message: `${r.message.patient_name || 'Patient'} is With Doctor`,
+						indicator: 'blue',
+					});
+					this.load(this.current_session);
+					this.dashboard.token_board.load(this.current_session);
+				}
+			},
+		});
+	}
+
+	_action_mark_completed(queue_entry) {
+		frappe.call({
+			method: 'clinic_flow.api.queue.mark_completed',
+			args: { queue_entry },
+			callback: (r) => {
+				if (r.message) {
+					frappe.show_alert({
+						message: `${r.message.patient_name || 'Patient'} — consultation completed`,
+						indicator: 'green',
+					});
+					this.load(this.current_session);
+					this.dashboard.token_board.load(this.current_session);
+				}
+			},
+		});
 	}
 }
