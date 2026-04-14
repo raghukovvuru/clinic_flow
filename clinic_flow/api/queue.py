@@ -687,6 +687,10 @@ def call_to_reception(queue_entry: str) -> dict:
 		"status": "Called",
 		"called_to_reception_at": now_datetime(),
 	})
+
+	from clinic_flow.api.eta import recalculate_downstream_etas
+	recalculate_downstream_etas(entry.queue_session)
+
 	_broadcast_queue_update(entry.queue_session)
 
 	return {"status": "Called", "token": entry.token, "patient_name": entry.patient_name}

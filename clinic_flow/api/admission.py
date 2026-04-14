@@ -12,7 +12,7 @@ from datetime import timedelta
 
 import frappe
 from frappe import _
-from frappe.utils import getdate, now_datetime, today, add_to_date
+from frappe.utils import getdate, now_datetime, today
 
 
 # ---------------------------------------------------------------------------
@@ -20,28 +20,45 @@ from frappe.utils import getdate, now_datetime, today, add_to_date
 # ---------------------------------------------------------------------------
 
 @frappe.whitelist()
-def get_visit_type(patient: str) -> dict:
+def get_visit_type(patient: str, practitioner: str | None = None) -> dict:
     """
     Return load_class for this patient: 'review_load' or 'non_review_load'.
 
-    A patient is classified as review_load if they have a completed QueueEntry
-    in this clinic within the last 90 days. Otherwise non_review_load (new patient).
+    A patient is review_load if they have an active, unexpired Fee Validity record
+    (Marley Healthcare) with remaining visits. Otherwise they are non_review_load.
+
+    practitioner: optional — if provided, restricts the lookup to that practitioner's
+    Fee Validity. When not provided (e.g. before session selection), any valid Fee
+    Validity for the patient qualifies them as a review patient.
     """
     if not patient:
         frappe.throw(_("Patient is required."))
 
-    cutoff = add_to_date(today(), days=-90)
-    past = frappe.db.count(
-        "Queue Entry",
-        filters={
-            "patient": patient,
-            "status": ["in", ["Completed", "Done", "With Doctor"]],
-            "done_at": [">=", cutoff],
-        },
+    filters: dict = {
+        "patient":    patient,
+        "valid_till": [">=", today()],
+    }
+    if practitioner:
+        filters["practitioner"] = practitioner
+
+    validity = frappe.db.get_value(
+        "Fee Validity",
+        filters,
+        ["name", "visited", "max_visits", "valid_till", "practitioner"],
+        as_dict=True,
     )
 
-    load_class = "review_load" if past else "non_review_load"
-    return {"patient": patient, "load_class": load_class, "past_visits_90d": past}
+    covered = bool(validity and (validity.visited or 0) < (validity.max_visits or 1))
+    load_class = "review_load" if covered else "non_review_load"
+
+    return {
+        "patient":              patient,
+        "load_class":           load_class,
+        "fee_validity_valid":   covered,
+        "fee_validity_till":    str(validity.valid_till) if validity else None,
+        "fee_validity_name":    validity.name if validity else None,
+        "fee_validity_prac":    validity.practitioner if validity else None,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -53,77 +70,241 @@ def get_suggested_sessions(
     load_class: str,
     channel: str = "walkin",
     from_date: str | None = None,
-    days_ahead: int = 7,
+    days_ahead: int = 3,
+    is_special: bool = False,
 ) -> list:
     """
-    Return upcoming sessions that have capacity for the given channel.
+    Return sessions with available capacity, sourced from practitioner schedules.
 
-    channel: 'phone' | 'walkin' | 'vip'
-    load_class: 'review_load' | 'non_review_load'
+    Walk-in  — today only.
+        The doctor may not have started yet (session could be Scheduled).
+        Receptionist books walk-in patients in the morning from the schedule;
+        the session becomes Active when the doctor arrives and starts it.
+        A Scheduled session is auto-created for today if the practitioner has
+        a schedule for today but the session record doesn't exist yet.
 
-    Each result includes load summary so the receptionist can choose the
-    less-loaded session for load balancing.
+    Phone  — tomorrow through today + days_ahead (default 3 days).
+        Advance booking. Same schedule-based lookup; Scheduled sessions are
+        created on demand so phone slots can be attached before the doctor
+        has started their session.
+
+    is_special  — priority flag, orthogonal to channel.
+        Special patients use reserved buffer slots instead of the regular
+        walk-in / phone quota. Channel still governs the date window:
+        walk-in special = today, phone special = tomorrow onwards.
+
+    In all cases practitioner schedules are the source of truth, not whatever
+    Queue Session records happen to already exist.
     """
-    start = getdate(from_date) if from_date else getdate(today())
-    end = start + timedelta(days=int(days_ahead))
+    if channel not in ("phone", "walkin"):
+        frappe.throw(_("channel must be 'phone' or 'walkin'."))
 
-    config = frappe.get_single("Slot Partition Config")
-    phone_pct: int = config.phone_pct or 60
+    config    = frappe.get_single("Slot Partition Config")
+    phone_pct = config.phone_pct or 60
 
-    sessions = frappe.get_all(
-        "Queue Session",
-        filters={
-            "status": ["in", ["Scheduled", "Active"]],
-            "session_date": ["between", [start, end]],
-        },
-        fields=[
-            "name", "session_name", "session_date", "start_time", "end_time",
-            "practitioner", "dept_abbr",
-            "planned_capacity", "stretch_capacity",
-            "review_load_count", "non_review_load_count",
-            "phone_booked_count", "walkin_count",
-            "vip_buffer_positions", "vip_buffer_used",
-        ],
-        order_by="session_date asc, start_time asc",
-    )
+    today_date = getdate(today())
+
+    if channel == "phone":
+        # Phone: tomorrow → today + days_ahead
+        start = today_date + timedelta(days=1)
+        end   = today_date + timedelta(days=int(days_ahead))
+    else:
+        # Walk-in: today only
+        start = today_date
+        end   = today_date
+
+    sessions = _sessions_for_date_range(start, end)
+    return _apply_channel_filter(sessions, channel, phone_pct, is_special=bool(is_special))
+
+
+# ---------------------------------------------------------------------------
+# session suggestion helpers
+# ---------------------------------------------------------------------------
+
+def _sessions_for_date_range(start, end) -> list:
+    """
+    For every practitioner schedule slot in [start, end], return the
+    existing Queue Session (Scheduled or Active) or create a new Scheduled
+    one.  Returns a list of frappe._dict session records.
+    """
+    from frappe.utils import formatdate
+
+    # All active-practitioner schedule slots
+    rows = frappe.db.sql("""
+        SELECT
+            hp.name             AS practitioner,
+            hp.practitioner_name,
+            hp.department,
+            psu.schedule,
+            ts.day,
+            ts.from_time,
+            ts.to_time,
+            ts.maximum_appointments AS capacity
+        FROM `tabPractitioner Service Unit Schedule` psu
+        JOIN `tabHealthcare Practitioner` hp
+             ON hp.name = psu.parent AND psu.parenttype = 'Healthcare Practitioner'
+        JOIN `tabHealthcare Schedule Time Slot` ts
+             ON ts.parent = psu.schedule AND ts.parenttype = 'Practitioner Schedule'
+        WHERE hp.status = 'Active'
+        ORDER BY hp.name, ts.from_time
+    """, as_dict=True)
+
+    if not rows:
+        return []
+
+    # dept_abbr per department (one query)
+    dept_abbr_map: dict[str, str] = {}
+    dept_ids = {r.department for r in rows if r.department}
+    if dept_ids:
+        for d in frappe.get_all(
+            "Medical Department",
+            filters={"name": ["in", list(dept_ids)]},
+            fields=["name", "custom_dept_abbr"],
+        ):
+            dept_abbr_map[d.name] = d.custom_dept_abbr or ""
+
+    # practitioner → {weekday_name → first matching slot}
+    prac_day: dict[str, dict[str, frappe._dict]] = {}
+    for r in rows:
+        day_map = prac_day.setdefault(r.practitioner, {})
+        if r.day not in day_map:
+            day_map[r.day] = r
+
+    _FIELDS = [
+        "name", "session_name", "session_date", "start_time", "end_time",
+        "practitioner", "dept_abbr",
+        "planned_capacity", "stretch_capacity",
+        "review_load_count", "non_review_load_count",
+        "phone_booked_count", "walkin_count",
+        "vip_buffer_positions", "vip_buffer_used",  # DB field names kept as-is
+    ]
 
     result = []
+    current = start
+    while current <= end:
+        day_name = current.strftime("%A")
+
+        for practitioner, day_map in prac_day.items():
+            if day_name not in day_map:
+                continue
+
+            slot      = day_map[day_name]
+            dept_abbr = dept_abbr_map.get(slot.department or "", "")
+            if not dept_abbr:
+                # dept_abbr is mandatory on Queue Session — skip
+                continue
+
+            # Find an existing session for this practitioner + date
+            existing = frappe.db.get_value(
+                "Queue Session",
+                {
+                    "practitioner": practitioner,
+                    "session_date":  current,
+                    "status":        ["in", ["Scheduled", "Active"]],
+                },
+                _FIELDS,
+                as_dict=True,
+            )
+            if existing:
+                result.append(existing)
+                continue
+
+            # No session yet — create a Scheduled one from the schedule
+            date_label   = formatdate(current, "EEE dd MMM yyyy")
+            schedule     = slot.schedule or ""
+            session_name = (
+                f"{schedule} · {date_label}" if schedule
+                else f"{slot.practitioner_name} · {date_label}"
+            )
+            try:
+                doc = frappe.get_doc({
+                    "doctype":          "Queue Session",
+                    "session_name":     session_name,
+                    "practitioner":     practitioner,
+                    "session_date":     current,
+                    "start_time":       str(slot.from_time),
+                    "end_time":         str(slot.to_time),
+                    "dept_abbr":        dept_abbr,
+                    "session_capacity": int(slot.capacity or 20),
+                    "status":           "Scheduled",
+                })
+                doc.insert(ignore_permissions=True)
+            except Exception:
+                continue
+
+            # before_insert has populated planned_capacity, stretch_capacity,
+            # vip_buffer_positions — use the doc directly
+            result.append(frappe._dict({
+                "name":                  doc.name,
+                "session_name":          doc.session_name,
+                "session_date":          doc.session_date,
+                "start_time":            doc.start_time,
+                "end_time":              doc.end_time,
+                "practitioner":          practitioner,
+                "dept_abbr":             doc.dept_abbr,
+                "planned_capacity":      doc.planned_capacity,
+                "stretch_capacity":      doc.stretch_capacity,
+                "review_load_count":     0,
+                "non_review_load_count": 0,
+                "phone_booked_count":    0,
+                "walkin_count":          0,
+                "vip_buffer_positions":  doc.vip_buffer_positions,
+                "vip_buffer_used":       0,
+            }))
+
+        current = current + timedelta(days=1)
+
+    return result
+
+
+def _apply_channel_filter(
+    sessions: list,
+    channel: str,
+    phone_pct: int,
+    is_special: bool = False,
+) -> list:
+    """Filter sessions by channel/special capacity and build result rows."""
+    result = []
     for s in sessions:
-        planned = s.planned_capacity or 0
-        stretch = s.stretch_capacity or planned
+        planned      = s.planned_capacity or 0
+        stretch      = s.stretch_capacity or planned
         total_booked = (s.phone_booked_count or 0) + (s.walkin_count or 0)
+        phone_quota  = int(planned * phone_pct / 100)
 
-        phone_quota = int(planned * phone_pct / 100)
-        walkin_quota = stretch - phone_quota
-
-        if channel == "phone":
+        if is_special:
+            # Special patients use reserved buffer slots regardless of channel
+            buffer_list = _parse_special_positions(s.vip_buffer_positions)
+            available   = len(buffer_list) - (s.vip_buffer_used or 0)
+        elif channel == "phone":
             available = phone_quota - (s.phone_booked_count or 0)
-        elif channel == "vip":
-            buffer_list = _parse_vip_positions(s.vip_buffer_positions)
-            available = len(buffer_list) - (s.vip_buffer_used or 0)
         else:  # walkin
             available = stretch - total_booked
 
         if available <= 0:
             continue
 
+        prac_name = frappe.db.get_value(
+            "Healthcare Practitioner", s.practitioner, "practitioner_name"
+        ) or s.practitioner
+
         row = {
-            "queue_session": s.name,
-            "session_name": s.session_name,
-            "session_date": str(s.session_date),
-            "start_time": str(s.start_time),
-            "end_time": str(s.end_time),
-            "practitioner": s.practitioner,
-            "dept_abbr": s.dept_abbr,
-            "available_slots": available,
-            "review_load_count": s.review_load_count or 0,
+            "queue_session":         s.name,
+            "session_name":          s.session_name,
+            "session_date":          str(s.session_date),
+            "start_time":            str(s.start_time),
+            "end_time":              str(s.end_time),
+            "practitioner":          s.practitioner,
+            "practitioner_name":     prac_name,
+            "dept_abbr":             s.dept_abbr,
+            "available_slots":       available,
+            "review_load_count":     s.review_load_count or 0,
             "non_review_load_count": s.non_review_load_count or 0,
-            "total_booked": total_booked,
-            "load_ratio": _load_ratio(s),
+            "total_booked":          total_booked,
+            "load_ratio":            _load_ratio(s),
         }
-        # For VIP channel include the nearest available buffer position
-        if channel == "vip":
-            used_tokens = {
+
+        if is_special:
+            used = {
                 r[0]
                 for r in frappe.db.sql(
                     "SELECT token_number FROM `tabQueue Entry` "
@@ -131,9 +312,12 @@ def get_suggested_sessions(
                     s.name,
                 )
             }
-            avail_buffers = [p for p in _parse_vip_positions(s.vip_buffer_positions)
-                             if p not in used_tokens]
-            row["suggested_vip_token"] = avail_buffers[0] if avail_buffers else None
+            avail_buf = [
+                p for p in _parse_special_positions(s.vip_buffer_positions)
+                if p not in used
+            ]
+            row["suggested_special_token"] = avail_buf[0] if avail_buf else None
+
         result.append(row)
 
     return result
@@ -184,7 +368,7 @@ def get_token_board(queue_session: str) -> dict:
         order_by="token_number asc",
     )
 
-    buffer_list = _parse_vip_positions(session.vip_buffer_positions)
+    buffer_list = _parse_special_positions(session.vip_buffer_positions)
     used_tokens = {e.token_number for e in entries if e.token_number}
 
     # Compute max token to know how many cells to draw
@@ -196,8 +380,8 @@ def get_token_board(queue_session: str) -> dict:
     return {
         "session": session,
         "entries": entries,
-        "vip_buffer_available": [p for p in buffer_list if p not in used_tokens],
-        "vip_buffer_reserved": buffer_list,
+        "special_buffer_available": [p for p in buffer_list if p not in used_tokens],
+        "special_buffer_reserved":  buffer_list,
         "max_token": max_token,
     }
 
@@ -215,24 +399,26 @@ def confirm_booking(
     guardian: str | None = None,
     notes: str = "",
     token_number: int | None = None,
+    is_special: bool = False,
 ) -> dict:
     """
     Confirm a booking: assign a token number and create a QueueEntry.
 
-    channel: 'phone' | 'walkin' | 'vip'
+    channel: 'phone' | 'walkin'
+    is_special: priority flag — uses reserved buffer slots, orthogonal to channel.
+        Special patients bypass the normal quota and take a buffer position.
+        channel still determines the date window (phone = advance, walkin = today).
     load_class: 'review_load' | 'non_review_load'
     token_number: optional override — receptionist selected a specific cell on the
-        token board. Validated against existing tokens and VIP buffer before use.
-
-    VIP channel takes the nearest unassigned vip_buffer_position.
-    Phone/walkin channel skips buffer positions when assigning sequential tokens.
+        token board. Validated against existing tokens and special buffer before use.
 
     Returns the new QueueEntry name and token_number.
     """
     queue_session = (queue_session or "").strip()
-    patient = (patient or "").strip()
-    channel = (channel or "walkin").strip().lower()
-    load_class = (load_class or "non_review_load").strip()
+    patient       = (patient or "").strip()
+    channel       = (channel or "walkin").strip().lower()
+    load_class    = (load_class or "non_review_load").strip()
+    is_special    = bool(is_special)
 
     if not queue_session:
         frappe.throw(_("Queue Session is required."))
@@ -240,8 +426,8 @@ def confirm_booking(
         frappe.throw(_("Patient is required."))
     if load_class not in ("review_load", "non_review_load"):
         frappe.throw(_("load_class must be 'review_load' or 'non_review_load'."))
-    if channel not in ("phone", "walkin", "vip"):
-        frappe.throw(_("channel must be 'phone', 'walkin', or 'vip'."))
+    if channel not in ("phone", "walkin"):
+        frappe.throw(_("channel must be 'phone' or 'walkin'."))
 
     session_doc = frappe.get_doc("Queue Session", queue_session)
 
@@ -253,19 +439,19 @@ def confirm_booking(
     config = frappe.get_single("Slot Partition Config")
     phone_pct: int = config.phone_pct or 60
 
-    planned = session_doc.planned_capacity or 0
-    stretch = session_doc.stretch_capacity or planned
-    phone_quota = int(planned * phone_pct / 100)
+    planned      = session_doc.planned_capacity or 0
+    stretch      = session_doc.stretch_capacity or planned
+    phone_quota  = int(planned * phone_pct / 100)
     total_booked = (session_doc.phone_booked_count or 0) + (session_doc.walkin_count or 0)
 
-    # Capacity check per channel
-    if channel == "phone":
+    # Capacity check
+    if is_special:
+        buffer_list = _parse_special_positions(session_doc.vip_buffer_positions)
+        if (session_doc.vip_buffer_used or 0) >= len(buffer_list):
+            frappe.throw(_("No Special buffer positions available in this session."))
+    elif channel == "phone":
         if (session_doc.phone_booked_count or 0) >= phone_quota:
             frappe.throw(_("Phone booking quota ({0}) is full for this session.").format(phone_quota))
-    elif channel == "vip":
-        buffer_list = _parse_vip_positions(session_doc.vip_buffer_positions)
-        if (session_doc.vip_buffer_used or 0) >= len(buffer_list):
-            frappe.throw(_("No VIP buffer positions available in this session."))
     else:  # walkin
         if total_booked >= stretch:
             frappe.throw(_("Session is full ({0}/{1} booked).").format(total_booked, stretch))
@@ -278,54 +464,58 @@ def confirm_booking(
             queue_session,
         )
     }
-    buffer_list = _parse_vip_positions(session_doc.vip_buffer_positions)
-    buffer_set = set(buffer_list)
+    buffer_list = _parse_special_positions(session_doc.vip_buffer_positions)
+    buffer_set  = set(buffer_list)
 
     if token_number is not None:
         # Validate the override token
         token_number = int(token_number)
         if token_number in existing_tokens:
             frappe.throw(_("Token {0} is already assigned in this session.").format(token_number))
-        if channel != "vip" and token_number in buffer_set:
+        if not is_special and token_number in buffer_set:
             frappe.throw(
-                _("Token {0} is a VIP buffer position. Use the VIP channel to assign it.").format(
+                _("Token {0} is a Special buffer position. Enable Special to assign it.").format(
                     token_number
                 )
             )
-        if channel == "vip" and token_number not in buffer_set:
+        if is_special and token_number not in buffer_set:
             frappe.throw(
-                _("Token {0} is not a VIP buffer position.").format(token_number)
+                _("Token {0} is not a Special buffer position.").format(token_number)
             )
-    elif channel == "vip":
-        token_number = _next_vip_token(buffer_list, existing_tokens)
+    elif is_special:
+        token_number = _next_special_token(buffer_list, existing_tokens)
     else:
         token_number = _next_normal_token(buffer_list, existing_tokens)
 
     # queue_position = token_number at booking time (ETA engine can reorder later)
     queue_position = token_number
 
-    # Map channel to legacy queue_type
-    queue_type_map = {"phone": "PRE_BOOKED", "walkin": "WALK_IN", "vip": "EMERGENCY"}
-    queue_type = queue_type_map[channel]
+    # Map to queue_type
+    if is_special:
+        queue_type = "EMERGENCY"
+    elif channel == "phone":
+        queue_type = "PRE_BOOKED"
+    else:
+        queue_type = "WALK_IN"
 
     # Build token label (for display, e.g. PED-042)
-    dept_abbr = session_doc.dept_abbr or "TKN"
+    dept_abbr   = session_doc.dept_abbr or "TKN"
     token_label = f"{dept_abbr}-{token_number:03d}"
 
     # Create QueueEntry
     entry = frappe.new_doc("Queue Entry")
-    entry.queue_session = queue_session
-    entry.patient = patient
-    entry.practitioner = session_doc.practitioner
-    entry.department = session_doc.department
-    entry.dept_abbr = dept_abbr
-    entry.token_number = token_number
-    entry.token = token_label
+    entry.queue_session  = queue_session
+    entry.patient        = patient
+    entry.practitioner   = session_doc.practitioner
+    entry.department     = session_doc.department
+    entry.dept_abbr      = dept_abbr
+    entry.token_number   = token_number
+    entry.token          = token_label
     entry.queue_position = queue_position
-    entry.queue_type = queue_type
-    entry.load_class = load_class
-    entry.status = "Booked"
-    entry.issued_by = frappe.session.user
+    entry.queue_type     = queue_type
+    entry.load_class     = load_class
+    entry.status         = "Booked"
+    entry.issued_by      = frappe.session.user
     entry.issued_by_role = "Reception"
     if notes:
         entry.notes = notes
@@ -334,13 +524,13 @@ def confirm_booking(
     # Update session counters
     update_fields: dict = {}
 
-    if channel == "phone":
+    if is_special:
+        # Special patients use the buffer; don't count against phone/walkin quotas
+        update_fields["vip_buffer_used"] = (session_doc.vip_buffer_used or 0) + 1
+    elif channel == "phone":
         update_fields["phone_booked_count"] = (session_doc.phone_booked_count or 0) + 1
     elif channel == "walkin":
         update_fields["walkin_count"] = (session_doc.walkin_count or 0) + 1
-    elif channel == "vip":
-        update_fields["vip_buffer_used"] = (session_doc.vip_buffer_used or 0) + 1
-        update_fields["phone_booked_count"] = (session_doc.phone_booked_count or 0) + 1
 
     if load_class == "review_load":
         update_fields["review_load_count"] = (session_doc.review_load_count or 0) + 1
@@ -368,15 +558,16 @@ def confirm_booking(
     recalculate_downstream_etas(queue_session)
 
     return {
-        "queue_entry": entry.name,
-        "token_number": token_number,
-        "token": token_label,
-        "queue_position": queue_position,
-        "load_class": load_class,
-        "channel": channel,
+        "queue_entry":           entry.name,
+        "token_number":          token_number,
+        "token":                 token_label,
+        "queue_position":        queue_position,
+        "load_class":            load_class,
+        "channel":               channel,
+        "is_special":            is_special,
         "predicted_doctor_time": eta["predicted_doctor_time"],
-        "report_by_time": eta["report_by_time"],
-        "estimated_window_end": eta["estimated_window_end"],
+        "report_by_time":        eta["report_by_time"],
+        "estimated_window_end":  eta["estimated_window_end"],
     }
 
 
@@ -384,8 +575,8 @@ def confirm_booking(
 # helpers
 # ---------------------------------------------------------------------------
 
-def _parse_vip_positions(raw: str | None) -> list[int]:
-    """Parse the JSON vip_buffer_positions field. Returns sorted list."""
+def _parse_special_positions(raw: str | None) -> list[int]:
+    """Parse the JSON vip_buffer_positions field (DB name kept). Returns sorted list."""
     if not raw:
         return []
     try:
@@ -398,7 +589,7 @@ def _parse_vip_positions(raw: str | None) -> list[int]:
 def _next_normal_token(buffer_positions: list[int], used_tokens: set) -> int:
     """
     Return the lowest positive integer that is not in used_tokens
-    and not in buffer_positions (reserved for VIP).
+    and not in buffer_positions (reserved for Special patients).
     """
     buffer_set = set(buffer_positions)
     candidate = 1
@@ -407,7 +598,7 @@ def _next_normal_token(buffer_positions: list[int], used_tokens: set) -> int:
     return candidate
 
 
-def _next_vip_token(buffer_positions: list[int], used_tokens: set) -> int:
+def _next_special_token(buffer_positions: list[int], used_tokens: set) -> int:
     """
     Return the lowest buffer position that has not yet been used.
     Raises if none available.
@@ -415,7 +606,7 @@ def _next_vip_token(buffer_positions: list[int], used_tokens: set) -> int:
     for pos in buffer_positions:
         if pos not in used_tokens:
             return pos
-    frappe.throw(_("No VIP buffer positions are available."))
+    frappe.throw(_("No Special buffer positions are available."))
 
 
 def _load_ratio(session: dict) -> float:

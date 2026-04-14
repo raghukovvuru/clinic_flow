@@ -214,11 +214,20 @@ function get_dashboard_html() {
 			<!-- Left header -->
 			<div style="padding:10px 16px;border-bottom:1px solid var(--border-color);flex-shrink:0;">
 				<div class="rd-label" style="margin-bottom:8px;">Admit Patient</div>
-				<!-- Channel tabs -->
-				<div id="rd-channels" style="display:flex;border-bottom:2px solid var(--border-color);">
-					<button class="rd-channel-btn active" data-channel="walkin">Walk-in</button>
-					<button class="rd-channel-btn" data-channel="phone">Phone</button>
-					<button class="rd-channel-btn" data-channel="vip">VIP</button>
+				<!-- Channel tabs + Special toggle -->
+				<div style="display:flex;align-items:center;gap:12px;border-bottom:2px solid var(--border-color);">
+					<div id="rd-channels" style="display:flex;flex:1;">
+						<button class="rd-channel-btn active" data-channel="walkin">Walk-in</button>
+						<button class="rd-channel-btn" data-channel="phone">Phone</button>
+					</div>
+					<label id="rd-special-label"
+						style="display:flex;align-items:center;gap:5px;cursor:pointer;
+							font-size:12px;font-weight:600;color:var(--text-muted);
+							padding:0 4px 2px;white-space:nowrap;"
+						title="Reserve a Special buffer slot for this patient">
+						<input type="checkbox" id="rd-special-toggle" style="cursor:pointer;">
+						Special
+					</label>
 				</div>
 			</div>
 
@@ -317,7 +326,8 @@ class ReceptionistDashboard {
 		this.state = {
 			step:            'search',  // search | guardian_found | guardian_not_found |
 			                            // register | child_selected | session_offered | confirmed
-			channel:         'walkin',  // walkin | phone | vip
+			channel:         'walkin',  // walkin | phone
+			is_special:      false,     // Special priority flag — uses buffer slots
 			mobile:          '',
 			guardian:        null,      // {name, guardian_name, mobile, relationship, notes}
 			children:        [],        // [{patient, patient_name, dob, age_display}]
@@ -346,7 +356,8 @@ class ReceptionistDashboard {
 	// ── Top bar ──────────────────────────────────────────────────────────────
 	load_top_bar() {
 		const today = frappe.datetime.get_today();
-		this.$topdate.text(frappe.datetime.str_to_user(today, true));
+		// str_to_user second arg is only_time in Frappe v16 — pass false to get date format
+		this.$topdate.text(frappe.datetime.str_to_user(today, false, true));
 
 		frappe.call({
 			method: 'clinic_flow.api.queue.get_queue_state_for_display',
@@ -370,6 +381,26 @@ class ReceptionistDashboard {
 						&nbsp;Token ${frappe.utils.escape_html(s.current_token || '—')}
 					</span>
 				`).join(''));
+
+				// Refresh ETAs for all active sessions every 60 s so report times
+				// stay current even when no booking/completion events have fired.
+				sessions
+					.filter(s => s.session_status === 'Active')
+					.forEach(s => {
+						frappe.call({
+							method: 'clinic_flow.api.eta.recalculate_downstream_etas',
+							args: { queue_session: s.session },
+							callback: () => {
+								// Silently refresh board/panel if they're showing this session
+								if (this.token_board && this.token_board.session === s.queue_session) {
+									this.token_board.refresh();
+								}
+								if (this.live_panel && this.live_panel.session === s.queue_session) {
+									this.live_panel.refresh();
+								}
+							},
+						});
+					});
 			},
 		});
 	}
@@ -381,7 +412,14 @@ class ReceptionistDashboard {
 			this.$channels.find('.rd-channel-btn').removeClass('active');
 			$btn.addClass('active');
 			this.state.channel = $btn.data('channel');
-			// Reset to search step when channel changes
+			this._reset_to_search();
+		});
+
+		this.$root.find('#rd-special-toggle').on('change', (e) => {
+			this.state.is_special = e.target.checked;
+			// Highlight label when active
+			const $lbl = this.$root.find('#rd-special-label');
+			$lbl.css('color', this.state.is_special ? '#d97706' : 'var(--text-muted)');
 			this._reset_to_search();
 		});
 	}
@@ -748,9 +786,9 @@ class ReceptionistDashboard {
 						${c.dob ? '&nbsp;·&nbsp;DOB ' + frappe.utils.escape_html(c.dob) : ''}
 					</div>
 					<span class="rd-badge ${badge_class}">${visit_label}</span>
-					${is_review ? `
+					${is_review && vt.fee_validity_till ? `
 					<span class="rd-caption" style="margin-left:6px;">
-						${vt.past_visits_90d} visit${vt.past_visits_90d === 1 ? '' : 's'} in last 90 days
+						✓ Free follow-up valid till ${frappe.utils.escape_html(vt.fee_validity_till)}
 					</span>` : ''}
 				</div>
 
@@ -783,16 +821,20 @@ class ReceptionistDashboard {
 				load_class: this.state.visit_type.load_class,
 				channel:    this.state.channel,
 				from_date:  frappe.datetime.get_today(),
+				is_special: this.state.is_special ? 1 : 0,
 			},
 			callback: (r) => {
 				if (!r.message || !r.message.length) {
+					const ch_label = this.state.is_special
+						? `Special (${this.state.channel})`
+						: this.state.channel;
 					this.$body.html(`
 						<div class="rd-card" style="border-color:#f87171;">
 							<div style="color:#dc2626;font-weight:600;margin-bottom:4px;">No sessions available</div>
 							<div class="rd-caption">
 								No open sessions found for
 								<strong>${frappe.utils.escape_html(this.state.visit_type.load_class)}</strong>
-								via <strong>${frappe.utils.escape_html(this.state.channel)}</strong>.
+								via <strong>${frappe.utils.escape_html(ch_label)}</strong>.
 							</div>
 						</div>
 						<button id="rd-back-child" class="rd-btn-secondary" style="width:100%;margin-top:8px;">
@@ -810,11 +852,11 @@ class ReceptionistDashboard {
 				this.state.session_idx = 0;
 				this.state.override_token = null;
 				this.state.step = 'session_offered';
-				// Load the first offered session on the board; for VIP pre-highlight suggested token
+				// Pre-highlight suggested special token on the board
 				const first = r.message[0];
-				const vip_hint = (this.state.channel === 'vip' && first.suggested_vip_token)
-					? first.suggested_vip_token : null;
-				this.token_board.load(first.queue_session, vip_hint);
+				const special_hint = (this.state.is_special && first.suggested_special_token)
+					? first.suggested_special_token : null;
+				this.token_board.load(first.queue_session, special_hint);
 				this.render_admission();
 			},
 		});
@@ -877,12 +919,12 @@ class ReceptionistDashboard {
 						&nbsp;·&nbsp;New: ${s.non_review_load_count}
 					</div>
 
-					${(this.state.channel === 'vip' && s.suggested_vip_token) ? `
+					${(this.state.is_special && s.suggested_special_token) ? `
 					<div style="padding:6px 10px;margin-bottom:10px;border-radius:6px;
 						background:#fef9c3;border:1px solid #d97706;
 						font-size:12px;font-weight:600;color:#a16207;">
-						Suggested VIP token:
-						<strong>${frappe.utils.escape_html(String(s.suggested_vip_token))}</strong>
+						Suggested Special token:
+						<strong>${frappe.utils.escape_html(String(s.suggested_special_token))}</strong>
 						&nbsp;(highlighted on board — click to confirm)
 					</div>` : ''}
 
@@ -957,6 +999,7 @@ class ReceptionistDashboard {
 				load_class:    this.state.visit_type.load_class,
 				guardian:      this.state.guardian.name,
 				token_number:  this.state.override_token || null,
+				is_special:    this.state.is_special ? 1 : 0,
 			},
 			callback: (r) => {
 				if (!r.message) return;
@@ -1035,7 +1078,13 @@ class ReceptionistDashboard {
 		`);
 
 		this.$body.find('#rd-print-btn').on('click', () => this._print_slip());
-		this.$body.find('#rd-new-booking-btn').on('click', () => this._reset_to_search());
+		this.$body.find('#rd-new-booking-btn').on('click', () => {
+			// Clear Special toggle for next booking
+			this.state.is_special = false;
+			this.$root.find('#rd-special-toggle').prop('checked', false);
+			this.$root.find('#rd-special-label').css('color', 'var(--text-muted)');
+			this._reset_to_search();
+		});
 	}
 
 	// ── Print slip ────────────────────────────────────────────────────────────
@@ -1088,6 +1137,7 @@ class ReceptionistDashboard {
 		this.state = {
 			step:           'search',
 			channel:        this.state.channel,
+			is_special:     this.state.is_special,
 			mobile:         '',
 			guardian:       null,
 			children:       [],
@@ -1111,7 +1161,7 @@ class TokenBoard {
 	// Cell state → visual config
 	static CELL_STYLES = {
 		available:    { bg: '#f0fdf4', border: '#16a34a', color: '#15803d', sub: '' },
-		vip_buffer:   { bg: '#fef9c3', border: '#d97706', color: '#a16207', sub: 'VIP' },
+		vip_buffer:   { bg: '#fef9c3', border: '#d97706', color: '#a16207', sub: '★' },
 		booked:       { bg: '#fee2e2', border: '#dc2626', color: '#991b1b', sub: '' },
 		called:       { bg: '#dbeafe', border: '#1d4ed8', color: '#1e40af', sub: 'CALL' },
 		no_response:  { bg: '#ffedd5', border: '#ea580c', color: '#9a3412', sub: 'N/R' },
@@ -1123,7 +1173,7 @@ class TokenBoard {
 
 	static LEGEND = [
 		{ state: 'available',    label: 'Available' },
-		{ state: 'vip_buffer',   label: 'VIP Buffer' },
+		{ state: 'vip_buffer',   label: 'Special' },
 		{ state: 'booked',       label: 'Booked' },
 		{ state: 'called',       label: 'Called' },
 		{ state: 'no_response',  label: 'No Response' },
@@ -1277,7 +1327,7 @@ class TokenBoard {
 		(data.entries || []).forEach(e => {
 			if (e.token_number) entries_map[e.token_number] = e;
 		});
-		const vip_set        = new Set(data.vip_buffer_reserved || []);
+		const vip_set        = new Set(data.special_buffer_reserved || []);
 		const max_token      = data.max_token || 0;
 
 		if (max_token === 0) {
@@ -1369,9 +1419,9 @@ class TokenBoard {
 			return;
 		}
 
-		// VIP buffer cell during VIP session_offered → select it
+		// Special buffer cell during Special session_offered → select it
 		if (state === 'vip_buffer' && admission_step === 'session_offered'
-			&& db.state.channel === 'vip') {
+			&& db.state.is_special) {
 			db.state.override_token = token_number;
 			this.set_recommended(token_number);
 			db.render_admission();
@@ -1383,7 +1433,7 @@ class TokenBoard {
 			const entry = (this.board_data.entries || []).find(e => e.name === entry_name);
 			if (entry) this._show_detail(entry);
 		} else if (state === 'vip_buffer') {
-			this._show_vip_detail(token_number);
+			this._show_special_detail(token_number);
 		}
 	}
 
@@ -1478,21 +1528,21 @@ class TokenBoard {
 		this.$drawer.find('#rd-drawer-close').on('click', () => this._hide_detail());
 	}
 
-	_show_vip_detail(token_number) {
+	_show_special_detail(token_number) {
 		this.$drawer.html(`
 			<div>
 				<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
 					<div style="font-size:22px;font-weight:900;color:#d97706;">${token_number}</div>
 					<div style="flex:1;">
-						<div style="font-size:14px;font-weight:700;">VIP Buffer Slot</div>
-						<span class="rd-badge rd-badge-amber">Held for VIP</span>
+						<div style="font-size:14px;font-weight:700;">Special Buffer Slot</div>
+						<span class="rd-badge rd-badge-amber">Reserved</span>
 					</div>
 					<button id="rd-drawer-close" class="rd-btn-secondary"
 						style="padding:4px 10px;font-size:11px;">✕ Close</button>
 				</div>
 				<div class="rd-caption">
-					This token position is reserved as a VIP buffer slot.<br>
-					Use the VIP channel in the admission panel to assign it to a patient.
+					This token position is a Special buffer slot.<br>
+					Enable the Special toggle in the admission panel to assign it to a patient.
 				</div>
 			</div>
 		`).show();
