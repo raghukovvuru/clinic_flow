@@ -28,6 +28,8 @@
   "issued_by",
   "issued_by_role",
   "notes",
+  "complaint",
+  "age_at_visit",
   "eta_section",
   "report_by_time",
   "predicted_doctor_time",
@@ -198,6 +200,19 @@
    "label": "Notes"
   },
   {
+   "fieldname": "complaint",
+   "fieldtype": "Link",
+   "label": "Chief Complaint",
+   "options": "Complaint",
+   "description": "Primary complaint selected at booking. Auto-populated into Patient Encounter symptoms."
+  },
+  {
+   "fieldname": "age_at_visit",
+   "fieldtype": "Data",
+   "label": "Age at Visit",
+   "description": "e.g. '3y 2m'. Auto-calculated from DOB; editable if DOB unknown."
+  },
+  {
    "fieldname": "eta_section",
    "fieldtype": "Section Break",
    "label": "ETA (v2)"
@@ -262,7 +277,7 @@
   }
  ],
  "links": [],
- "modified": "2026-04-13 00:00:00.000000",
+ "modified": "2026-04-14 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Clinic Flow",
  "name": "Queue Entry",

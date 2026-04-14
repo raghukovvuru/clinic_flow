@@ -1067,6 +1067,15 @@ def get_live_session_state(queue_session: str) -> dict:
 
 def _get_or_create_encounter(entry: dict, queue_session: str) -> str:
 	"""Find an existing Draft encounter or create one. Returns encounter name."""
+	# get_next_token() returns a minimal dict; re-fetch fields needed for encounter creation
+	full_entry = frappe.db.get_value(
+		"Queue Entry",
+		entry.name,
+		["appointment", "queue_type", "complaint"],
+		as_dict=True,
+	) or {}
+	entry = frappe._dict({**entry, **full_entry})
+
 	session_doc = frappe.get_doc("Queue Session", queue_session)
 	existing = frappe.get_all(
 		"Patient Encounter",
@@ -1124,6 +1133,11 @@ def _get_or_create_encounter(entry: dict, queue_session: str) -> str:
 		enc_data["appointment"] = entry.appointment
 
 	enc = frappe.get_doc(enc_data)
+
+	# Pre-populate complaint from booking so doctor sees it immediately
+	if entry.get("complaint"):
+		enc.append("symptoms", {"complaint": entry.complaint})
+
 	enc.insert(ignore_permissions=True)
 	return enc.name
 

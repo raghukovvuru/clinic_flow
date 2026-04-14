@@ -51,6 +51,8 @@ def get_visit_type(patient: str, practitioner: str | None = None) -> dict:
     covered = bool(validity and (validity.visited or 0) < (validity.max_visits or 1))
     load_class = "review_load" if covered else "non_review_load"
 
+    dob = frappe.db.get_value("Patient", patient, "dob")
+
     return {
         "patient":              patient,
         "load_class":           load_class,
@@ -58,6 +60,7 @@ def get_visit_type(patient: str, practitioner: str | None = None) -> dict:
         "fee_validity_till":    str(validity.valid_till) if validity else None,
         "fee_validity_name":    validity.name if validity else None,
         "fee_validity_prac":    validity.practitioner if validity else None,
+        "dob":                  str(dob) if dob else None,
     }
 
 
@@ -400,6 +403,9 @@ def confirm_booking(
     notes: str = "",
     token_number: int | None = None,
     is_special: bool = False,
+    weight: float | None = None,
+    complaint: str | None = None,
+    age_at_visit: str | None = None,
 ) -> dict:
     """
     Confirm a booking: assign a token number and create a QueueEntry.
@@ -530,6 +536,16 @@ def confirm_booking(
     entry.appointment    = patient_appointment
     if notes:
         entry.notes = notes
+    if complaint:
+        entry.complaint = complaint
+    if age_at_visit:
+        entry.age_at_visit = age_at_visit
+    if weight is not None:
+        try:
+            entry.weight_recorded    = float(weight)
+            entry.weight_recorded_at = now_datetime()
+        except (ValueError, TypeError):
+            pass
     entry.save(ignore_permissions=True)
 
     # Update session counters

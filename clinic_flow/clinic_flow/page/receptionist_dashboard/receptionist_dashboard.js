@@ -3,6 +3,31 @@
 // Phase 5: Token Board (center panel) — placeholder
 // Phase 6: Live Session Panel (right panel) — placeholder
 
+// ETA datetimes are stored as local time (naive, no UTC offset).
+// frappe.datetime.str_to_user() treats strings as UTC before converting —
+// that would add the timezone offset a second time. Extract HH:MM directly.
+function _eta_fmt(dt_str) {
+	if (!dt_str) return '—';
+	const t = String(dt_str).split(/[T ]/)[1];
+	return t ? t.substring(0, 5) : '—';
+}
+
+// Calculate age from an ISO date string (YYYY-MM-DD).
+// Returns a compact string like "3y 2m", "5m", "12d", or "" if no dob.
+function _age_from_dob(dob_str) {
+	if (!dob_str) return '';
+	const dob = new Date(dob_str);
+	const now = new Date();
+	let years  = now.getFullYear() - dob.getFullYear();
+	let months = now.getMonth() - dob.getMonth();
+	if (now.getDate() < dob.getDate()) months--;
+	if (months < 0) { years--; months += 12; }
+	if (years > 0)  return months > 0 ? `${years}y ${months}m` : `${years}y`;
+	if (months > 0) return `${months}m`;
+	const days = Math.max(0, Math.floor((now - dob) / 86400000));
+	return `${days}d`;
+}
+
 frappe.pages['receptionist-dashboard'].on_page_load = function (wrapper) {
 	frappe.ui.make_app_page({
 		parent: wrapper,
@@ -337,6 +362,9 @@ class ReceptionistDashboard {
 			session_idx:     0,         // which session in the list is being offered
 			booking:         null,      // result from confirm_booking
 			override_token:  null,      // token selected by clicking a cell on the board
+			complaint:       null,      // selected Complaint name
+			weight_at_booking: null,    // weight in kg (float string)
+			age_at_visit:    null,      // age string e.g. "3y 2m"
 		};
 
 		// Token board (center panel)
@@ -751,8 +779,12 @@ class ReceptionistDashboard {
 			args: { patient: child.patient },
 			callback: (r) => {
 				if (!r.message) return;
-				this.state.child = child;
+				// Merge DOB from visit_type into child object so age can be computed
+				const dob = r.message.dob || child.dob || null;
+				this.state.child = { ...child, dob };
 				this.state.visit_type = r.message;
+				// Pre-compute age for the booking form
+				this.state.age_at_visit = _age_from_dob(dob) || child.age_display || null;
 				this.state.step = 'child_selected';
 				this.render_admission();
 			},
@@ -942,6 +974,41 @@ class ReceptionistDashboard {
 						Token auto-assigned. Click any green cell on the board to override.
 					</div>`}
 
+					<!-- Complaint, Weight, Age ───────────────────────── -->
+					<div style="border-top:1px solid var(--border-color);
+						padding-top:10px;margin-bottom:10px;">
+
+						<!-- Complaint autocomplete -->
+						<div style="margin-bottom:8px;position:relative;">
+							<div class="rd-label" style="margin-bottom:3px;">Chief Complaint</div>
+							<input id="rd-complaint-input" class="rd-input" type="text"
+								autocomplete="off" placeholder="Type to search…"
+								value="${frappe.utils.escape_html(this.state.complaint || '')}">
+							<div id="rd-complaint-dd" style="display:none;position:absolute;
+								top:100%;left:0;right:0;background:var(--card-bg);
+								border:1px solid var(--border-color);border-top:none;
+								border-radius:0 0 6px 6px;max-height:160px;overflow-y:auto;
+								z-index:200;box-shadow:0 4px 12px rgba(0,0,0,.1);"></div>
+						</div>
+
+						<!-- Weight + Age side by side -->
+						<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+							<div>
+								<div class="rd-label" style="margin-bottom:3px;">Weight (kg)</div>
+								<input id="rd-weight-input" class="rd-input" type="number"
+									step="0.1" min="0" placeholder="e.g. 12.5"
+									value="${this.state.weight_at_booking || ''}">
+							</div>
+							<div>
+								<div class="rd-label" style="margin-bottom:3px;">Age</div>
+								<input id="rd-age-input" class="rd-input" type="text"
+									placeholder="e.g. 3y 2m"
+									value="${frappe.utils.escape_html(this.state.age_at_visit || '')}">
+							</div>
+						</div>
+					</div>
+					<!-- ─────────────────────────────────────────────── -->
+
 					<button id="rd-confirm-btn" class="rd-btn-primary">
 						Confirm Booking
 					</button>
@@ -969,6 +1036,51 @@ class ReceptionistDashboard {
 			this.render_admission();
 		});
 		this.$body.find('#rd-confirm-btn').on('click', () => this._do_confirm_booking(s));
+
+		// Complaint autocomplete
+		let _complaint_timer;
+		this.$body.find('#rd-complaint-input').on('input', (e) => {
+			const q = e.target.value;
+			this.state.complaint = q || null;
+			clearTimeout(_complaint_timer);
+			if (!q || q.length < 1) {
+				this.$body.find('#rd-complaint-dd').hide().empty();
+				return;
+			}
+			_complaint_timer = setTimeout(() => {
+				frappe.call({
+					method: 'frappe.client.get_list',
+					args: { doctype: 'Complaint', filters: [['name', 'like', `%${q}%`]],
+						fields: ['name'], limit: 10 },
+					callback: (r) => {
+						const $dd = this.$body.find('#rd-complaint-dd');
+						if (!r.message || !r.message.length) { $dd.hide().empty(); return; }
+						$dd.empty().show();
+						r.message.forEach(c => {
+							$(`<div style="padding:8px 12px;cursor:pointer;font-size:13px;
+								border-bottom:1px solid var(--border-color);">
+								${frappe.utils.escape_html(c.name)}
+							</div>`).on('click', () => {
+								this.state.complaint = c.name;
+								this.$body.find('#rd-complaint-input').val(c.name);
+								$dd.hide().empty();
+							}).appendTo($dd);
+						});
+					},
+				});
+			}, 280);
+		}).on('blur', () => {
+			// Delay hide so click on dropdown item fires first
+			setTimeout(() => this.$body.find('#rd-complaint-dd').hide(), 180);
+		});
+
+		// Weight + Age — persist to state immediately
+		this.$body.find('#rd-weight-input').on('input', (e) => {
+			this.state.weight_at_booking = e.target.value || null;
+		});
+		this.$body.find('#rd-age-input').on('input', (e) => {
+			this.state.age_at_visit = e.target.value || null;
+		});
 		this.$body.find('#rd-prev-session').on('click', () => {
 			this.state.session_idx--;
 			this.state.override_token = null;
@@ -1000,6 +1112,9 @@ class ReceptionistDashboard {
 				guardian:      this.state.guardian.name,
 				token_number:  this.state.override_token || null,
 				is_special:    this.state.is_special ? 1 : 0,
+				complaint:     this.state.complaint || null,
+				weight:        this.state.weight_at_booking || null,
+				age_at_visit:  this.state.age_at_visit || null,
 			},
 			callback: (r) => {
 				if (!r.message) return;
@@ -1023,12 +1138,11 @@ class ReceptionistDashboard {
 		const g   = this.state.guardian;
 		const s   = this.state.sessions[this.state.session_idx];
 
-		const report_time = b.report_by_time
-			? frappe.datetime.str_to_user(b.report_by_time, true)
-			: '—';
-		const pred_time   = b.predicted_doctor_time
-			? frappe.datetime.str_to_user(b.predicted_doctor_time, true)
-			: '—';
+		const report_time = _eta_fmt(b.report_by_time);
+		const pred_time   = _eta_fmt(b.predicted_doctor_time);
+		const age_str     = this.state.age_at_visit || '';
+		const weight_str  = this.state.weight_at_booking ? `${this.state.weight_at_booking} kg` : '';
+		const complaint   = this.state.complaint || '';
 
 		this.$body.html(`
 			<div>
@@ -1041,12 +1155,27 @@ class ReceptionistDashboard {
 						Token Number
 					</div>
 
-					<div style="margin-bottom:6px;font-size:13px;">
+					<div style="margin-bottom:4px;font-size:13px;">
 						<strong>${frappe.utils.escape_html(c.patient_name || c.patient)}</strong>
+						${age_str ? `<span class="rd-caption" style="margin-left:6px;">${frappe.utils.escape_html(age_str)}</span>` : ''}
 					</div>
 					<div class="rd-caption" style="margin-bottom:10px;">
 						${frappe.utils.escape_html(g.guardian_name)} · ${frappe.utils.escape_html(g.mobile)}
 					</div>
+
+					${complaint ? `
+					<div style="padding:5px 8px;margin-bottom:8px;border-radius:5px;
+						background:#eff6ff;font-size:12px;color:#1e40af;">
+						<span style="font-weight:700;">Complaint:</span>
+						${frappe.utils.escape_html(complaint)}
+					</div>` : ''}
+
+					${weight_str ? `
+					<div style="padding:5px 8px;margin-bottom:8px;border-radius:5px;
+						background:#f0fdf4;font-size:12px;color:#166534;">
+						<span style="font-weight:700;">Weight:</span>
+						${frappe.utils.escape_html(weight_str)}
+					</div>` : ''}
 
 					<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
 						<div style="text-align:center;">
@@ -1094,13 +1223,14 @@ class ReceptionistDashboard {
 		const g = this.state.guardian;
 		const s = this.state.sessions[this.state.session_idx];
 
-		const report_time = b.report_by_time
-			? frappe.datetime.str_to_user(b.report_by_time, true) : '—';
-		const pred_time = b.predicted_doctor_time
-			? frappe.datetime.str_to_user(b.predicted_doctor_time, true) : '—';
+		const report_time = _eta_fmt(b.report_by_time);
+		const pred_time   = _eta_fmt(b.predicted_doctor_time);
+		const age_str     = this.state.age_at_visit || '';
+		const weight_str  = this.state.weight_at_booking ? `${this.state.weight_at_booking} kg` : '';
+		const complaint   = this.state.complaint || '';
 
 		const win = window.open('', '_blank',
-			'width=420,height=520,toolbar=0,menubar=0,scrollbars=0');
+			'width=420,height=580,toolbar=0,menubar=0,scrollbars=0');
 		win.document.write(`<!DOCTYPE html><html><head>
 			<meta charset="utf-8"><title>Token Slip</title>
 			<style>
@@ -1115,8 +1245,10 @@ class ReceptionistDashboard {
 			<div class="t">${frappe.utils.escape_html(String(b.token_number))}</div>
 			<hr>
 			<div class="label">Patient</div>
-			<div class="val">${frappe.utils.escape_html(c.patient_name || c.patient)}</div>
+			<div class="val">${frappe.utils.escape_html(c.patient_name || c.patient)}${age_str ? ' · ' + frappe.utils.escape_html(age_str) : ''}</div>
 			<div class="cap">${frappe.utils.escape_html(g.guardian_name)} · ${frappe.utils.escape_html(g.mobile)}</div>
+			${complaint ? `<div class="cap" style="margin-top:4px;">Complaint: <strong>${frappe.utils.escape_html(complaint)}</strong></div>` : ''}
+			${weight_str ? `<div class="cap">Weight: <strong>${frappe.utils.escape_html(weight_str)}</strong></div>` : ''}
 			<hr>
 			<div class="label">Session</div>
 			<div class="cap">${frappe.utils.escape_html(s.session_name)}</div>
@@ -1135,18 +1267,21 @@ class ReceptionistDashboard {
 	// ── Reset helpers ─────────────────────────────────────────────────────────
 	_reset_to_search() {
 		this.state = {
-			step:           'search',
-			channel:        this.state.channel,
-			is_special:     this.state.is_special,
-			mobile:         '',
-			guardian:       null,
-			children:       [],
-			child:          null,
-			visit_type:     null,
-			sessions:       [],
-			session_idx:    0,
-			booking:        null,
-			override_token: null,
+			step:             'search',
+			channel:          this.state.channel,
+			is_special:       this.state.is_special,
+			mobile:           '',
+			guardian:         null,
+			children:         [],
+			child:            null,
+			visit_type:       null,
+			sessions:         [],
+			session_idx:      0,
+			booking:          null,
+			override_token:   null,
+			complaint:        null,
+			weight_at_booking: null,
+			age_at_visit:     null,
 		};
 		this.token_board.clear_highlight();
 		this.render_admission();
@@ -1439,10 +1574,8 @@ class TokenBoard {
 
 	// ── Detail drawer ─────────────────────────────────────────────────────────
 	_show_detail(entry) {
-		const report_time = entry.report_by_time
-			? frappe.datetime.str_to_user(entry.report_by_time, true) : '—';
-		const pred_time = entry.predicted_doctor_time
-			? frappe.datetime.str_to_user(entry.predicted_doctor_time, true) : '—';
+		const report_time = _eta_fmt(entry.report_by_time);
+		const pred_time   = _eta_fmt(entry.predicted_doctor_time);
 
 		const status_colors = {
 			'Booked':           '#fee2e2',
