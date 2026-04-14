@@ -746,8 +746,8 @@ def complete_reception(
 	Valid from: Called or No Response (patient returned before grace expired).
 	Sets status → Ready Near Doctor, records reception_done_at.
 
-	payment_mode / paid_amount are stored in notes for now; formal payment
-	recording against the healthcare Fee Validity is a later-phase concern.
+	Also syncs the linked Patient Appointment to "Checked In" with payment data so
+	Marley Healthcare's fee validity management and invoicing hooks fire correctly.
 
 	Also increments hold_patients_count on all No Response entries in the same session,
 	so the auto-push-to-end rule can fire.
@@ -756,7 +756,7 @@ def complete_reception(
 
 	entry = frappe.db.get_value(
 		"Queue Entry", queue_entry,
-		["name", "status", "queue_session", "token"],
+		["name", "status", "queue_session", "token", "appointment"],
 		as_dict=True,
 	)
 	if not entry:
@@ -778,14 +778,17 @@ def complete_reception(
 		update["weight_recorded"] = float(weight_kg)
 		update["weight_recorded_at"] = now_datetime()
 
-	if payment_mode or paid_amount is not None:
-		existing_notes = frappe.db.get_value("Queue Entry", queue_entry, "notes") or ""
-		payment_note = f"Payment: {payment_mode or 'unspecified'}"
-		if paid_amount is not None:
-			payment_note += f" | ₹{paid_amount}"
-		update["notes"] = (existing_notes + "\n" + payment_note).strip()
-
 	frappe.db.set_value("Queue Entry", queue_entry, update)
+
+	# ── Sync linked Patient Appointment → "Checked In" ───────────────────────
+	# This triggers Healthcare's on_update() which runs update_fee_validity()
+	# and manage_fee_validity() — correctly consuming the patient's fee validity.
+	if entry.appointment:
+		_checkin_patient_appointment(
+			appointment=entry.appointment,
+			payment_mode=payment_mode,
+			paid_amount=paid_amount,
+		)
 
 	# Increment hold counter on all No Response entries in this session
 	config = frappe.get_single("Slot Partition Config")
@@ -1123,3 +1126,41 @@ def _get_or_create_encounter(entry: dict, queue_session: str) -> str:
 	enc = frappe.get_doc(enc_data)
 	enc.insert(ignore_permissions=True)
 	return enc.name
+
+
+# ---------------------------------------------------------------------------
+# Healthcare appointment sync helper
+# ---------------------------------------------------------------------------
+
+def _checkin_patient_appointment(
+	appointment: str,
+	payment_mode: str,
+	paid_amount: float | None,
+) -> None:
+	"""
+	Set the linked Patient Appointment to 'Checked In' with payment data.
+
+	Healthcare's on_update() fires on save() and calls update_fee_validity() →
+	manage_fee_validity(), which:
+	  - for review patients: increments fee_validity.visited
+	  - for new patients:    creates a new Fee Validity record
+	  - for cancelled appts: decrements visited (handled by Healthcare itself)
+	"""
+	try:
+		appt = frappe.get_doc("Patient Appointment", appointment)
+		if appt.status in ("Checked In", "Checked Out", "Closed", "Cancelled"):
+			return  # Already processed — do not double-trigger
+
+		appt.status = "Checked In"
+		if payment_mode:
+			appt.mode_of_payment = payment_mode
+		if paid_amount is not None and float(paid_amount) > 0:
+			appt.paid_amount = float(paid_amount)
+			appt.invoiced    = 1
+		appt.save(ignore_permissions=True)
+		# Healthcare on_update() → update_fee_validity() fires here
+	except Exception:
+		frappe.log_error(
+			frappe.get_traceback(),
+			f"clinic_flow: failed to check in Patient Appointment {appointment}",
+		)

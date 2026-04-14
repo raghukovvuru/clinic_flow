@@ -155,9 +155,14 @@ class QueueMixin(Document):
 			)
 			return
 
+		# Skip Queue Entry creation if one already exists for this appointment
+		# in any active state. The V2 dashboard creates Queue Entries directly
+		# at booking time (confirm_booking) and links them via the appointment
+		# field. When complete_reception() later saves the appointment as
+		# "Checked In", this guard prevents a duplicate entry being created.
 		already_queued = frappe.db.exists(
 			"Queue Entry",
-			{"appointment": self.name, "status": ["in", ["Waiting", "Called", "With Doctor"]]},
+			{"appointment": self.name, "status": ["not in", ["No Show", "Cancelled"]]},
 		)
 		if already_queued:
 			return

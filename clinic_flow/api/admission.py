@@ -12,7 +12,7 @@ from datetime import timedelta
 
 import frappe
 from frappe import _
-from frappe.utils import getdate, now_datetime, today
+from frappe.utils import getdate, now_datetime, today, get_datetime, add_to_date
 
 
 # ---------------------------------------------------------------------------
@@ -502,6 +502,16 @@ def confirm_booking(
     dept_abbr   = session_doc.dept_abbr or "TKN"
     token_label = f"{dept_abbr}-{token_number:03d}"
 
+    # ── Create Patient Appointment (Healthcare integration) ──────────────────
+    # This keeps the Marley Healthcare appointment calendar in sync and ensures
+    # fee validity management, sales invoices, and check-in flow work correctly.
+    patient_appointment = _create_patient_appointment(
+        patient=patient,
+        session_doc=session_doc,
+        queue_type=queue_type,
+        token_number=token_number,
+    )
+
     # Create QueueEntry
     entry = frappe.new_doc("Queue Entry")
     entry.queue_session  = queue_session
@@ -517,6 +527,7 @@ def confirm_booking(
     entry.status         = "Booked"
     entry.issued_by      = frappe.session.user
     entry.issued_by_role = "Reception"
+    entry.appointment    = patient_appointment
     if notes:
         entry.notes = notes
     entry.save(ignore_permissions=True)
@@ -618,3 +629,76 @@ def _load_ratio(session: dict) -> float:
     review = session.get("review_load_count") or 0
     non_review = session.get("non_review_load_count") or 0
     return round((review + non_review) / planned, 2)
+
+
+def _create_patient_appointment(
+    patient: str,
+    session_doc,
+    queue_type: str,
+    token_number: int,
+) -> str | None:
+    """
+    Create a Patient Appointment linked to this booking so that Marley Healthcare's
+    standard workflows (fee validity, check-in, sales invoice) remain functional.
+
+    Returns the new Patient Appointment name, or None on failure (non-blocking).
+    """
+    # Resolve Appointment Type from queue_type code
+    code_map = {"PRE_BOOKED": "PRE", "WALK_IN": "WLK", "FOLLOW_UP": "FLW", "EMERGENCY": "EMR"}
+    code = code_map.get(queue_type)
+    appointment_type = None
+    if code:
+        appointment_type = frappe.db.get_value(
+            "Appointment Type", {"custom_queue_code": code}, "name"
+        )
+    if not appointment_type:
+        result = frappe.db.sql("SELECT name FROM `tabAppointment Type` LIMIT 1")
+        appointment_type = result[0][0] if result else None
+
+    if not appointment_type:
+        frappe.log_error(
+            "No Appointment Type found — Patient Appointment not created for booking.",
+            "clinic_flow: confirm_booking"
+        )
+        return None
+
+    # Calculate a unique appointment_time within the session so Healthcare's
+    # overlap validator (appointment_based_on_check_in=1) doesn't reject duplicates.
+    session_date_str = str(session_doc.session_date)
+    appt_time = str(session_doc.start_time)
+    try:
+        start_dt = get_datetime(f"{session_date_str} {session_doc.start_time}")
+        end_dt   = get_datetime(f"{session_date_str} {session_doc.end_time}")
+        total_mins = int((end_dt - start_dt).total_seconds() // 60)
+        cap        = int(session_doc.planned_capacity or 20)
+        slot_mins  = max(1, total_mins // cap)
+        appt_time  = str(add_to_date(start_dt, minutes=(token_number - 1) * slot_mins).time())
+    except Exception:
+        pass  # Fall back to session start_time
+
+    company = frappe.db.get_single_value("Global Defaults", "default_company")
+    dept    = frappe.db.get_value(
+        "Healthcare Practitioner", session_doc.practitioner, "department"
+    )
+
+    try:
+        appt = frappe.get_doc({
+            "doctype":                       "Patient Appointment",
+            "patient":                       patient,
+            "practitioner":                  session_doc.practitioner,
+            "appointment_for":               "Healthcare Practitioner",
+            "appointment_type":              appointment_type,
+            "appointment_date":              session_doc.session_date,
+            "appointment_time":              appt_time,
+            "department":                    dept,
+            "company":                       company,
+            "custom_queue_type":             queue_type,
+            "duration":                      1,
+            # Tells Healthcare to skip strict time-range overlap check
+            "appointment_based_on_check_in": 1,
+        })
+        appt.insert(ignore_permissions=True)
+        return appt.name
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "clinic_flow: Patient Appointment creation failed")
+        return None
