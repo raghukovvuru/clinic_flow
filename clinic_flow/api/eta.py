@@ -270,8 +270,14 @@ def _weighted_time_ahead(
     non_review_avg: float,
 ) -> float:
     """
-    Sum up the expected consultation minutes for all patients with a lower
-    token_number who are still pending (not Completed, Pushed to End, or No Response).
+    Sum up the expected consultation minutes for all patients ahead of this token.
+
+    For active/live sessions: counts actual pending Queue Entries with lower token numbers.
+
+    For scheduled (future) sessions: many earlier tokens may not have been created yet
+    (phone bookings arrive one at a time). In that case, if the actual count of entries
+    ahead is less than (token_number - 1), fill the gap using a blended average so the
+    estimate reflects the patient's actual position in the queue.
 
     This includes the patient currently With Doctor — their full expected
     consultation time is counted (slight overestimate, safer for scheduling).
@@ -289,6 +295,15 @@ def _weighted_time_ahead(
     total = 0.0
     for r in rows:
         total += review_avg if r.load_class == "review_load" else non_review_avg
+
+    # For future sessions: if fewer actual entries than the token position implies,
+    # fill the gap with a blended per-patient average to give a position-aware estimate.
+    # (token_number - 1) = number of patients logically ahead in the queue.
+    expected_ahead = token_number - 1
+    actual_ahead   = len(rows)
+    if actual_ahead < expected_ahead:
+        blended_avg = (review_avg + non_review_avg) / 2.0
+        total += (expected_ahead - actual_ahead) * blended_avg
 
     return total
 
