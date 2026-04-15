@@ -233,6 +233,10 @@ def _sessions_for_date_range(start, end) -> list:
                 })
                 doc.insert(ignore_permissions=True)
             except Exception:
+                frappe.log_error(
+                    frappe.get_traceback(),
+                    f"clinic_flow: failed to auto-create Queue Session for {session_name}",
+                )
                 continue
 
             # before_insert has populated planned_capacity, stretch_capacity,

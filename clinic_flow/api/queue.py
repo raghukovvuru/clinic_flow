@@ -252,7 +252,7 @@ def call_next(queue_session: str) -> dict:
 	"""
 	Doctor clicks "Call Next".
 	1. Find next eligible token via priority engine.
-	2. Mark it Called.
+	2. Move it into consultation.
 	3. Update Queue Session current_token + total_called.
 	4. Create or reopen Patient Encounter draft.
 	5. Return compact workspace payload.
@@ -271,26 +271,22 @@ def call_next(queue_session: str) -> dict:
 
 	now = now_datetime()
 
-	frappe.db.set_value("Queue Entry", entry.name, {
-		"status": "Called",
-		"called_at": now,
-	})
-
 	session_doc = frappe.get_doc("Queue Session", queue_session)
 	frappe.db.set_value("Queue Session", queue_session, {
 		"current_token": entry.token,
 		"total_called": (session_doc.total_called or 0) + 1,
 	})
 
-	_broadcast_queue_update(queue_session)
-
 	encounter_name = _get_or_create_encounter(entry, queue_session)
 
 	frappe.db.set_value("Queue Entry", entry.name, {
 		"status": "With Doctor",
-		"seen_at": now_datetime(),
+		"called_at": now,
+		"seen_at": now,
 		"patient_encounter": encounter_name,
 	})
+
+	_broadcast_queue_update(queue_session)
 
 	# Recalculate downstream ETAs if the actual pace has drifted significantly
 	from clinic_flow.api.eta import check_pace_deviation, recalculate_downstream_etas
@@ -490,21 +486,26 @@ def skip_patient(queue_entry: str, reason: str = "") -> dict:
 
 @frappe.whitelist()
 def get_queue_state(queue_session: str) -> dict:
-	"""Left panel data: current token + next 10 waiting."""
+	"""Doctor workspace queue strip: current token + next 10 ready patients."""
 	frappe.has_permission("Queue Entry", "read", throw=True)
 
 	session = frappe.get_doc("Queue Session", queue_session)
 	waiting = frappe.get_all(
 		"Queue Entry",
-		filters={"queue_session": queue_session, "status": "Waiting"},
-		fields=["name", "token", "patient_name", "queue_type", "queue_position"],
+		filters={"queue_session": queue_session, "status": ["in", ["Ready Near Doctor", "Waiting"]]},
+		fields=["name", "token", "patient_name", "queue_type", "queue_position", "status"],
 		order_by="queue_position asc",
 		limit=10,
 	)
+	status_order = {"Ready Near Doctor": 0, "Waiting": 1}
+	waiting = sorted(
+		waiting,
+		key=lambda row: (status_order.get(row.get("status"), 9), row.get("queue_position") or 0),
+	)
 	current = frappe.get_all(
 		"Queue Entry",
-		filters={"queue_session": queue_session, "status": ["in", ["Called", "With Doctor"]]},
-		fields=["name", "token", "patient_name", "queue_type"],
+		filters={"queue_session": queue_session, "status": ["in", ["With Doctor", "Called"]]},
+		fields=["name", "token", "patient_name", "queue_type", "patient", "patient_encounter"],
 		limit=1,
 	)
 	return {
@@ -1136,7 +1137,7 @@ def _get_or_create_encounter(entry: dict, queue_session: str) -> str:
 
 	# Pre-populate complaint from booking so doctor sees it immediately
 	if entry.get("complaint"):
-		enc.append("symptoms", {"complaint": entry.complaint})
+		enc.custom_chief_complaint = entry.complaint
 
 	enc.insert(ignore_permissions=True)
 	return enc.name

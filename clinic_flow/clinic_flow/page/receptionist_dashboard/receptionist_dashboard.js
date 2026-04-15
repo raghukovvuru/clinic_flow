@@ -420,10 +420,10 @@ class ReceptionistDashboard {
 							args: { queue_session: s.session },
 							callback: () => {
 								// Silently refresh board/panel if they're showing this session
-								if (this.token_board && this.token_board.session === s.queue_session) {
+								if (this.token_board && this.token_board.current_session === s.session) {
 									this.token_board.refresh();
 								}
-								if (this.live_panel && this.live_panel.session === s.queue_session) {
+								if (this.live_panel && this.live_panel.current_session === s.session) {
 									this.live_panel.refresh();
 								}
 							},
@@ -1773,6 +1773,14 @@ class LiveSessionPanel {
 				this.load(this.current_session);
 			}
 		});
+		frappe.realtime.on('session_status', (data) => {
+			if (!data) return;
+			this._load_session_list();
+			if (data.status === 'Active' && !this.current_session && data.queue_session) {
+				this.$session_sel.val(data.queue_session);
+				this.load(data.queue_session);
+			}
+		});
 	}
 
 	// ── Load and render ───────────────────────────────────────────────────────
@@ -1884,10 +1892,9 @@ class LiveSessionPanel {
 							${since ? '&nbsp;· Since ' + frappe.utils.escape_html(since) : ''}
 						</div>
 					</div>
-					<button class="rd-action-btn rd-action-btn-green rd-mark-completed-btn"
-						data-entry="${frappe.utils.escape_html(e.name)}">
-						✓ Done
-					</button>
+					<div class="rd-caption" style="font-weight:600;color:#1d4ed8;">
+						Doctor workspace controls completion
+					</div>
 				</div>
 			</div>
 		</div>`;
@@ -1908,17 +1915,16 @@ class LiveSessionPanel {
 							? '<span class="rd-badge rd-badge-green" style="font-size:9px;margin-left:4px;">Review</span>'
 							: '<span class="rd-badge rd-badge-blue" style="font-size:9px;margin-left:4px;">New</span>'}
 					</div>
-					${e.reception_done_at
-						? `<div class="rd-caption">Ready since ${frappe.utils.escape_html(frappe.datetime.str_to_user(e.reception_done_at, true))}</div>`
-						: ''}
-					${e.weight_recorded ? `<div class="rd-caption">${e.weight_recorded} kg</div>` : ''}
-				</div>
-				<button class="rd-action-btn rd-action-btn-blue rd-with-doctor-btn"
-					data-entry="${frappe.utils.escape_html(e.name)}">
-					→ Doctor
-				</button>
-			</div>`;
-		}).join('');
+						${e.reception_done_at
+							? `<div class="rd-caption">Ready since ${frappe.utils.escape_html(frappe.datetime.str_to_user(e.reception_done_at, true))}</div>`
+							: ''}
+						${e.weight_recorded ? `<div class="rd-caption">${e.weight_recorded} kg</div>` : ''}
+					</div>
+					<div class="rd-caption" style="font-weight:600;color:#7c3aed;">
+						Waiting for doctor call
+					</div>
+				</div>`;
+			}).join('');
 
 		return `
 		<div class="rd-pipeline-section">
@@ -2006,11 +2012,11 @@ class LiveSessionPanel {
 						placeholder="Weight (kg)" min="0" step="0.1"
 						style="margin-bottom:6px;" />
 					<div style="display:flex;gap:6px;">
-						<button class="rd-action-btn rd-action-btn-green rd-confirm-reception-btn"
-							style="flex:1;"
-							data-entry="${frappe.utils.escape_html(e.name)}">
-							Confirm &amp; Send to Doctor
-						</button>
+							<button class="rd-action-btn rd-action-btn-green rd-confirm-reception-btn"
+								style="flex:1;"
+								data-entry="${frappe.utils.escape_html(e.name)}">
+								Complete Reception
+							</button>
 						<button class="rd-action-btn rd-action-btn-red rd-cancel-recep-btn"
 							data-entry="${frappe.utils.escape_html(e.name)}">
 							✕
@@ -2212,23 +2218,11 @@ class LiveSessionPanel {
 			this._action_resume(entry);
 		});
 
-		// Move to With Doctor
-		this.$panel.find('.rd-with-doctor-btn').on('click', (e) => {
-			const entry = $(e.currentTarget).data('entry');
-			this._action_move_to_with_doctor(entry);
-		});
-
-		// Mark Completed
-		this.$panel.find('.rd-mark-completed-btn').on('click', (e) => {
-			const entry = $(e.currentTarget).data('entry');
-			this._action_mark_completed(entry);
-		});
-
-		// Call pushed-to-end patient again
-		this.$panel.find('.rd-call-pushed-btn').on('click', (e) => {
-			const entry = $(e.currentTarget).data('entry');
-			this._action_call_to_reception(entry);
-		});
+			// Call pushed-to-end patient again
+			this.$panel.find('.rd-call-pushed-btn').on('click', (e) => {
+				const entry = $(e.currentTarget).data('entry');
+				this._action_call_to_reception(entry);
+			});
 	}
 
 	// ── Individual actions ────────────────────────────────────────────────────
@@ -2331,40 +2325,6 @@ class LiveSessionPanel {
 					}
 				}
 			},
-		});
-	}
-
-	_action_move_to_with_doctor(queue_entry) {
-		frappe.call({
-			method: 'clinic_flow.api.queue.move_to_with_doctor',
-			args: { queue_entry },
-			callback: (r) => {
-				if (r.message) {
-					frappe.show_alert({
-						message: `${r.message.patient_name || 'Patient'} is With Doctor`,
-						indicator: 'blue',
-					});
-					this.load(this.current_session);
-					this.dashboard.token_board.load(this.current_session);
-				}
-			},
-		});
-	}
-
-	_action_mark_completed(queue_entry) {
-		frappe.call({
-			method: 'clinic_flow.api.queue.mark_completed',
-			args: { queue_entry },
-			callback: (r) => {
-				if (r.message) {
-					frappe.show_alert({
-						message: `${r.message.patient_name || 'Patient'} — consultation completed`,
-						indicator: 'green',
-					});
-					this.load(this.current_session);
-					this.dashboard.token_board.load(this.current_session);
-				}
-			},
-		});
-	}
+			});
+		}
 }

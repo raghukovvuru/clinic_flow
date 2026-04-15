@@ -3,6 +3,7 @@ import math
 import frappe
 from frappe import _
 from frappe.model.document import Document
+from frappe.utils import get_time
 
 
 class QueueSession(Document):
@@ -40,7 +41,9 @@ class QueueSession(Document):
 			)
 
 	def validate(self) -> None:
-		if self.start_time >= self.end_time:
+		start_time = get_time(self.start_time) if self.start_time else None
+		end_time = get_time(self.end_time) if self.end_time else None
+		if start_time and end_time and start_time >= end_time:
 			frappe.throw(_("End time must be after start time."))
 		if not self.dept_abbr:
 			frappe.throw(_("Department Abbreviation is required (e.g. CARD, PED). Set it on this session."))
