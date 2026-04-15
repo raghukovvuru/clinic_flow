@@ -117,7 +117,13 @@ def get_suggested_sessions(
         end   = today_date
 
     sessions = _sessions_for_date_range(start, end)
-    return _apply_channel_filter(sessions, channel, phone_pct, is_special=bool(is_special))
+    return _apply_channel_filter(
+        sessions,
+        channel,
+        phone_pct,
+        is_special=bool(is_special),
+        load_class=load_class,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -178,6 +184,7 @@ def _sessions_for_date_range(start, end) -> list:
         "practitioner", "dept_abbr",
         "planned_capacity", "stretch_capacity",
         "review_load_count", "non_review_load_count",
+        "weighted_load_total",
         "phone_booked_count", "walkin_count",
         "vip_buffer_positions", "vip_buffer_used",  # DB field names kept as-is
     ]
@@ -253,6 +260,7 @@ def _sessions_for_date_range(start, end) -> list:
                 "stretch_capacity":      doc.stretch_capacity,
                 "review_load_count":     0,
                 "non_review_load_count": 0,
+                "weighted_load_total":   0,
                 "phone_booked_count":    0,
                 "walkin_count":          0,
                 "vip_buffer_positions":  doc.vip_buffer_positions,
@@ -269,8 +277,10 @@ def _apply_channel_filter(
     channel: str,
     phone_pct: int,
     is_special: bool = False,
+    load_class: str = "non_review_load",
 ) -> list:
     """Filter sessions by channel/special capacity and build result rows."""
+    config = frappe.get_single("Slot Partition Config")
     result = []
     for s in sessions:
         planned      = s.planned_capacity or 0
@@ -308,6 +318,10 @@ def _apply_channel_filter(
             "non_review_load_count": s.non_review_load_count or 0,
             "total_booked":          total_booked,
             "load_ratio":            _load_ratio(s),
+            "stress_label":          _stress_label(_load_ratio(s)),
+            "stress_color":          _stress_color(_load_ratio(s)),
+            "fit_label":             _fit_label(_load_ratio(s)),
+            "likely_hour_band":      _estimate_hour_band(s, config, load_class),
         }
 
         if is_special:
@@ -328,6 +342,61 @@ def _apply_channel_filter(
         result.append(row)
 
     return result
+
+
+def _stress_label(load_ratio: float) -> str:
+    if load_ratio < 0.4:
+        return "Low Stress"
+    if load_ratio < 0.75:
+        return "Medium Stress"
+    return "High Stress"
+
+
+def _stress_color(load_ratio: float) -> str:
+    if load_ratio < 0.4:
+        return "#15803d"
+    if load_ratio < 0.75:
+        return "#b45309"
+    return "#b91c1c"
+
+
+def _fit_label(load_ratio: float) -> str:
+    if load_ratio < 0.4:
+        return "Good for New"
+    if load_ratio < 0.75:
+        return "Balanced"
+    return "Better for Review"
+
+
+def _estimate_hour_band(session: frappe._dict, config, load_class: str) -> str:
+    session_date = str(session.session_date or "")
+    start_time = session.start_time
+    if not session_date or not start_time:
+        return ""
+
+    try:
+        start_dt = get_datetime(f"{session_date} {start_time}")
+    except Exception:
+        return ""
+
+    weighted_total = float(getattr(session, "weighted_load_total", 0) or 0)
+    if weighted_total <= 0:
+        review_min = float(config.default_review_consult_min or 2.0)
+        non_review_min = float(config.default_non_review_consult_min or 5.0)
+        weighted_total = (
+            (float(session.review_load_count or 0) * review_min) +
+            (float(session.non_review_load_count or 0) * non_review_min)
+        )
+
+    consult_min = float(
+        config.default_review_consult_min if load_class == "review_load"
+        else config.default_non_review_consult_min
+        or 5.0
+    )
+    likely_dt = add_to_date(start_dt, minutes=int(weighted_total + max(consult_min / 2, 1)))
+    band_start = likely_dt.replace(minute=0, second=0, microsecond=0)
+    band_end = add_to_date(band_start, hours=1)
+    return f"{band_start.strftime('%-I %p')} - {band_end.strftime('%-I %p')}"
 
 
 # ---------------------------------------------------------------------------
