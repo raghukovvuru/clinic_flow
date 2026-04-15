@@ -388,11 +388,12 @@ def _estimate_hour_band(session: frappe._dict, config, load_class: str) -> str:
             (float(session.non_review_load_count or 0) * non_review_min)
         )
 
-    consult_min = float(
-        config.default_review_consult_min if load_class == "review_load"
+    consult_default = (
+        config.default_review_consult_min
+        if load_class == "review_load"
         else config.default_non_review_consult_min
-        or 5.0
     )
+    consult_min = float(consult_default or 5.0)
     likely_dt = add_to_date(start_dt, minutes=int(weighted_total + max(consult_min / 2, 1)))
     band_start = likely_dt.replace(minute=0, second=0, microsecond=0)
     band_end = add_to_date(band_start, hours=1)

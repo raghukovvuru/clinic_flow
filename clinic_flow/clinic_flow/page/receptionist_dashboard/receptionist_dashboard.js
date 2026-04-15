@@ -62,20 +62,58 @@ function get_dashboard_html() {
 	display:none !important;
 }
 #rd-root.walkin-mode .rd-shell-grid {
-	grid-template-columns:240px minmax(0, 1fr);
+	grid-template-columns:minmax(0, 2.35fr) minmax(320px, 1fr);
 }
 #rd-root.walkin-mode #rd-center {
 	display:flex !important;
-	border-right:none;
+	border-right:1px solid var(--border-color);
 }
 #rd-root.walkin-mode #rd-right {
-	display:none !important;
+	display:flex !important;
 }
 #rd-root.walkin-mode #rd-left {
-	border-right:1px solid var(--border-color);
+	display:none !important;
 }
 #rd-root.walkin-mode #rd-steps {
 	display:none !important;
+}
+#rd-root.walkin-mode #rd-special-label {
+	display:none !important;
+}
+#rd-root.walkin-mode #rd-center > div:first-child,
+#rd-root.walkin-mode #rd-center > #rd-board-legend,
+#rd-root.walkin-mode #rd-center > #rd-board-context {
+	padding-left:16px;
+	padding-right:16px;
+}
+#rd-root.walkin-mode #rd-board-main {
+	background: linear-gradient(180deg, rgba(15, 92, 77, 0.02) 0%, transparent 100%);
+	display:grid;
+	grid-template-columns:minmax(0, 1.25fr) minmax(300px, .75fr);
+	gap:0;
+}
+#rd-root.walkin-mode #rd-board-legend {
+	padding-top: 6px;
+	padding-bottom: 6px;
+}
+#rd-root.walkin-mode #rd-board-grid {
+	max-width:none;
+	margin:0;
+	width:100%;
+	padding:16px !important;
+	border-right:1px solid var(--border-color);
+}
+#rd-root.walkin-mode #rd-board-context {
+	max-width:none;
+	margin:0;
+	width:100%;
+	border-top:none !important;
+	padding:16px !important;
+	background:rgba(255,255,255,.88);
+	overflow-y:auto;
+}
+#rd-root.walkin-mode #rd-right {
+	min-width: 320px;
 }
 #rd-root.phone-mode #rd-right { min-width:340px; }
 .rd-availability-groups {
@@ -136,11 +174,22 @@ function get_dashboard_html() {
 	box-shadow:0 0 0 2px rgba(34, 197, 94, 0.10);
 	background:var(--primary-light);
 }
+.rd-walkin-dock {
+	position:sticky;
+	top:0;
+}
+.rd-walkin-selected-token {
+	padding:8px 10px;
+	border:1px solid var(--border-color);
+	border-radius:8px;
+	background:var(--card-bg);
+	margin-bottom:8px;
+}
 .rd-walkin-confirm {
 	border:1px solid var(--border-color);
-	border-radius:10px;
+	border-radius:8px;
 	background:var(--card-bg);
-	padding:12px;
+	padding:10px;
 }
 @media (max-width: 1600px) {
 	.rd-shell-grid {
@@ -153,7 +202,7 @@ function get_dashboard_html() {
 		grid-template-columns:minmax(470px, 1.05fr) minmax(330px, .88fr) minmax(310px, .92fr);
 	}
 	#rd-root.walkin-mode .rd-shell-grid {
-		grid-template-columns:220px minmax(0, 1fr);
+		grid-template-columns:minmax(0, 2.2fr) minmax(300px, 1fr);
 	}
 }
 @media (max-width: 1280px) {
@@ -167,7 +216,7 @@ function get_dashboard_html() {
 		grid-template-columns:minmax(400px, 1fr) minmax(300px, .86fr) 280px;
 	}
 	#rd-root.walkin-mode .rd-shell-grid {
-		grid-template-columns:200px minmax(0, 1fr);
+		grid-template-columns:minmax(0, 1.9fr) minmax(280px, .95fr);
 	}
 	.rd-availability-group-grid {
 		grid-template-columns:1fr;
@@ -242,14 +291,50 @@ function get_dashboard_html() {
 }
 .rd-caption { font-size: 11px; color: var(--text-muted); }
 
-/* channel tab pills */
-.rd-mode-btn {
-	padding: 6px 18px; border: none; background: transparent;
-	font-size: 12px; font-weight: 600; cursor: pointer;
-	color: var(--text-muted); border-bottom: 2px solid transparent;
-	transition: all .15s;
+/* workspace mode switch */
+#rd-mode-bar {
+	flex-shrink: 0;
+	display: flex;
+	align-items: stretch;
+	gap: 0;
+	padding: 10px 20px;
+	background: var(--card-bg);
+	border-bottom: 1px solid var(--border-color);
 }
-.rd-mode-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+.rd-mode-btn {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 2px;
+	padding: 8px 20px;
+	border: 1.5px solid var(--border-color);
+	background: transparent;
+	cursor: pointer;
+	font-size: 13px;
+	font-weight: 700;
+	color: var(--text-muted);
+	transition: all .15s;
+	border-radius: 0;
+	min-width: 180px;
+}
+.rd-mode-btn:first-child { border-radius: 8px 0 0 8px; }
+.rd-mode-btn:last-child  { border-radius: 0 8px 8px 0; border-left: none; }
+.rd-mode-btn .rd-mode-sub {
+	font-size: 10px;
+	font-weight: 500;
+	color: var(--text-muted);
+	opacity: 0.7;
+}
+.rd-mode-btn.active {
+	background: var(--primary);
+	border-color: var(--primary);
+	color: #fff;
+}
+.rd-mode-btn.active .rd-mode-sub { color: rgba(255,255,255,0.75); opacity: 1; }
+.rd-mode-btn:not(.active):hover {
+	background: var(--bg-color);
+	color: var(--text-color);
+}
 
 /* step indicator */
 .rd-step {
@@ -341,13 +426,13 @@ function get_dashboard_html() {
 
 /* token board cells */
 .rd-token-cell {
-	width: 44px; height: 44px; border-radius: 7px; border: 1.5px solid;
+	width: 38px; height: 38px; border-radius: 6px; border: 1.5px solid;
 	display: flex; flex-direction: column; align-items: center; justify-content: center;
-	font-size: 11px; font-weight: 700; cursor: default;
-	transition: transform .1s, box-shadow .1s; position: relative; flex-shrink: 0;
+	font-size: 10px; font-weight: 700; cursor: default;
+	transition: box-shadow .1s; position: relative; flex-shrink: 0;
 }
 .rd-token-cell.clickable { cursor: pointer; }
-.rd-token-cell.clickable:hover { transform: scale(1.08); }
+.rd-token-cell.clickable:hover { box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.16); }
 .rd-token-cell.recommended {
 	box-shadow: 0 0 0 3px var(--primary) !important;
 }
@@ -355,7 +440,7 @@ function get_dashboard_html() {
 	box-shadow: 0 0 0 3px #16a34a !important;
 }
 .rd-token-cell .rd-cell-sub {
-	font-size: 8px; font-weight: 400; line-height: 1; margin-top: 1px;
+	font-size: 7px; font-weight: 400; line-height: 1; margin-top: 1px;
 }
 
 /* detail drawer */
@@ -403,6 +488,26 @@ function get_dashboard_html() {
 	font-size: 12px; outline: none; background: var(--input-bg); width: 100%;
 }
 .rd-recep-input:focus { border-color: var(--primary); }
+.rd-walkin-panel {
+	padding: 10px 12px;
+	border: 1px solid var(--border-color);
+	border-radius: 8px;
+	background: var(--card-bg);
+}
+.rd-walkin-note {
+	margin-top: 8px;
+	padding: 5px 8px;
+	border-radius: 6px;
+	background: #fffbeb;
+	border: 1px solid #f59e0b;
+	font-size: 11px;
+	color: #92400e;
+}
+.rd-walkin-rows {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
 </style>
 
 <div id="rd-root" style="display:flex;flex-direction:column;height:calc(100vh - 60px);overflow:hidden;">
@@ -417,6 +522,18 @@ function get_dashboard_html() {
 		<div id="rd-topbar-doctor" style="font-size:12px;color:var(--text-muted);"></div>
 	</div>
 
+	<!-- ── MODE SWITCH ──────────────────────────────────────────────────────── -->
+	<div id="rd-mode-bar">
+		<button class="rd-mode-btn active" data-channel="phone">
+			Phone Booking
+			<span class="rd-mode-sub">Multi-day booking</span>
+		</button>
+		<button class="rd-mode-btn" data-channel="walkin">
+			Walk-in Intake
+			<span class="rd-mode-sub">Today's fast intake</span>
+		</button>
+	</div>
+
 	<!-- ── THREE-COLUMN BODY ────────────────────────────────────────────────── -->
 	<div class="rd-shell-grid">
 
@@ -426,23 +543,17 @@ function get_dashboard_html() {
 				border-right:1px solid var(--border-color);">
 
 			<!-- Left header -->
-			<div style="padding:10px 16px;border-bottom:1px solid var(--border-color);flex-shrink:0;">
-				<div class="rd-label" style="margin-bottom:8px;">Admit Patient</div>
-				<!-- Booking mode + Special toggle -->
-				<div style="display:flex;align-items:center;gap:12px;border-bottom:2px solid var(--border-color);">
-					<div id="rd-channels" style="display:flex;flex:1;">
-						<button class="rd-mode-btn active" data-channel="phone">Phone Booking</button>
-						<button class="rd-mode-btn" data-channel="walkin">Walk-in Intake</button>
-					</div>
-					<label id="rd-special-label"
-						style="display:flex;align-items:center;gap:5px;cursor:pointer;
-							font-size:12px;font-weight:600;color:var(--text-muted);
-							padding:0 4px 2px;white-space:nowrap;"
-						title="Reserve a Special buffer slot for this patient">
-						<input type="checkbox" id="rd-special-toggle" style="cursor:pointer;">
-						Special
-					</label>
-				</div>
+			<div style="padding:10px 16px;border-bottom:1px solid var(--border-color);flex-shrink:0;
+				display:flex;align-items:center;justify-content:space-between;">
+				<div class="rd-label">Admit Patient</div>
+				<label id="rd-special-label"
+					style="display:flex;align-items:center;gap:5px;cursor:pointer;
+						font-size:12px;font-weight:600;color:var(--text-muted);
+						white-space:nowrap;"
+					title="Reserve a Special buffer slot for this patient">
+					<input type="checkbox" id="rd-special-toggle" style="cursor:pointer;">
+					Special
+				</label>
 			</div>
 
 			<!-- Step indicator -->
@@ -488,13 +599,12 @@ function get_dashboard_html() {
 			<div id="rd-board-legend"
 				style="padding:5px 12px;border-bottom:1px solid var(--border-color);
 					flex-shrink:0;display:flex;gap:10px;flex-wrap:wrap;"></div>
-			<div id="rd-board-context"
-				style="display:none;padding:10px 12px;border-bottom:1px solid var(--border-color);
-					flex-shrink:0;background:var(--card-bg);"></div>
 			<!-- Grid / drawer area -->
 			<div id="rd-board-main" style="flex:1;overflow:hidden;position:relative;">
 				<div id="rd-board-grid"
 					style="height:100%;overflow-y:auto;padding:12px;"></div>
+				<div id="rd-board-context"
+					style="display:none;overflow-y:auto;background:var(--card-bg);"></div>
 				<!-- Detail drawer overlays the grid -->
 				<div id="rd-board-drawer"
 					style="position:absolute;top:0;left:0;right:0;bottom:0;
@@ -544,7 +654,7 @@ class ReceptionistDashboard {
 		this.$topdoc   = this.$root.find('#rd-topbar-doctor');
 		this.$body     = this.$root.find('#rd-admission-body');
 		this.$steps    = this.$root.find('#rd-steps');
-		this.$channels = this.$root.find('#rd-channels');
+		this.$channels = this.$root.find('#rd-mode-bar');
 
 		// Admission state
 		this.state = {
@@ -567,6 +677,8 @@ class ReceptionistDashboard {
 			weight_at_booking: null,    // weight in kg (float string)
 			age_at_visit:    null,      // age string e.g. "3y 2m"
 			provisional_load_class: null, // walk-in intake guess before actual review/new is confirmed
+			walkin_phase:    'token_pick', // token_pick | guardian_result | guardian_missing | register_child | confirm | done
+			walkin_notice:   null,      // explicit walk-in state reconciliation message
 			token_board_open: false,    // phone mode opens board only for manual token selection
 		};
 
@@ -653,6 +765,9 @@ class ReceptionistDashboard {
 			// Highlight label when active
 			const $lbl = this.$root.find('#rd-special-label');
 			$lbl.css('color', this.state.is_special ? '#d97706' : 'var(--text-muted)');
+			if (this.state.channel === 'walkin') {
+				this.state.walkin_notice = 'Token guidance refreshed because Special mode changed.';
+			}
 			this._reset_to_search();
 		});
 	}
@@ -693,7 +808,6 @@ class ReceptionistDashboard {
 	render_admission() {
 		this._apply_mode_layout();
 		if (this.state.channel === 'walkin') {
-			this._render_walkin_sidebar();
 			this.token_board.render_walkin_context();
 			return;
 		}
@@ -719,21 +833,6 @@ class ReceptionistDashboard {
 		case 'confirmed':        return this._render_confirmed();
 		default:                 return this._render_search();
 		}
-	}
-
-	_render_walkin_sidebar() {
-		this.$body.html(`
-			<div>
-				<div class="rd-card" style="padding:10px 12px;">
-					<div style="font-size:13px;font-weight:700;margin-bottom:4px;">
-						Walk-in Intake
-					</div>
-					<div class="rd-caption">
-						Dedicated fast mode. Session, token, lookup, and confirmation happen in the center workspace.
-					</div>
-				</div>
-			</div>
-		`);
 	}
 
 	_load_walkin_preview(force = false) {
@@ -780,9 +879,6 @@ class ReceptionistDashboard {
 
 	// ── Step: Search ─────────────────────────────────────────────────────────
 	_render_search() {
-		const isWalkin = this.state.channel === 'walkin';
-		if (isWalkin) return this._render_walkin_search();
-		const guessed = this.state.provisional_load_class;
 		this.$body.html(`
 			<div>
 				<div class="rd-card" style="padding:10px 12px;margin-bottom:12px;">
@@ -822,106 +918,12 @@ class ReceptionistDashboard {
 		$input.on('keydown', (e) => { if (e.key === 'Enter') do_search(); });
 	}
 
-	_render_walkin_search() {
-		this._load_walkin_preview();
-		const guessed = this.state.provisional_load_class;
-		const preview = this.state.walkin_preview_sessions || [];
-		const picked = preview[this.state.session_idx] || preview[0] || null;
-		const tokenText = this.state.override_token
-			? `Token ${frappe.utils.escape_html(String(this.state.override_token))} selected`
-			: 'No token selected yet';
-
-		this.$body.html(`
-			<div>
-				<div class="rd-card" style="padding:10px 12px;margin-bottom:12px;">
-					<div style="font-size:13px;font-weight:700;margin-bottom:3px;">
-						Walk-in Intake
-					</div>
-					<div class="rd-caption">
-						Today-only fast intake. Pick a token first, then look up the patient.
-					</div>
-				</div>
-
-				<div class="rd-card" style="padding:10px 12px;margin-bottom:12px;">
-					<div class="rd-label" style="margin-bottom:8px;">Intake Guess</div>
-					<div style="display:flex;gap:8px;flex-wrap:wrap;">
-						<button class="rd-btn-secondary rd-provisional-load"
-							data-load-class="review_load"
-							style="border-color:${guessed === 'review_load' ? 'var(--primary)' : 'var(--border-color)'};color:${guessed === 'review_load' ? 'var(--primary)' : 'inherit'};">
-							Likely Review
-						</button>
-						<button class="rd-btn-secondary rd-provisional-load"
-							data-load-class="non_review_load"
-							style="border-color:${guessed === 'non_review_load' ? 'var(--primary)' : 'var(--border-color)'};color:${guessed === 'non_review_load' ? 'var(--primary)' : 'inherit'};">
-							Likely New
-						</button>
-					</div>
-					<div class="rd-caption" style="margin-top:8px;">
-						This is a provisional desk guess. Mobile lookup and fee validity still decide the final visit type.
-					</div>
-				</div>
-
-				<div class="rd-label" style="margin-bottom:8px;">Today's Session${preview.length > 1 ? 's' : ''}</div>
-				<div class="rd-walkin-session-chips">
-					${this.state.walkin_preview_loading ? `
-						<div class="rd-card" style="padding:12px;">
-							<span class="rd-spinner"></span>
-							<span class="rd-caption" style="margin-left:8px;">Loading today's sessions…</span>
-						</div>
-					` : preview.length ? preview.map((row, rowIdx) => `
-						<button class="rd-walkin-session-chip ${picked && row.queue_session === picked.queue_session ? 'active' : ''}"
-							data-idx="${rowIdx}">
-							<span>${frappe.utils.escape_html(row.practitioner_name || row.session_name)}</span>
-							<span class="rd-caption">
-								${frappe.utils.escape_html(row.start_time)}-${frappe.utils.escape_html(row.end_time)}
-							</span>
-							<span class="rd-scan-chip ${(row.stress_label || '').includes('High') ? 'stress-high' : ((row.stress_label || '').includes('Medium') ? 'stress-mid' : 'stress-low')}">
-								${frappe.utils.escape_html(String(row.available_slots || 0))}
-							</span>
-						</button>
-					`).join('') : `
-						<div class="rd-card" style="padding:12px;">
-							<div class="rd-caption">No walk-in sessions available for the current intake guess.</div>
-						</div>
-					`}
-				</div>
-
-				<div class="rd-walkin-confirm" style="margin-bottom:12px;">
-					<div class="rd-label" style="margin-bottom:6px;">Token Flow</div>
-					<div style="font-size:13px;font-weight:700;">${tokenText}</div>
-					<div class="rd-caption" style="margin-top:4px;">
-						Search is now attached to the token board. Select a token, then continue from the center panel.
-					</div>
-					${picked ? `
-					<div class="rd-caption" style="margin-top:8px;">
-						Active:
-						<strong>${frappe.utils.escape_html(picked.practitioner_name || picked.session_name)}</strong>
-						· ${frappe.utils.escape_html(picked.start_time)} – ${frappe.utils.escape_html(picked.end_time)}
-					</div>` : ''}
-				</div>
-			</div>
-		`);
-		this.$body.find('.rd-provisional-load').on('click', (e) => {
-			this.state.provisional_load_class = $(e.currentTarget).data('load-class');
-			this.state.override_token = null;
-			this.state.walkin_preview_sessions = [];
-			this.render_admission();
-		});
-		this.$body.find('.rd-walkin-session-chip').on('click', (e) => {
-			const nextIdx = Number($(e.currentTarget).data('idx'));
-			if (Number.isNaN(nextIdx)) return;
-			this.state.session_idx = nextIdx;
-			this.state.override_token = null;
-			const selected = this.state.walkin_preview_sessions[nextIdx];
-			if (selected) this.token_board.load(selected.queue_session);
-			this.render_admission();
-		});
-	}
-
 	_do_search_guardian(mobile) {
-		this.$body.find('#rd-search-btn').prop('disabled', true).html(
-			'<span class="rd-spinner"></span>'
-		);
+		const $scope = this.state.channel === 'walkin' ? this.token_board.$context : this.$body;
+		const $btn = $scope.find(this.state.channel === 'walkin' ? '#rd-board-search-btn' : '#rd-search-btn');
+		if ($btn.length) {
+			$btn.prop('disabled', true).html('<span class="rd-spinner"></span>');
+		}
 
 		frappe.call({
 			method: 'clinic_flow.api.family.search_guardian',
@@ -932,8 +934,10 @@ class ReceptionistDashboard {
 				if (result.found) {
 					this.state.guardian = result.guardian;
 					this.state.children = result.children || [];
+					if (this.state.channel === 'walkin') this.state.walkin_phase = 'guardian_result';
 					this.state.step = 'guardian_found';
 				} else {
+					if (this.state.channel === 'walkin') this.state.walkin_phase = 'guardian_missing';
 					this.state.step = 'guardian_not_found';
 				}
 				this.render_admission();
@@ -1107,22 +1111,23 @@ class ReceptionistDashboard {
 	}
 
 	_do_register(is_new) {
-		const child_name = this.$body.find('#rd-reg-child-name').val().trim();
-		const dob        = this.$body.find('#rd-reg-dob').val();
-		const sex        = this.$body.find('#rd-reg-sex').val();
+		const $scope = this.state.channel === 'walkin' ? this.token_board.$context : this.$body;
+		const child_name = $scope.find('#rd-reg-child-name').val().trim();
+		const dob        = $scope.find('#rd-reg-dob').val();
+		const sex        = $scope.find('#rd-reg-sex').val();
 
 		if (!child_name) {
 			frappe.show_alert({ message: 'Child name is required.', indicator: 'orange' });
 			return;
 		}
 
-		const $btn = this.$body.find('#rd-reg-submit').prop('disabled', true)
+		const $btn = $scope.find(this.state.channel === 'walkin' ? '#rd-board-reg-submit' : '#rd-reg-submit').prop('disabled', true)
 			.html('<span class="rd-spinner"></span>');
 
 		if (is_new) {
-			const guardian_name  = this.$body.find('#rd-reg-guardian-name').val().trim();
-			const mobile         = this.$body.find('#rd-reg-mobile').val().trim();
-			const relationship   = this.$body.find('#rd-reg-relationship').val();
+			const guardian_name  = $scope.find('#rd-reg-guardian-name').val().trim();
+			const mobile         = $scope.find('#rd-reg-mobile').val().trim();
+			const relationship   = $scope.find('#rd-reg-relationship').val();
 
 			if (!guardian_name || !mobile) {
 				$btn.prop('disabled', false).text('Register & Continue');
@@ -1137,7 +1142,14 @@ class ReceptionistDashboard {
 					if (!r.message) return;
 					const { guardian, patient, patient_name } = r.message;
 					this.state.guardian = { name: guardian, guardian_name, mobile, relationship };
-					this.state.children = [{ patient, patient_name, dob, age_display: '' }];
+					const child = { patient, patient_name, dob, age_display: '' };
+					this.state.children = [child];
+					if (this.state.channel === 'walkin') {
+						this.state.walkin_notice = null;
+						this._do_select_child(child);
+						frappe.show_alert({ message: 'Guardian registered!', indicator: 'green' });
+						return;
+					}
 					this.state.step = 'guardian_found';
 					this.render_admission();
 					frappe.show_alert({ message: 'Guardian registered!', indicator: 'green' });
@@ -1152,6 +1164,7 @@ class ReceptionistDashboard {
 					if (!r.message) return;
 					const { patient, patient_name: pname } = r.message;
 					this.state.children.push({ patient, patient_name: pname, dob, age_display: '' });
+					if (this.state.channel === 'walkin') this.state.walkin_phase = 'guardian_result';
 					this.state.step = 'guardian_found';
 					this.render_admission();
 					frappe.show_alert({ message: 'Child added!', indicator: 'green' });
@@ -1163,7 +1176,8 @@ class ReceptionistDashboard {
 
 	// ── Step: Child Selected — visit type ────────────────────────────────────
 	_do_select_child(child) {
-		this.$body.html(`
+		const $scope = this.state.channel === 'walkin' ? this.token_board.$context : this.$body;
+		$scope.html(`
 			<div style="text-align:center;padding:24px 0;">
 				<span class="rd-spinner"></span>
 				<div class="rd-caption" style="margin-top:8px;">Checking visit type…</div>
@@ -1186,8 +1200,10 @@ class ReceptionistDashboard {
 						this.state.sessions = [...this.state.walkin_preview_sessions];
 						const picked = this.state.sessions[this.state.session_idx] || this.state.sessions[0];
 						if (picked) this.token_board.load(picked.queue_session, this.state.override_token || null);
+						this.state.walkin_phase = 'confirm';
 						this.state.step = 'session_offered';
 					} else {
+						this.state.walkin_phase = 'confirm';
 						this.state.step = 'child_selected';
 					}
 				} else {
@@ -1378,158 +1394,6 @@ class ReceptionistDashboard {
 		return frappe.datetime.str_to_user(dateStr, false, true);
 	}
 
-	_render_walkin_session_offered() {
-		const sessions = this.state.sessions || [];
-		const idx = this.state.session_idx;
-		const session = sessions[idx];
-		const isReview = this.state.visit_type && this.state.visit_type.load_class === 'review_load';
-		const provisional = this.state.provisional_load_class;
-		const hasMismatch = provisional && this.state.visit_type && provisional !== this.state.visit_type.load_class;
-		const bookingHint = this.state.override_token
-			? `Token ${frappe.utils.escape_html(String(this.state.override_token))} selected`
-			: 'Best token will be auto-assigned';
-
-		this.$body.html(`
-			<div>
-				<div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;">
-					<button id="rd-back-child2" class="rd-btn-secondary" style="font-size:11px;">← Child</button>
-					<span class="rd-label">Walk-in Intake</span>
-				</div>
-
-				<div class="rd-card" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;margin-bottom:12px;">
-					<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-						<span class="rd-badge ${isReview ? 'rd-badge-green' : 'rd-badge-blue'}">
-							${isReview ? 'Review' : 'New'}
-						</span>
-						${this.state.is_special ? '<span class="rd-badge" style="background:#fff7ed;color:#c2410c;border:1px solid #fdba74;">Special</span>' : ''}
-						<span class="rd-caption" style="font-weight:600;">
-							${frappe.utils.escape_html(this.state.child?.patient_name || this.state.child?.patient || '')}
-						</span>
-					</div>
-					<div class="rd-caption" style="font-weight:600;">
-						Today-only intake. Pick the session, use the token board, then confirm.
-					</div>
-				</div>
-
-				${hasMismatch ? `
-				<div class="rd-card" style="margin-bottom:12px;padding:10px 12px;border-color:#f59e0b;background:#fffbeb;">
-					<div style="font-size:12px;font-weight:700;color:#b45309;margin-bottom:4px;">
-						Actual type differs from the intake guess
-					</div>
-					<div class="rd-caption" style="color:#92400e;">
-						The intake guess was <strong>${frappe.utils.escape_html(this._load_label(provisional))}</strong>,
-						but the patient is actually <strong>${frappe.utils.escape_html(this._load_label(this.state.visit_type.load_class))}</strong>.
-						Session guidance followed the intake guess; confirmation will still use the actual result.
-					</div>
-				</div>` : ''}
-
-				<div class="rd-label" style="margin-bottom:8px;">Today's Sessions</div>
-				<div class="rd-walkin-session-strip">
-					${sessions.map((row, rowIdx) => `
-						<button class="rd-walkin-session-btn ${rowIdx === idx ? 'active' : ''}" data-idx="${rowIdx}">
-							<div>
-								<div style="font-size:13px;font-weight:700;">
-									${frappe.utils.escape_html(row.practitioner_name || row.session_name)}
-								</div>
-								<div class="rd-caption">
-									${frappe.utils.escape_html(row.start_time)} – ${frappe.utils.escape_html(row.end_time)}
-									${row.dept_abbr ? '&nbsp;·&nbsp;' + frappe.utils.escape_html(row.dept_abbr) : ''}
-								</div>
-							</div>
-							<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
-								<span class="rd-scan-chip ${(row.stress_label || '').includes('High') ? 'stress-high' : ((row.stress_label || '').includes('Medium') ? 'stress-mid' : 'stress-low')}">
-									${frappe.utils.escape_html(row.stress_label || 'Open')}
-								</span>
-								<span class="rd-scan-chip hour-chip">${frappe.utils.escape_html(row.likely_hour_band || '—')}</span>
-								<div style="font-size:18px;font-weight:900;color:var(--primary);min-width:26px;text-align:right;">
-									${frappe.utils.escape_html(String(row.available_slots || 0))}
-								</div>
-							</div>
-						</button>
-					`).join('')}
-				</div>
-
-				<div class="rd-walkin-confirm">
-					<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
-						<div>
-							<div style="font-size:13px;font-weight:700;">
-								${frappe.utils.escape_html(session?.practitioner_name || session?.session_name || 'Session')}
-							</div>
-							<div class="rd-caption">
-								${session ? `${frappe.utils.escape_html(session.start_time)} – ${frappe.utils.escape_html(session.end_time)}` : ''}
-								${session?.dept_abbr ? '&nbsp;·&nbsp;' + frappe.utils.escape_html(session.dept_abbr) : ''}
-							</div>
-						</div>
-						<div style="display:flex;gap:6px;flex-wrap:wrap;">
-							<span class="rd-scan-chip fit-chip">${frappe.utils.escape_html(session?.fit_label || 'Balanced')}</span>
-							<span class="rd-scan-chip hour-chip">${frappe.utils.escape_html(session?.likely_hour_band || '—')}</span>
-						</div>
-					</div>
-
-					<div style="padding:7px 9px;border-radius:8px;background:var(--bg-color);margin-bottom:8px;">
-						<div class="rd-label">Token</div>
-						<div style="font-size:12px;font-weight:700;margin-top:2px;">${bookingHint}</div>
-						<div class="rd-caption" style="margin-top:3px;">
-							Use the central token board to override when needed.
-						</div>
-					</div>
-
-					<div style="margin-bottom:8px;position:relative;">
-						<div class="rd-label" style="margin-bottom:3px;">Complaint</div>
-						<input id="rd-complaint-input" class="rd-input" type="text"
-							autocomplete="off" placeholder="Type to search…"
-							value="${frappe.utils.escape_html(this.state.complaint || '')}">
-						<div id="rd-complaint-dd" style="display:none;position:absolute;
-							top:100%;left:0;right:0;background:var(--card-bg);
-							border:1px solid var(--border-color);border-top:none;
-							border-radius:0 0 6px 6px;max-height:160px;overflow-y:auto;
-							z-index:200;box-shadow:0 4px 12px rgba(0,0,0,.1);"></div>
-					</div>
-
-					<div style="display:grid;grid-template-columns:minmax(0, 1fr) minmax(0, 1fr) auto;gap:8px;align-items:end;">
-						<div>
-							<div class="rd-label" style="margin-bottom:3px;">Weight</div>
-							<input id="rd-weight-input" class="rd-input" type="number"
-								step="0.1" min="0" placeholder="kg"
-								value="${this.state.weight_at_booking || ''}">
-						</div>
-						<div>
-							<div class="rd-label" style="margin-bottom:3px;">Age</div>
-							<input id="rd-age-input" class="rd-input" type="text"
-								placeholder="3y 2m"
-								value="${frappe.utils.escape_html(this.state.age_at_visit || '')}">
-						</div>
-						<button class="rd-btn-primary rd-confirm-booking-inline"
-							data-idx="${idx}"
-							style="width:auto;min-width:150px;">
-							Confirm Booking
-						</button>
-					</div>
-				</div>
-			</div>
-		`);
-
-		this.$body.find('#rd-back-child2').on('click', () => {
-			this.state.step = 'child_selected';
-			this.render_admission();
-		});
-		this.$body.find('.rd-walkin-session-btn').on('click', (e) => {
-			const nextIdx = Number($(e.currentTarget).data('idx'));
-			if (Number.isNaN(nextIdx) || nextIdx === this.state.session_idx) return;
-			this._select_session(nextIdx);
-			this.render_admission();
-		});
-		this.$body.find('.rd-confirm-booking-inline').on('click', (e) => {
-			e.preventDefault();
-			e.stopPropagation();
-			const bookingIdx = Number($(e.currentTarget).data('idx'));
-			const picked = this.state.sessions[bookingIdx];
-			if (!picked) return;
-			this._do_confirm_booking(picked);
-		});
-		this._bind_booking_inputs();
-	}
-
 	_render_session_card(session, idx, is_selected) {
 		const hasOverride = this.state.override_token && this.state.session_idx === idx;
 		const bookingHint = hasOverride
@@ -1656,14 +1520,12 @@ class ReceptionistDashboard {
 		const idx         = this.state.session_idx;
 		const groups      = this._group_sessions_by_date();
 		const isReview = this.state.visit_type && this.state.visit_type.load_class === 'review_load';
-		const isWalkin = this.state.channel === 'walkin';
-		if (isWalkin) return this._render_walkin_session_offered();
 
 		this.$body.html(`
 			<div>
 				<div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;">
 					<button id="rd-back-child2" class="rd-btn-secondary" style="font-size:11px;">← Child</button>
-					<span class="rd-label">${isWalkin ? 'Walk-in Intake' : 'Availability Board'}</span>
+					<span class="rd-label">Availability Board</span>
 				</div>
 
 				<div class="rd-card" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;margin-bottom:12px;">
@@ -1680,9 +1542,7 @@ class ReceptionistDashboard {
 						</span>
 					</div>
 					<div class="rd-caption" style="font-weight:600;">
-						${isWalkin
-							? 'Today-only intake. Pick the session/token quickly, then confirm.'
-							: 'Choose a session or book the best token directly'}
+						Choose a session or book the best token directly
 					</div>
 				</div>
 
@@ -1737,14 +1597,15 @@ class ReceptionistDashboard {
 	}
 
 	_bind_booking_inputs() {
+		const $scope = this.state.channel === 'walkin' ? this.token_board.$context : this.$body;
 		// Complaint autocomplete
 		let _complaint_timer;
-		this.$body.find('#rd-complaint-input').on('input', (e) => {
+		$scope.find('#rd-complaint-input').on('input', (e) => {
 			const q = e.target.value;
 			this.state.complaint = q || null;
 			clearTimeout(_complaint_timer);
 			if (!q || q.length < 1) {
-				this.$body.find('#rd-complaint-dd').hide().empty();
+				$scope.find('#rd-complaint-dd').hide().empty();
 				return;
 			}
 			_complaint_timer = setTimeout(() => {
@@ -1753,7 +1614,7 @@ class ReceptionistDashboard {
 					args: { doctype: 'Complaint', filters: [['name', 'like', `%${q}%`]],
 						fields: ['name'], limit: 10 },
 					callback: (r) => {
-						const $dd = this.$body.find('#rd-complaint-dd');
+						const $dd = $scope.find('#rd-complaint-dd');
 						if (!r.message || !r.message.length) { $dd.hide().empty(); return; }
 						$dd.empty().show();
 						r.message.forEach(c => {
@@ -1762,7 +1623,7 @@ class ReceptionistDashboard {
 								${frappe.utils.escape_html(c.name)}
 							</div>`).on('click', () => {
 								this.state.complaint = c.name;
-								this.$body.find('#rd-complaint-input').val(c.name);
+								$scope.find('#rd-complaint-input').val(c.name);
 								$dd.hide().empty();
 							}).appendTo($dd);
 						});
@@ -1771,23 +1632,26 @@ class ReceptionistDashboard {
 			}, 280);
 		}).on('blur', () => {
 			// Delay hide so click on dropdown item fires first
-			setTimeout(() => this.$body.find('#rd-complaint-dd').hide(), 180);
+			setTimeout(() => $scope.find('#rd-complaint-dd').hide(), 180);
 		});
 
 		// Weight + Age — persist to state immediately
-		this.$body.find('#rd-weight-input').on('input', (e) => {
+		$scope.find('#rd-weight-input').on('input', (e) => {
 			this.state.weight_at_booking = e.target.value || null;
 		});
-		this.$body.find('#rd-age-input').on('input', (e) => {
+		$scope.find('#rd-age-input').on('input', (e) => {
 			this.state.age_at_visit = e.target.value || null;
 		});
 	}
 
 	// ── Confirm booking ──────────────────────────────────────────────────────
 	_do_confirm_booking(session) {
-		const $btn = this.$body.find('.rd-confirm-booking-inline').filter((_, el) =>
-			Number($(el).data('idx')) === this.state.session_idx
-		).first();
+		const $scope = this.state.channel === 'walkin' ? this.token_board.$context : this.$body;
+		const $btn = this.state.channel === 'walkin'
+			? $scope.find('#rd-board-confirm-booking').first()
+			: this.$body.find('.rd-confirm-booking-inline').filter((_, el) =>
+				Number($(el).data('idx')) === this.state.session_idx
+			).first();
 		if ($btn.length) {
 			$btn.prop('disabled', true).html('<span class="rd-spinner"></span> Confirming…');
 		}
@@ -1809,6 +1673,7 @@ class ReceptionistDashboard {
 			callback: (r) => {
 				if (!r.message) return;
 				this.state.booking = r.message;
+				if (this.state.channel === 'walkin') this.state.walkin_phase = 'done';
 				this.state.step = 'confirmed';
 				this.render_admission();
 				this.load_top_bar();
@@ -1975,6 +1840,8 @@ class ReceptionistDashboard {
 			weight_at_booking: null,
 			age_at_visit:     null,
 			provisional_load_class: this.state.channel === 'walkin' ? this.state.provisional_load_class : null,
+			walkin_phase:     'token_pick',
+			walkin_notice:    null,
 			token_board_open: this.state.channel === 'walkin',
 		};
 		this.token_board.clear_highlight();
@@ -2045,6 +1912,90 @@ class TokenBoard {
 			</span>`;
 		});
 		this.$legend.html(items.join(''));
+	}
+
+	_render_walkin_toolbar() {
+		const db = this.dashboard;
+		const provisional = db.state.provisional_load_class;
+		const sessions = db.state.walkin_preview_sessions || [];
+		const currentIdx = Math.max(0, db.state.session_idx || 0);
+		const chips = sessions.map((session, idx) => `
+			<button class="rd-walkin-session-chip ${idx === currentIdx ? 'is-active' : ''}"
+				data-idx="${idx}"
+				style="border:${idx === currentIdx ? '1.5px solid var(--primary)' : '1.5px solid var(--border-color)'};
+					background:${idx === currentIdx ? 'rgba(15,92,77,.08)' : 'var(--card-bg)'};
+					color:${idx === currentIdx ? 'var(--primary)' : 'inherit'};
+					border-radius:999px;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;">
+				${frappe.utils.escape_html(session.practitioner_name || session.session_name)}
+				${session.start_time && session.end_time ? ` · ${frappe.utils.escape_html(session.start_time)}-${frappe.utils.escape_html(session.end_time)}` : ''}
+			</button>
+		`).join('');
+
+		this.$legend.html(`
+			<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+				<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+					<span class="rd-label" style="margin:0;">Intake</span>
+					<button class="rd-walkin-load-chip"
+						data-load-class="review_load"
+						style="border:${provisional === 'review_load' ? '1.5px solid var(--primary)' : '1.5px solid var(--border-color)'};
+							background:${provisional === 'review_load' ? 'rgba(15,92,77,.08)' : 'var(--card-bg)'};
+							color:${provisional === 'review_load' ? 'var(--primary)' : 'inherit'};
+							border-radius:999px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;">
+						Review
+					</button>
+					<button class="rd-walkin-load-chip"
+						data-load-class="non_review_load"
+						style="border:${provisional === 'non_review_load' ? '1.5px solid var(--primary)' : '1.5px solid var(--border-color)'};
+							background:${provisional === 'non_review_load' ? 'rgba(15,92,77,.08)' : 'var(--card-bg)'};
+							color:${provisional === 'non_review_load' ? 'var(--primary)' : 'inherit'};
+							border-radius:999px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;">
+						New
+					</button>
+				</div>
+				<label id="rd-walkin-special-label"
+					style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;
+						font-weight:600;color:${db.state.is_special ? '#d97706' : 'var(--text-muted)'};">
+					<input type="checkbox" id="rd-walkin-special-toggle" style="cursor:pointer;"
+						${db.state.is_special ? 'checked' : ''}>
+					Special
+				</label>
+			</div>
+			${chips ? `
+			<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;">
+				<span class="rd-label" style="margin:0;">Today</span>
+				${chips}
+			</div>` : ''}
+		`);
+
+		this.$legend.find('.rd-walkin-load-chip').on('click', (e) => {
+			const next = $(e.currentTarget).data('load-class');
+			db.state.provisional_load_class = next;
+			db.state.override_token = null;
+			db.state.walkin_notice = `Showing ${db._load_label(next)} guidance. Pick a token below.`;
+			db.state.walkin_preview_sessions = [];
+			db._load_walkin_preview(true);
+			db.render_admission();
+		});
+
+		this.$legend.find('#rd-walkin-special-toggle').on('change', (e) => {
+			db.state.is_special = e.target.checked;
+			db.state.override_token = null;
+			db.state.walkin_notice = 'Special mode changed. Pick a token below.';
+			db.state.walkin_preview_sessions = [];
+			db._load_walkin_preview(true);
+			db.render_admission();
+		});
+
+		this.$legend.find('.rd-walkin-session-chip').on('click', (e) => {
+			const nextIdx = parseInt($(e.currentTarget).data('idx'), 10);
+			if (Number.isNaN(nextIdx)) return;
+			db.state.session_idx = nextIdx;
+			db.state.override_token = null;
+			db.state.walkin_notice = null;
+			const picked = sessions[nextIdx];
+			if (picked) this.load(picked.queue_session, null);
+			db.render_admission();
+		});
 	}
 
 	_load_session_list() {
@@ -2244,51 +2195,51 @@ class TokenBoard {
 
 	_render_context_dock() {
 		const db = this.dashboard;
-		const isWalkinSearch = db.state.channel === 'walkin' && db.state.step === 'search';
+		const isWalkinSearch = db.state.channel === 'walkin' && db.state.walkin_phase === 'token_pick';
 		if (!isWalkinSearch) {
 			this.$context.hide().empty();
 			return;
 		}
 
 		const session = db.state.walkin_preview_sessions[db.state.session_idx] || null;
-		const tokenText = db.state.override_token
+		const hasToken = !!db.state.override_token;
+		const tokenText = hasToken
 			? `Token ${frappe.utils.escape_html(String(db.state.override_token))} selected`
-			: 'Select a token to continue';
-
+			: 'Pick a token above to continue';
 		this.$context.show().html(`
-			<div style="display:flex;align-items:end;gap:10px;flex-wrap:wrap;">
-				<div style="min-width:170px;">
+			<div class="rd-walkin-dock">
+				<div class="rd-walkin-selected-token">
 					<div class="rd-label" style="margin-bottom:4px;">Selected Token</div>
-					<div style="font-size:14px;font-weight:800;">${tokenText}</div>
+					<div style="font-size:15px;font-weight:800;">${tokenText}</div>
 					<div class="rd-caption" style="margin-top:4px;">
-						${session ? `${frappe.utils.escape_html(session.practitioner_name || session.session_name)} · ${frappe.utils.escape_html(session.start_time)}-${frappe.utils.escape_html(session.end_time)}` : 'Choose the active token first'}
+						${session ? `${frappe.utils.escape_html(session.practitioner_name || session.session_name)} · ${frappe.utils.escape_html(session.start_time)}-${frappe.utils.escape_html(session.end_time)}` : 'No active session'}
 					</div>
 				</div>
-				<div style="flex:1;min-width:220px;">
-					<div class="rd-label" style="margin-bottom:4px;">Parent / Guardian Mobile</div>
-					<input id="rd-board-mobile-input" class="rd-input"
-						type="tel" placeholder="e.g. 9876543210"
-						value="${frappe.utils.escape_html(db.state.mobile || '')}"
-						autocomplete="off">
-				</div>
-				<button id="rd-board-search-btn" class="rd-btn-primary"
-					style="width:auto;padding:9px 18px;"
-					${db.state.override_token ? '' : 'disabled'}>
-					Search
-				</button>
+				${hasToken ? `
+				<div class="rd-walkin-panel" style="padding:0;">
+					<div style="margin-bottom:8px;">
+						<div class="rd-label" style="margin-bottom:4px;">Parent / Guardian Mobile</div>
+						<input id="rd-board-mobile-input" class="rd-input"
+							type="tel" placeholder="Enter mobile to continue"
+							value="${frappe.utils.escape_html(db.state.mobile || '')}"
+							autocomplete="off">
+					</div>
+					<button id="rd-board-search-btn" class="rd-btn-primary"
+						style="width:100%;">
+						Search
+					</button>
+				</div>` : ''}
 			</div>
-			<div class="rd-caption" style="margin-top:6px;">
-				Walk-in flow: select token, then search. You can still change the token before continuing.
-			</div>
+			${db.state.walkin_notice ? `
+			<div class="rd-walkin-note">
+				${frappe.utils.escape_html(db.state.walkin_notice)}
+			</div>` : ''}
 		`);
 
+		if (!hasToken) return;
 		const $input = this.$context.find('#rd-board-mobile-input');
 		const do_search = () => {
 			const mobile = $input.val().trim();
-			if (!db.state.override_token) {
-				frappe.show_alert({ message: 'Select a token first.', indicator: 'orange' });
-				return;
-			}
 			if (!mobile) {
 				frappe.show_alert({ message: 'Enter a mobile number.', indicator: 'orange' });
 				return;
@@ -2304,22 +2255,26 @@ class TokenBoard {
 	render_walkin_context() {
 		const db = this.dashboard;
 		if (db.state.channel !== 'walkin') {
+			this._render_legend();
 			this.$context.hide().empty();
 			return;
 		}
-		switch (db.state.step) {
-		case 'search':
+		this._render_walkin_toolbar();
+		if (!db.state.walkin_preview_sessions.length || !this.current_session) {
+			db._load_walkin_preview();
+		}
+		switch (db.state.walkin_phase) {
+		case 'token_pick':
 			return this._render_context_dock();
-		case 'guardian_found':
+		case 'guardian_result':
 			return this._render_walkin_guardian_found();
-		case 'guardian_not_found':
+		case 'guardian_missing':
 			return this._render_walkin_guardian_not_found();
-		case 'register':
+		case 'register_child':
 			return this._render_walkin_register();
-		case 'child_selected':
-		case 'session_offered':
+		case 'confirm':
 			return this._render_walkin_confirm();
-		case 'confirmed':
+		case 'done':
 			return this._render_walkin_confirmed();
 		default:
 			return this._render_context_dock();
@@ -2331,8 +2286,8 @@ class TokenBoard {
 		const g = db.state.guardian;
 		const children = db.state.children || [];
 		this.$context.show().html(`
-			<div>
-				<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;">
+			<div class="rd-walkin-panel">
+				<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">
 					<div>
 						<div class="rd-label">Guardian Found</div>
 						<div style="font-size:14px;font-weight:700;">${frappe.utils.escape_html(g.guardian_name)}</div>
@@ -2341,9 +2296,10 @@ class TokenBoard {
 					<button id="rd-board-change-mobile" class="rd-btn-secondary" style="font-size:11px;">Change</button>
 				</div>
 				<div class="rd-label" style="margin-bottom:8px;">Select Child</div>
-				<div style="display:flex;flex-direction:column;gap:6px;">
+				<div class="rd-walkin-rows">
 					${children.map(c => `
-						<button class="rd-child-row" data-patient="${frappe.utils.escape_html(c.patient)}" style="width:100%;text-align:left;background:var(--card-bg);">
+						<button class="rd-child-row" data-patient="${frappe.utils.escape_html(c.patient)}"
+							style="width:100%;text-align:left;background:var(--card-bg);margin-bottom:0;padding:8px 10px;">
 							<div style="flex:1;">
 								<div style="font-size:13px;font-weight:600;">
 									${frappe.utils.escape_html(c.patient_name || c.patient)}
@@ -2369,7 +2325,8 @@ class TokenBoard {
 			if (child) db._do_select_child(child);
 		});
 		this.$context.find('#rd-board-add-child').on('click', () => {
-			db.state.step = 'register';
+			db.state.walkin_phase = 'register_child';
+			db.state.walkin_notice = null;
 			db.state._register_mode = 'add_child';
 			db.render_admission();
 		});
@@ -2378,8 +2335,8 @@ class TokenBoard {
 	_render_walkin_guardian_not_found() {
 		const db = this.dashboard;
 		this.$context.show().html(`
-			<div>
-				<div class="rd-card" style="border-color:#f87171;margin-bottom:12px;">
+			<div class="rd-walkin-panel">
+				<div class="rd-card" style="border-color:#f87171;margin-bottom:10px;">
 					<div style="font-size:13px;font-weight:600;color:#dc2626;margin-bottom:4px;">
 						No guardian found
 					</div>
@@ -2398,7 +2355,8 @@ class TokenBoard {
 			</div>
 		`);
 		this.$context.find('#rd-board-register-btn').on('click', () => {
-			db.state.step = 'register';
+			db.state.walkin_phase = 'register_child';
+			db.state.walkin_notice = null;
 			db.state._register_mode = 'new';
 			db.render_admission();
 		});
@@ -2410,8 +2368,8 @@ class TokenBoard {
 		const is_new = db.state._register_mode === 'new';
 		const g = db.state.guardian;
 		this.$context.show().html(`
-			<div>
-				<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+			<div class="rd-walkin-panel">
+				<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
 					<button id="rd-board-reg-back" class="rd-btn-secondary" style="font-size:11px;">←</button>
 					<span style="font-size:13px;font-weight:700;">
 						${is_new ? 'Register New Guardian & Child' : 'Add Child to ' + frappe.utils.escape_html(g.guardian_name)}
@@ -2448,7 +2406,8 @@ class TokenBoard {
 			</div>
 		`);
 		this.$context.find('#rd-board-reg-back').on('click', () => {
-			db.state.step = is_new ? 'guardian_not_found' : 'guardian_found';
+			db.state.walkin_phase = is_new ? 'guardian_missing' : 'guardian_result';
+			db.state.walkin_notice = null;
 			db.render_admission();
 		});
 		this.$context.find('#rd-board-reg-submit').on('click', () => db._do_register(is_new));
@@ -2462,24 +2421,28 @@ class TokenBoard {
 		if (!c || !vt || !s) return this._render_context_dock();
 		const is_review = vt.load_class === 'review_load';
 		this.$context.show().html(`
-			<div>
-				<div class="rd-card" style="margin-bottom:12px;">
-					<div style="font-size:14px;font-weight:700;margin-bottom:2px;">
-						${frappe.utils.escape_html(c.patient_name || c.patient)}
+			<div class="rd-walkin-panel rd-walkin-confirm">
+				<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+					<div>
+						<div class="rd-label">Selected Child</div>
+						<div style="font-size:14px;font-weight:700;">${frappe.utils.escape_html(c.patient_name || c.patient)}</div>
+						<div class="rd-caption">
+							Token <strong>${frappe.utils.escape_html(String(db.state.override_token || '—'))}</strong>
+							· ${frappe.utils.escape_html(s.practitioner_name || s.session_name)}
+						</div>
 					</div>
-					<div class="rd-caption" style="margin-bottom:8px;">
+					<span class="rd-badge ${is_review ? 'rd-badge-green' : 'rd-badge-blue'}">
+						${is_review ? 'Review' : 'New'}
+					</span>
+				</div>
+				<div class="rd-caption" style="margin-bottom:8px;">
+					${frappe.utils.escape_html(s.practitioner_name || s.session_name)}
+				</div>
+				<div style="margin-bottom:8px;position:relative;">
+					<div class="rd-caption" style="margin-bottom:6px;">
 						${db.state.age_at_visit ? frappe.utils.escape_html(db.state.age_at_visit) : ''}
 						${c.dob ? '&nbsp;·&nbsp;DOB ' + frappe.utils.escape_html(c.dob) : ''}
 					</div>
-					<span class="rd-badge ${is_review ? 'rd-badge-green' : 'rd-badge-blue'}">
-						${is_review ? 'Review Patient' : 'New Patient'}
-					</span>
-					<div class="rd-caption" style="margin-top:8px;">
-						Token <strong>${frappe.utils.escape_html(String(db.state.override_token || '—'))}</strong>
-						· ${frappe.utils.escape_html(s.practitioner_name || s.session_name)}
-					</div>
-				</div>
-				<div style="margin-bottom:8px;position:relative;">
 					<div class="rd-label" style="margin-bottom:3px;">Complaint</div>
 					<input id="rd-complaint-input" class="rd-input" type="text"
 						autocomplete="off" placeholder="Type to search…"
@@ -2490,7 +2453,7 @@ class TokenBoard {
 						border-radius:0 0 6px 6px;max-height:160px;overflow-y:auto;
 						z-index:200;box-shadow:0 4px 12px rgba(0,0,0,.1);"></div>
 				</div>
-				<div style="display:grid;grid-template-columns:minmax(0, 1fr) minmax(0, 1fr) auto;gap:8px;align-items:end;">
+				<div style="display:grid;grid-template-columns:minmax(0, 1fr) minmax(0, 1fr);gap:8px;margin-bottom:8px;">
 					<div>
 						<div class="rd-label" style="margin-bottom:3px;">Weight</div>
 						<input id="rd-weight-input" class="rd-input" type="number"
@@ -2503,11 +2466,10 @@ class TokenBoard {
 							placeholder="3y 2m"
 							value="${frappe.utils.escape_html(db.state.age_at_visit || '')}">
 					</div>
-					<button id="rd-board-confirm-booking" class="rd-btn-primary"
-						style="width:auto;min-width:150px;">
-						Confirm Booking
-					</button>
 				</div>
+				<button id="rd-board-confirm-booking" class="rd-btn-primary" style="width:100%;">
+					Confirm Booking
+				</button>
 			</div>
 		`);
 		db._bind_booking_inputs();
@@ -2521,7 +2483,7 @@ class TokenBoard {
 		const s = db.state.sessions[db.state.session_idx];
 		if (!b || !c || !s) return this._render_context_dock();
 		this.$context.show().html(`
-			<div>
+			<div class="rd-walkin-panel">
 				<div class="rd-confirm-slip">
 					<div style="font-size:28px;font-weight:900;color:#15803d;margin-bottom:4px;">
 						${frappe.utils.escape_html(String(b.token_number))}
@@ -2577,13 +2539,14 @@ class TokenBoard {
 		const db = this.dashboard;
 		const admission_step = db.state.step;
 		const walkinTokenPick = db.state.channel === 'walkin'
-			&& ['search', 'guardian_found', 'guardian_not_found', 'register', 'child_selected', 'session_offered']
-				.includes(admission_step);
+			&& ['token_pick', 'guardian_result', 'guardian_missing', 'register_child', 'confirm']
+				.includes(db.state.walkin_phase);
 		const allowSelection = admission_step === 'session_offered' || walkinTokenPick;
 
 		// Available cell during session_offered → override token selection
 		if (state === 'available' && allowSelection) {
 			db.state.override_token = token_number;
+			if (db.state.channel === 'walkin') db.state.walkin_notice = null;
 			this.set_recommended(token_number);
 			// Mark cell with override-selected style
 			this.$grid.find(`.rd-token-cell[data-token="${token_number}"]`)
@@ -2596,6 +2559,7 @@ class TokenBoard {
 		if (state === 'vip_buffer' && allowSelection
 			&& db.state.is_special) {
 			db.state.override_token = token_number;
+			if (db.state.channel === 'walkin') db.state.walkin_notice = null;
 			this.set_recommended(token_number);
 			db.render_admission();
 			return;
