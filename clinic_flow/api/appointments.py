@@ -75,7 +75,8 @@ def quick_create_patient(
 def get_availability(practitioner: str, queue_type: str) -> list:
 	"""
 	Returns the next 7 sessions with available slots for practitioner + queue_type.
-	Source of truth is the Practitioner Schedule — Queue Sessions don't exist in advance.
+	Source of truth is the Practitioner Schedule. Queue Sessions are materialized
+	on demand as Scheduled/Active operational instances when needed elsewhere.
 	Scans up to 30 days out.
 	"""
 	config = frappe.get_single("Slot Partition Config")

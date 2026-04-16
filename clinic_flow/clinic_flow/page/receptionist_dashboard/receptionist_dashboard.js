@@ -44,6 +44,23 @@ frappe.pages['receptionist-dashboard'].on_page_load = function (wrapper) {
 function get_dashboard_html() {
 	return `
 <style>
+#rd-root {
+	--rd-bg: #f4f6f5;
+	--rd-panel: #fffdfb;
+	--rd-panel-soft: #eef3f0;
+	--rd-panel-tint: #f7fbf8;
+	--rd-border: #d9e1dc;
+	--rd-border-strong: #b9c9c0;
+	--rd-text: #1f2a24;
+	--rd-muted: #66736d;
+	--rd-primary: #14624d;
+	--rd-primary-tint: #dff2ea;
+	--rd-primary-soft: #edf8f2;
+	--rd-blue-tint: #dbeafe;
+	--rd-amber-tint: #fef3c7;
+	background: var(--rd-bg);
+	color: var(--rd-text);
+}
 #rd-root * { box-sizing: border-box; }
 .rd-shell-grid {
 	display:grid;
@@ -223,18 +240,20 @@ function get_dashboard_html() {
 	}
 }
 .rd-session-row {
-	border: 1px solid var(--border-color);
+	border: 1px solid var(--rd-border);
 	border-radius: 10px;
-	background: var(--card-bg);
+	background: var(--rd-panel);
 	padding: 10px 12px;
+	box-shadow: 0 1px 2px rgba(17, 24, 39, 0.03);
 }
 .rd-session-row.is-active {
-	border-color: var(--primary);
-	box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.12);
+	border-color: var(--rd-primary);
+	background: linear-gradient(180deg, var(--rd-primary-soft) 0%, var(--rd-panel) 100%);
+	box-shadow: 0 0 0 2px rgba(20, 98, 77, 0.14), 0 8px 18px rgba(20, 98, 77, 0.06);
 }
 .rd-session-row.is-recommended {
 	border-color: #16a34a;
-	background: linear-gradient(180deg, rgba(240, 253, 244, 0.85) 0%, var(--card-bg) 100%);
+	background: linear-gradient(180deg, rgba(223, 242, 234, 0.95) 0%, var(--rd-panel) 100%);
 }
 .rd-session-row-main {
 	display:grid;
@@ -270,8 +289,8 @@ function get_dashboard_html() {
 .rd-scan-chip.stress-low { background:#dcfce7; color:#15803d; }
 .rd-scan-chip.stress-mid { background:#fef3c7; color:#b45309; }
 .rd-scan-chip.stress-high { background:#fee2e2; color:#b91c1c; }
-.rd-scan-chip.fit-chip { background:#dbeafe; color:#1d4ed8; }
-.rd-scan-chip.hour-chip { background:#f3f4f6; color:#374151; }
+.rd-scan-chip.fit-chip { background:var(--rd-blue-tint); color:#1d4ed8; }
+.rd-scan-chip.hour-chip { background:#eef2f1; color:#42514a; }
 .rd-best-badge {
 	display:inline-flex;
 	align-items:center;
@@ -286,10 +305,10 @@ function get_dashboard_html() {
 
 /* typography helpers */
 .rd-label {
-	font-size: 10px; font-weight: 700; color: var(--text-muted);
+	font-size: 10px; font-weight: 700; color: var(--rd-muted);
 	text-transform: uppercase; letter-spacing: 1px;
 }
-.rd-caption { font-size: 11px; color: var(--text-muted); }
+.rd-caption { font-size: 11px; color: var(--rd-muted); }
 
 /* workspace mode switch */
 #rd-mode-bar {
@@ -298,8 +317,8 @@ function get_dashboard_html() {
 	align-items: stretch;
 	gap: 0;
 	padding: 10px 20px;
-	background: var(--card-bg);
-	border-bottom: 1px solid var(--border-color);
+	background: var(--rd-panel);
+	border-bottom: 1px solid var(--rd-border);
 }
 .rd-mode-btn {
 	display: flex;
@@ -307,12 +326,12 @@ function get_dashboard_html() {
 	align-items: flex-start;
 	gap: 2px;
 	padding: 8px 20px;
-	border: 1.5px solid var(--border-color);
+	border: 1.5px solid var(--rd-border);
 	background: transparent;
 	cursor: pointer;
 	font-size: 13px;
 	font-weight: 700;
-	color: var(--text-muted);
+	color: var(--rd-muted);
 	transition: all .15s;
 	border-radius: 0;
 	min-width: 180px;
@@ -322,77 +341,89 @@ function get_dashboard_html() {
 .rd-mode-btn .rd-mode-sub {
 	font-size: 10px;
 	font-weight: 500;
-	color: var(--text-muted);
+	color: var(--rd-muted);
 	opacity: 0.7;
 }
 .rd-mode-btn.active {
-	background: var(--primary);
-	border-color: var(--primary);
+	background: var(--rd-primary);
+	border-color: var(--rd-primary);
 	color: #fff;
 }
 .rd-mode-btn.active .rd-mode-sub { color: rgba(255,255,255,0.75); opacity: 1; }
 .rd-mode-btn:not(.active):hover {
-	background: var(--bg-color);
-	color: var(--text-color);
+	background: var(--rd-panel-soft);
+	color: var(--rd-text);
 }
 
 /* step indicator */
 .rd-step {
 	flex: 1; text-align: center; padding: 6px 4px;
-	font-size: 10px; font-weight: 700; color: var(--text-muted);
-	border-bottom: 2px solid var(--border-color); transition: all .2s;
+	font-size: 10px; font-weight: 700; color: var(--rd-muted);
+	border-bottom: 2px solid var(--rd-border); transition: all .2s;
 }
-.rd-step.active { color: var(--primary); border-bottom-color: var(--primary); }
+.rd-step.active { color: var(--rd-primary); border-bottom-color: var(--rd-primary); }
 .rd-step.done   { color: #16a34a;       border-bottom-color: #16a34a; }
 
 /* inputs */
 .rd-input {
-	width: 100%; padding: 9px 12px; border: 1.5px solid var(--border-color);
+	width: 100%; padding: 9px 12px; border: 1.5px solid var(--rd-border);
 	border-radius: 7px; font-size: 13px; outline: none;
-	background: var(--input-bg); transition: border-color .15s;
+	background: #fff; color: var(--rd-text);
+	transition: border-color .15s, box-shadow .15s, background .15s;
 }
-.rd-input:focus { border-color: var(--primary); }
+.rd-input:focus {
+	border-color: var(--rd-primary);
+	box-shadow: 0 0 0 3px rgba(20, 98, 77, 0.12);
+	background: #fff;
+}
 
 /* buttons */
 .rd-btn-primary {
 	padding: 9px 20px; border-radius: 7px; border: none;
-	background: var(--primary); color: #fff; font-size: 13px;
+	background: var(--rd-primary); color: #fff; font-size: 13px;
 	font-weight: 600; cursor: pointer; transition: opacity .15s; width: 100%;
 }
 .rd-btn-primary:hover { opacity: .88; }
 .rd-btn-primary:disabled { opacity: .45; cursor: not-allowed; }
 .rd-btn-secondary {
 	padding: 8px 16px; border-radius: 7px;
-	border: 1px solid var(--border-color); background: var(--card-bg);
+	border: 1px solid var(--rd-border-strong); background: var(--rd-panel);
+	color: var(--rd-text);
 	font-size: 12px; font-weight: 500; cursor: pointer; transition: all .15s;
 }
-.rd-btn-secondary:hover { border-color: var(--primary); color: var(--primary); }
+.rd-btn-secondary:hover {
+	border-color: var(--rd-primary);
+	color: var(--rd-primary);
+	background: var(--rd-panel-soft);
+}
 
 /* cards */
 .rd-card {
-	border: 1px solid var(--border-color); border-radius: 8px;
-	padding: 12px 14px; margin-bottom: 8px; background: var(--card-bg);
+	border: 1px solid var(--rd-border); border-radius: 8px;
+	padding: 12px 14px; margin-bottom: 8px; background: var(--rd-panel);
+	box-shadow: 0 1px 2px rgba(17, 24, 39, 0.03);
 }
 .rd-card-selectable {
-	border: 1px solid var(--border-color); border-radius: 8px;
-	padding: 12px 14px; margin-bottom: 8px; background: var(--card-bg);
+	border: 1px solid var(--rd-border); border-radius: 8px;
+	padding: 12px 14px; margin-bottom: 8px; background: var(--rd-panel);
 	cursor: pointer; transition: border-color .15s, box-shadow .15s;
 }
 .rd-card-selectable:hover {
-	border-color: var(--primary); box-shadow: 0 2px 8px rgba(0,0,0,.08);
+	border-color: var(--rd-primary); box-shadow: 0 6px 16px rgba(17,24,39,.06);
 }
 .rd-card-selectable.selected {
-	border-color: var(--primary); background: var(--primary-light);
+	border-color: var(--rd-primary); background: var(--rd-primary-tint);
 }
 
 /* child row */
 .rd-child-row {
 	display: flex; align-items: center; gap: 10px; padding: 10px 12px;
 	border-radius: 7px; cursor: pointer; transition: background .1s;
-	border: 1.5px solid var(--border-color); margin-bottom: 6px;
+	border: 1.5px solid var(--rd-border); margin-bottom: 6px;
+	background: var(--rd-panel);
 }
-.rd-child-row:hover { background: var(--bg-color); border-color: var(--primary); }
-.rd-child-row.selected { border-color: var(--primary); background: var(--primary-light); }
+.rd-child-row:hover { background: var(--rd-panel-soft); border-color: var(--rd-primary); }
+.rd-child-row.selected { border-color: var(--rd-primary); background: var(--rd-primary-tint); }
 
 /* badges */
 .rd-badge {
@@ -402,12 +433,12 @@ function get_dashboard_html() {
 .rd-badge-green  { background: #dcfce7; color: #15803d; }
 .rd-badge-amber  { background: #fef9c3; color: #a16207; }
 .rd-badge-blue   { background: #dbeafe; color: #1d4ed8; }
-.rd-badge-gray   { background: var(--bg-color); color: var(--text-muted); }
+.rd-badge-gray   { background: #eef2f1; color: var(--rd-muted); }
 
 /* session offer card */
 .rd-session-card {
-	border: 1.5px solid var(--primary); border-radius: 10px; padding: 16px;
-	background: var(--card-bg); margin-bottom: 12px;
+	border: 1.5px solid var(--rd-primary); border-radius: 10px; padding: 16px;
+	background: var(--rd-panel); margin-bottom: 12px;
 }
 
 /* confirmation slip */
@@ -419,7 +450,7 @@ function get_dashboard_html() {
 /* spinner */
 .rd-spinner {
 	display: inline-block; width: 18px; height: 18px;
-	border: 2px solid var(--border-color); border-top-color: var(--primary);
+	border: 2px solid var(--rd-border); border-top-color: var(--rd-primary);
 	border-radius: 50%; animation: rd-spin .6s linear infinite;
 }
 @keyframes rd-spin { to { transform: rotate(360deg); } }
@@ -452,13 +483,14 @@ function get_dashboard_html() {
 .rd-pipeline-section { margin-bottom: 14px; }
 .rd-pipeline-header {
 	font-size: 10px; font-weight: 700; text-transform: uppercase;
-	letter-spacing: 1px; color: var(--text-muted);
-	padding: 4px 0 6px; border-bottom: 1px solid var(--border-color);
+	letter-spacing: 1px; color: var(--rd-muted);
+	padding: 4px 0 6px; border-bottom: 1px solid var(--rd-border);
 	margin-bottom: 6px;
 }
 .rd-patient-card {
-	border: 1px solid var(--border-color); border-radius: 8px;
-	padding: 8px 10px; margin-bottom: 6px; background: var(--card-bg);
+	border: 1px solid var(--rd-border); border-radius: 8px;
+	padding: 8px 10px; margin-bottom: 6px; background: var(--rd-panel);
+	box-shadow: 0 1px 2px rgba(17, 24, 39, 0.03);
 }
 .rd-patient-card.with-doctor {
 	border-color: #1d4ed8; background: #eff6ff;
@@ -481,25 +513,29 @@ function get_dashboard_html() {
 .rd-action-btn-red:hover    { background: #dc2626; color: #fff; }
 .rd-recep-form {
 	margin-top: 8px; padding: 8px; border-radius: 6px;
-	background: var(--bg-color); border: 1px solid var(--border-color);
+	background: var(--rd-panel-soft); border: 1px solid var(--rd-border);
 }
 .rd-recep-input {
-	padding: 6px 8px; border: 1.5px solid var(--border-color); border-radius: 5px;
-	font-size: 12px; outline: none; background: var(--input-bg); width: 100%;
+	padding: 6px 8px; border: 1.5px solid var(--rd-border); border-radius: 5px;
+	font-size: 12px; outline: none; background: #fff; width: 100%; color: var(--rd-text);
 }
-.rd-recep-input:focus { border-color: var(--primary); }
+.rd-recep-input:focus {
+	border-color: var(--rd-primary);
+	box-shadow: 0 0 0 3px rgba(20, 98, 77, 0.12);
+}
 .rd-walkin-panel {
 	padding: 10px 12px;
-	border: 1px solid var(--border-color);
+	border: 1px solid var(--rd-border);
 	border-radius: 8px;
-	background: var(--card-bg);
+	background: var(--rd-panel);
+	box-shadow: 0 1px 2px rgba(17, 24, 39, 0.03);
 }
 .rd-walkin-note {
 	margin-top: 8px;
 	padding: 5px 8px;
 	border-radius: 6px;
-	background: #fffbeb;
-	border: 1px solid #f59e0b;
+	background: #fff9e8;
+	border: 1px solid #f0c97f;
 	font-size: 11px;
 	color: #92400e;
 }
@@ -507,6 +543,83 @@ function get_dashboard_html() {
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
+}
+.rd-context-strip {
+	border: 1px solid var(--rd-border);
+	border-radius: 10px;
+	background: linear-gradient(180deg, var(--rd-panel) 0%, var(--rd-panel-tint) 100%);
+	padding: 10px 12px;
+	margin-bottom: 12px;
+	box-shadow: 0 1px 2px rgba(17, 24, 39, 0.03);
+}
+.rd-context-strip-head {
+	display:flex;
+	align-items:center;
+	justify-content:space-between;
+	gap:10px;
+	flex-wrap:wrap;
+}
+.rd-context-strip-title {
+	font-size: 13px;
+	font-weight: 700;
+	color: var(--rd-text);
+}
+.rd-context-strip-meta {
+	display:flex;
+	align-items:center;
+	gap:8px;
+	flex-wrap:wrap;
+	margin-top:6px;
+}
+.rd-context-strip.is-collapsed .rd-context-details {
+	display:none;
+}
+.rd-context-details {
+	margin-top:10px;
+	padding-top:10px;
+	border-top:1px solid var(--rd-border);
+}
+.rd-flow-stack {
+	display:flex;
+	flex-direction:column;
+	gap:12px;
+	width:min(760px, 100%);
+	margin:0 auto;
+}
+.rd-flow-card {
+	border: 1px solid var(--rd-border);
+	border-radius: 10px;
+	background: var(--rd-panel);
+	padding: 12px 14px;
+	box-shadow: 0 1px 2px rgba(17, 24, 39, 0.03);
+}
+.rd-flow-card-soft {
+	background: linear-gradient(180deg, var(--rd-panel) 0%, var(--rd-panel-tint) 100%);
+}
+.rd-flow-card-head {
+	display:flex;
+	align-items:flex-start;
+	justify-content:space-between;
+	gap:10px;
+	flex-wrap:wrap;
+	margin-bottom:10px;
+}
+.rd-flow-card-title {
+	font-size:13px;
+	font-weight:700;
+	color:var(--rd-text);
+}
+.rd-flow-field-grid {
+	display:grid;
+	grid-template-columns:minmax(0, 1fr) minmax(0, 1fr);
+	gap:8px;
+}
+.rd-flow-action-row {
+	display:flex;
+	align-items:center;
+	justify-content:center;
+	gap:8px;
+	flex-wrap:wrap;
 }
 </style>
 
@@ -676,6 +789,10 @@ class ReceptionistDashboard {
 			complaint:       null,      // selected Complaint name
 			weight_at_booking: null,    // weight in kg (float string)
 			age_at_visit:    null,      // age string e.g. "3y 2m"
+			phone_context_collapsed: false,
+			phone_flow_mode: 'availability', // availability | direct
+			phone_inquiry_load_class: 'non_review_load',
+			phone_post_session_lookup: false,
 			provisional_load_class: null, // walk-in intake guess before actual review/new is confirmed
 			walkin_phase:    'token_pick', // token_pick | guardian_result | guardian_missing | register_child | confirm | done
 			walkin_notice:   null,      // explicit walk-in state reconciliation message
@@ -801,7 +918,30 @@ class ReceptionistDashboard {
 		if (this.state.channel === 'walkin' && this.state.provisional_load_class) {
 			return this.state.provisional_load_class;
 		}
+		if (this.state.channel === 'phone'
+			&& this.state.phone_flow_mode === 'availability'
+			&& !this.state.visit_type) {
+			return this.state.phone_inquiry_load_class || 'non_review_load';
+		}
 		return this.state.visit_type?.load_class || 'non_review_load';
+	}
+
+	_render_phone_flow_switch() {
+		const mode = this.state.phone_flow_mode;
+		return `
+			<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
+				<button class="rd-btn-secondary rd-phone-flow-btn ${mode === 'availability' ? 'is-active' : ''}"
+					data-mode="availability"
+					style="width:auto;${mode === 'availability' ? 'border-color:var(--rd-primary);background:var(--rd-primary-soft);color:var(--rd-primary);' : ''}">
+					Check Availability
+				</button>
+				<button class="rd-btn-secondary rd-phone-flow-btn ${mode === 'direct' ? 'is-active' : ''}"
+					data-mode="direct"
+					style="width:auto;${mode === 'direct' ? 'border-color:var(--rd-primary);background:var(--rd-primary-soft);color:var(--rd-primary);' : ''}">
+					Direct Booking
+				</button>
+			</div>
+		`;
 	}
 
 	// ── Main render dispatcher ───────────────────────────────────────────────
@@ -824,14 +964,368 @@ class ReceptionistDashboard {
 		);
 
 		switch (step) {
-		case 'search':           return this._render_search();
-		case 'guardian_found':   return this._render_guardian_found();
-		case 'guardian_not_found': return this._render_guardian_not_found();
-		case 'register':         return this._render_register_form();
-		case 'child_selected':   return this._render_child_selected();
+		case 'search':
+		case 'guardian_found':
+		case 'guardian_not_found':
+		case 'register':
+		case 'child_selected':
+			return this._render_phone_progressive_context();
 		case 'session_offered':  return this._render_session_offered();
 		case 'confirmed':        return this._render_confirmed();
-		default:                 return this._render_search();
+		default:                 return this._render_phone_progressive_context();
+		}
+	}
+
+	_render_phone_progressive_context() {
+		const step = this.state.step;
+		const g = this.state.guardian;
+		const c = this.state.child;
+		const vt = this.state.visit_type;
+		const children = this.state.children || [];
+		const isRegisterNew = this.state._register_mode === 'new';
+		const hasSelectedChildState = !!(c && vt);
+		const isCollapsed = !!(hasSelectedChildState && this.state.phone_context_collapsed);
+		const isReview = vt && vt.load_class === 'review_load';
+		const badgeClass = isReview ? 'rd-badge-green' : 'rd-badge-blue';
+		const visitLabel = isReview ? 'Review Patient' : 'New Patient';
+		const inAvailabilityMode = this.state.phone_flow_mode === 'availability';
+		const inquiryIsReview = this.state.phone_inquiry_load_class === 'review_load';
+		const inquiryLabel = inquiryIsReview ? 'Review' : 'New';
+		const selectedSession = this.state.sessions[this.state.session_idx] || null;
+		const selectedSessionSummary = selectedSession ? [
+			selectedSession.practitioner_name || selectedSession.session_name || '',
+			selectedSession.session_date ? frappe.datetime.str_to_user(selectedSession.session_date, false, true) : '',
+			selectedSession.start_time && selectedSession.end_time ? `${selectedSession.start_time} - ${selectedSession.end_time}` : '',
+		].filter(Boolean).join(' · ') : '';
+		const selectedSessionMeta = selectedSession ? [
+			selectedSession.likely_hour_band || '',
+			this.state.override_token ? `Token ${this.state.override_token}` : 'Best token ready',
+		].filter(Boolean).join(' · ') : '';
+		const childRows = children.length
+			? children.map(row => `
+				<div class="rd-child-row ${c && c.patient === row.patient ? 'selected' : ''}"
+					data-patient="${frappe.utils.escape_html(row.patient)}">
+					<div style="flex:1;">
+						<div style="font-size:13px;font-weight:600;">
+							${frappe.utils.escape_html(row.patient_name || row.patient)}
+						</div>
+						<div class="rd-caption">
+							${row.dob ? frappe.utils.escape_html(row.dob) : 'DOB unknown'}
+							${row.age_display ? '&nbsp;·&nbsp;' + frappe.utils.escape_html(row.age_display) : ''}
+						</div>
+					</div>
+					<span style="font-size:11px;color:var(--rd-muted);">${c && c.patient === row.patient ? 'Selected' : 'Select →'}</span>
+				</div>`).join('')
+			: `<div class="rd-caption">No children linked yet.</div>`;
+
+		if (inAvailabilityMode && !this.state.phone_post_session_lookup && !hasSelectedChildState) {
+			this.$body.html(`
+				<div>
+					${this._render_phone_flow_switch()}
+					<div class="rd-context-strip">
+						<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+							<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+								<span class="rd-label">Inquiry</span>
+								<button class="rd-btn-secondary rd-phone-inquiry-load"
+									data-load-class="review_load"
+									style="width:auto;${inquiryIsReview ? 'border-color:var(--rd-primary);background:var(--rd-primary-soft);color:var(--rd-primary);' : ''}">
+									Review
+								</button>
+								<button class="rd-btn-secondary rd-phone-inquiry-load"
+									data-load-class="non_review_load"
+									style="width:auto;${!inquiryIsReview ? 'border-color:var(--rd-primary);background:var(--rd-primary-soft);color:var(--rd-primary);' : ''}">
+									New
+								</button>
+							</div>
+							<button id="rd-find-slot-btn" class="rd-btn-primary" style="width:auto;padding:9px 18px;">
+								Find Sessions
+							</button>
+						</div>
+					</div>
+				</div>
+			`);
+			this.$body.find('.rd-phone-flow-btn').on('click', (e) => {
+				const next = $(e.currentTarget).data('mode');
+				if (next === this.state.phone_flow_mode) return;
+				this.state.phone_flow_mode = next;
+				this.state.phone_post_session_lookup = false;
+				this.state.phone_context_collapsed = false;
+				this.render_admission();
+			});
+			this.$body.find('.rd-phone-inquiry-load').on('click', (e) => {
+				this.state.phone_inquiry_load_class = $(e.currentTarget).data('load-class');
+				this.render_admission();
+			});
+			this.$body.find('#rd-find-slot-btn').on('click', () => this._do_find_slot());
+			return;
+		}
+
+		this.$body.html(`
+			<div>
+				${this._render_phone_flow_switch()}
+				<div class="rd-flow-stack">
+				${this.state.phone_post_session_lookup && this.state.sessions.length ? `
+				<div class="rd-flow-card rd-flow-card-soft">
+					<div class="rd-flow-card-head">
+						<div>
+							<div class="rd-flow-card-title">Selected Session</div>
+							<div class="rd-context-strip-meta">
+								<span class="rd-badge ${badgeClass}">
+									${frappe.utils.escape_html(visitLabel)}
+								</span>
+							</div>
+						</div>
+						<button id="rd-back-sessions" class="rd-btn-secondary" style="width:auto;font-size:11px;">Back to Sessions</button>
+					</div>
+					<div style="font-size:12px;font-weight:700;">
+						${frappe.utils.escape_html(selectedSessionSummary)}
+					</div>
+					<div class="rd-caption" style="margin-top:4px;">
+						${frappe.utils.escape_html(selectedSessionMeta)}
+					</div>
+				</div>` : ''}
+				<div class="rd-context-strip ${isCollapsed ? 'is-collapsed' : ''}" id="rd-phone-progress-card">
+					${hasSelectedChildState ? `
+					<div class="rd-context-strip-head" style="margin-bottom:10px;">
+						<div>
+							<div class="rd-context-strip-title">${frappe.utils.escape_html(c.patient_name || c.patient)}</div>
+							<div class="rd-context-strip-meta">
+								<span class="rd-badge ${badgeClass}">${visitLabel}</span>
+								<span class="rd-caption">${frappe.utils.escape_html(g.guardian_name || '')}</span>
+								${this.state.age_at_visit ? `<span class="rd-caption">Age ${frappe.utils.escape_html(this.state.age_at_visit)}</span>` : ''}
+								${isReview && vt.fee_validity_till ? `<span class="rd-caption">✓ Valid till ${frappe.utils.escape_html(vt.fee_validity_till)}</span>` : ''}
+							</div>
+						</div>
+						<button id="rd-toggle-phone-progress" class="rd-btn-secondary" style="font-size:11px;width:auto;">
+							${isCollapsed ? 'Show Details' : 'Hide Details'}
+						</button>
+					</div>` : ''}
+					<div class="rd-context-details" style="${hasSelectedChildState ? '' : 'display:block;margin-top:0;padding-top:0;border-top:none;'}">
+						${hasSelectedChildState ? `
+						<div style="display:grid;grid-template-columns:minmax(0, 1fr) minmax(0, 1fr);gap:8px;margin-bottom:12px;">
+							<div>
+								<div class="rd-label" style="margin-bottom:3px;">DOB</div>
+								<div class="rd-input" style="display:flex;align-items:center;">
+									${c?.dob ? frappe.utils.escape_html(c.dob) : 'DOB unknown'}
+								</div>
+							</div>
+							<div>
+								<div class="rd-label" style="margin-bottom:3px;">Age</div>
+								<input id="rd-age-input" class="rd-input" type="text"
+									placeholder="3y 2m"
+									value="${frappe.utils.escape_html(this.state.age_at_visit || '')}">
+							</div>
+						</div>` : ''}
+						<div style="margin-bottom:12px;">
+							<div class="rd-label" style="margin-bottom:8px;">Parent / Guardian Mobile</div>
+							<div style="display:flex;gap:8px;align-items:center;">
+								<input id="rd-mobile-input" class="rd-input"
+									type="tel" placeholder="e.g. 9876543210"
+									value="${frappe.utils.escape_html(this.state.mobile)}"
+									autocomplete="off" style="flex:1;" />
+								<button id="rd-search-btn" class="rd-btn-primary" style="width:auto;padding:9px 18px;">
+									${g ? 'Refresh' : 'Search'}
+								</button>
+							</div>
+						</div>
+
+						${g ? `
+						<div style="margin-bottom:12px;">
+							<div class="rd-context-strip-head" style="margin-bottom:10px;">
+								<div>
+									<div class="rd-label">Guardian</div>
+									<div class="rd-context-strip-title">${frappe.utils.escape_html(g.guardian_name)}</div>
+									<div class="rd-caption">
+										${frappe.utils.escape_html(g.mobile)}
+										${g.relationship ? '&nbsp;·&nbsp;' + frappe.utils.escape_html(g.relationship) : ''}
+									</div>
+								</div>
+								<button id="rd-back-search" class="rd-btn-secondary" style="font-size:11px;width:auto;">Change</button>
+							</div>
+						</div>` : ''}
+
+						${step === 'guardian_not_found' ? `
+						<div class="rd-card" style="border-color:#f0c97f;background:#fff9e8;margin-bottom:12px;">
+							<div style="font-size:12px;font-weight:700;color:#b45309;margin-bottom:4px;">
+								No guardian found
+							</div>
+						</div>
+						<div style="margin-bottom:12px;">
+							<button id="rd-register-btn" class="rd-btn-primary" style="width:auto;">Register New Guardian & Child</button>
+						</div>` : ''}
+
+						${g && !(step === 'register' && isRegisterNew) ? `
+						<div style="margin-bottom:12px;">
+							<div class="rd-label" style="margin-bottom:8px;">Select Child</div>
+							<div class="rd-walkin-rows">
+								${childRows}
+							</div>
+						</div>` : ''}
+
+						${g ? `
+						<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:${step === 'register' ? '12px' : '0'};">
+							<button id="rd-add-child-btn" class="rd-btn-secondary" style="width:auto;">+ Add New Child</button>
+							${hasSelectedChildState ? `
+							<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+								${!this.state.phone_post_session_lookup ? `
+								<button id="rd-find-slot-btn" class="rd-btn-primary" style="width:auto;padding:9px 18px;">
+									Find Sessions
+								</button>` : ''}
+							</div>` : ''}
+						</div>` : ''}
+
+						${step === 'register' ? `
+						<div class="rd-context-details" style="display:block;margin-top:12px;padding-top:12px;">
+							<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;">
+								<div class="rd-context-strip-title">
+									${isRegisterNew ? 'Register New Guardian & Child' : 'Add Child to ' + frappe.utils.escape_html(g.guardian_name)}
+								</div>
+								<button id="rd-reg-back" class="rd-btn-secondary" style="font-size:11px;width:auto;">Back</button>
+							</div>
+							${isRegisterNew ? `
+							<div class="rd-label" style="margin-bottom:6px;">Guardian</div>
+							<div style="display:grid;grid-template-columns:1.1fr .9fr;gap:8px;margin-bottom:8px;">
+								<input id="rd-reg-guardian-name" class="rd-input" placeholder="Guardian full name *" />
+								<input id="rd-reg-mobile" class="rd-input" placeholder="Mobile number *"
+									value="${frappe.utils.escape_html(this.state.mobile)}" />
+							</div>
+							<select id="rd-reg-relationship" class="rd-input" style="margin-bottom:10px;">
+								<option value="">Relationship (optional)</option>
+								<option value="Father">Father</option>
+								<option value="Mother">Mother</option>
+								<option value="Guardian">Guardian</option>
+								<option value="Other">Other</option>
+							</select>` : ''}
+							<div class="rd-label" style="margin-bottom:6px;">Child</div>
+							<input id="rd-reg-child-name" class="rd-input" placeholder="Child full name *" style="margin-bottom:8px;" />
+							<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+								<input id="rd-reg-dob" class="rd-input" type="date" />
+								<select id="rd-reg-sex" class="rd-input">
+									<option value="Male">Male</option>
+									<option value="Female">Female</option>
+								</select>
+							</div>
+							<button id="rd-reg-submit" class="rd-btn-primary">
+								${isRegisterNew ? 'Register & Continue' : 'Add Child & Continue'}
+							</button>
+						</div>` : ''}
+					</div>
+				</div>
+				${this.state.phone_post_session_lookup && hasSelectedChildState && selectedSession ? `
+				<div class="rd-flow-card rd-flow-card-soft">
+					<div class="rd-flow-card-title" style="margin-bottom:8px;">Current Visit</div>
+					<div style="margin-bottom:8px;position:relative;">
+						<div class="rd-label" style="margin-bottom:3px;">Complaint</div>
+						<input id="rd-complaint-input" class="rd-input" type="text"
+							autocomplete="off" placeholder="Type to search…"
+							value="${frappe.utils.escape_html(this.state.complaint || '')}">
+						<div id="rd-complaint-dd" style="display:none;position:absolute;
+							top:100%;left:0;right:0;background:var(--card-bg);
+							border:1px solid var(--border-color);border-top:none;
+							border-radius:0 0 6px 6px;max-height:160px;overflow-y:auto;
+							z-index:200;box-shadow:0 4px 12px rgba(0,0,0,.1);"></div>
+					</div>
+
+					<div class="rd-flow-field-grid" style="grid-template-columns:minmax(0, 1fr);">
+						<div>
+							<div class="rd-label" style="margin-bottom:3px;">Weight</div>
+							<input id="rd-weight-input" class="rd-input" type="number"
+								step="0.1" min="0" placeholder="kg"
+								value="${this.state.weight_at_booking || ''}">
+						</div>
+					</div>
+				</div>
+
+				<div class="rd-flow-card">
+					<div class="rd-flow-action-row">
+						<button id="rd-phone-context-confirm" class="rd-btn-primary" style="width:auto;min-width:180px;">
+							Confirm Booking
+						</button>
+					</div>
+				</div>` : ''}
+				</div>
+			</div>
+		`);
+
+		this.$body.find('.rd-phone-flow-btn').on('click', (e) => {
+			const next = $(e.currentTarget).data('mode');
+			if (next === this.state.phone_flow_mode) return;
+			this.state.phone_flow_mode = next;
+			this.state.phone_post_session_lookup = false;
+			this.state.phone_context_collapsed = false;
+			this.state.sessions = [];
+			this.state.session_idx = 0;
+			this.state.override_token = null;
+			this.state.token_board_open = false;
+			this._reset_to_search();
+		});
+		this.$body.find('#rd-back-sessions').on('click', () => {
+			this.state.phone_post_session_lookup = false;
+			this.state.phone_context_collapsed = false;
+			this.state.step = 'session_offered';
+			this.render_admission();
+		});
+		const $input = this.$body.find('#rd-mobile-input');
+		if (step === 'search') $input.focus();
+		const do_search = () => {
+			const mobile = $input.val().trim();
+			if (!mobile) { frappe.show_alert({ message: 'Enter a mobile number.', indicator: 'orange' }); return; }
+			this.state.mobile = mobile;
+			this._do_search_guardian(mobile);
+		};
+		this.$body.find('#rd-search-btn').on('click', do_search);
+		$input.on('keydown', (e) => { if (e.key === 'Enter') do_search(); });
+
+		if (hasSelectedChildState) {
+			this.$body.find('#rd-toggle-phone-progress').on('click', () => {
+				const $card = this.$body.find('#rd-phone-progress-card');
+				const collapsed = $card.hasClass('is-collapsed');
+				$card.toggleClass('is-collapsed', !collapsed);
+				this.state.phone_context_collapsed = !collapsed;
+				this.$body.find('#rd-toggle-phone-progress').text(collapsed ? 'Hide Details' : 'Show Details');
+			});
+		}
+
+		if (step === 'guardian_not_found') {
+			this.$body.find('#rd-register-btn').on('click', () => {
+				this.state.step = 'register';
+				this.state._register_mode = 'new';
+				this.render_admission();
+			});
+		}
+
+		if (step === 'register') {
+			this.$body.find('#rd-reg-back').on('click', () => {
+				this.state.step = isRegisterNew ? 'guardian_not_found' : 'guardian_found';
+				this.render_admission();
+			});
+			this.$body.find('#rd-reg-submit').on('click', () => this._do_register(isRegisterNew));
+		}
+
+		this.$body.find('#rd-back-search').on('click', () => this._reset_to_search());
+		this.$body.find('.rd-child-row').on('click', (e) => {
+			const patient = $(e.currentTarget).data('patient');
+			const child = this.state.children.find(row => row.patient === patient);
+			if (child) this._do_select_child(child);
+		});
+		this.$body.find('#rd-add-child-btn').on('click', () => {
+			this.state.step = 'register';
+			this.state._register_mode = 'add_child';
+			this.render_admission();
+		});
+		if (hasSelectedChildState) {
+			this.$body.find('#rd-find-slot-btn').on('click', () => {
+				if (this.state.phone_post_session_lookup && this.state.sessions.length) {
+					this.state.step = 'session_offered';
+					this.render_admission();
+					return;
+				}
+				this._do_find_slot();
+			});
+		}
+		if (this.state.phone_post_session_lookup && hasSelectedChildState && selectedSession) {
+			this._bind_booking_inputs();
+			this.$body.find('#rd-phone-context-confirm').on('click', () => this._do_confirm_booking(selectedSession));
 		}
 	}
 
@@ -973,33 +1467,38 @@ class ReceptionistDashboard {
 
 		this.$body.html(`
 			<div>
-				<!-- Guardian card -->
-				<div class="rd-card" style="margin-bottom:12px;">
-					<div style="display:flex;align-items:center;justify-content:space-between;">
+				<div class="rd-context-strip">
+					<div class="rd-context-strip-head">
 						<div>
-							<div style="font-size:14px;font-weight:700;">
+							<div class="rd-label">Guardian</div>
+							<div class="rd-context-strip-title">
 								${frappe.utils.escape_html(g.guardian_name)}
 							</div>
-							<div class="rd-caption">${frappe.utils.escape_html(g.mobile)}
+							<div class="rd-caption">
+								${frappe.utils.escape_html(g.mobile)}
 								${g.relationship ? '&nbsp;·&nbsp;' + frappe.utils.escape_html(g.relationship) : ''}
 							</div>
 						</div>
 						<button id="rd-back-search" class="rd-btn-secondary" style="font-size:11px;">
-							← Change
+							Change
 						</button>
 					</div>
 				</div>
 
-				<!-- Children -->
-				<div class="rd-label" style="margin-bottom:8px;">
-					Select Child
-					${children.length === 0 ? '' :
-						`<span class="rd-badge rd-badge-gray" style="margin-left:6px;">
-							${children.length}
-						</span>`}
+				<div class="rd-context-strip">
+					<div class="rd-context-strip-head">
+						<div class="rd-context-strip-title">
+							Select Child
+							${children.length === 0 ? '' :
+								`<span class="rd-badge rd-badge-gray" style="margin-left:6px;">
+									${children.length}
+								</span>`}
+						</div>
+					</div>
+					<div class="rd-context-details" style="display:block;margin-top:8px;padding-top:0;border-top:none;">
+						${children_html}
+					</div>
 				</div>
-
-				${children_html}
 
 				<button id="rd-add-child-btn" class="rd-btn-secondary"
 					style="width:100%;margin-top:4px;text-align:center;">
@@ -1150,8 +1649,7 @@ class ReceptionistDashboard {
 						frappe.show_alert({ message: 'Guardian registered!', indicator: 'green' });
 						return;
 					}
-					this.state.step = 'guardian_found';
-					this.render_admission();
+					this._do_select_child(child);
 					frappe.show_alert({ message: 'Guardian registered!', indicator: 'green' });
 				},
 				error: () => { $btn.prop('disabled', false).text('Register & Continue'); },
@@ -1195,6 +1693,7 @@ class ReceptionistDashboard {
 				this.state.visit_type = r.message;
 				// Pre-compute age for the booking form
 				this.state.age_at_visit = _age_from_dob(dob) || child.age_display || null;
+				this.state.phone_context_collapsed = !!(this.state.channel === 'phone' && this.state.phone_post_session_lookup);
 				if (this.state.channel === 'walkin') {
 					if (this.state.walkin_preview_sessions.length) {
 						this.state.sessions = [...this.state.walkin_preview_sessions];
@@ -1228,26 +1727,38 @@ class ReceptionistDashboard {
 
 		this.$body.html(`
 			<div>
-				<!-- Back link -->
-				<button id="rd-back-guardian" class="rd-btn-secondary"
-					style="font-size:11px;margin-bottom:12px;">
-					← ${frappe.utils.escape_html(g.guardian_name)}
-				</button>
-
-				<!-- Summary card -->
-				<div class="rd-card" style="margin-bottom:14px;">
-					<div style="font-size:14px;font-weight:700;margin-bottom:2px;">
-						${frappe.utils.escape_html(c.patient_name || c.patient)}
+				<div class="rd-context-strip is-collapsed" id="rd-phone-context-strip">
+					<div class="rd-context-strip-head">
+						<div>
+							<div class="rd-label">Patient Context</div>
+							<div class="rd-context-strip-title">
+								${frappe.utils.escape_html(c.patient_name || c.patient)}
+							</div>
+							<div class="rd-context-strip-meta">
+								<span class="rd-badge ${badge_class}">${visit_label}</span>
+								<span class="rd-caption">${frappe.utils.escape_html(g.guardian_name)}</span>
+								${is_review && vt.fee_validity_till ? `
+								<span class="rd-caption">
+									✓ Free follow-up valid till ${frappe.utils.escape_html(vt.fee_validity_till)}
+								</span>` : ''}
+							</div>
+						</div>
+						<div style="display:flex;align-items:center;gap:8px;">
+							<button id="rd-toggle-context" class="rd-btn-secondary" style="font-size:11px;">
+								Show Details
+							</button>
+							<button id="rd-back-guardian" class="rd-btn-secondary" style="font-size:11px;">
+								Change
+							</button>
+						</div>
 					</div>
-					<div class="rd-caption" style="margin-bottom:8px;">
-						${c.age_display ? frappe.utils.escape_html(c.age_display) : ''}
-						${c.dob ? '&nbsp;·&nbsp;DOB ' + frappe.utils.escape_html(c.dob) : ''}
+					<div class="rd-context-details">
+						<div class="rd-caption">
+							${c.age_display ? frappe.utils.escape_html(c.age_display) : ''}
+							${c.dob ? '&nbsp;·&nbsp;DOB ' + frappe.utils.escape_html(c.dob) : ''}
+							&nbsp;·&nbsp;${frappe.utils.escape_html(g.mobile)}
+						</div>
 					</div>
-					<span class="rd-badge ${badge_class}">${visit_label}</span>
-					${is_review && vt.fee_validity_till ? `
-					<span class="rd-caption" style="margin-left:6px;">
-						✓ Free follow-up valid till ${frappe.utils.escape_html(vt.fee_validity_till)}
-					</span>` : ''}
 				</div>
 
 				${hasMismatch ? `
@@ -1263,10 +1774,11 @@ class ReceptionistDashboard {
 					</div>
 				</div>` : ''}
 
+				${!this.state.phone_post_session_lookup ? `
 				<div class="rd-caption" style="margin-bottom:12px;">
 					Mode: <strong>${frappe.utils.escape_html(is_walkin ? 'Walk-in Intake' : 'Phone Booking')}</strong>
 					&nbsp;·&nbsp;Load class: <strong>${frappe.utils.escape_html(vt.load_class)}</strong>
-				</div>
+				</div>` : ''}
 
 				${is_walkin ? `
 				<div class="rd-card" style="padding:10px 12px;margin-bottom:12px;">
@@ -1292,9 +1804,17 @@ class ReceptionistDashboard {
 					</div>
 				</div>` : ''}
 
-				<button id="rd-find-slot-btn" class="rd-btn-primary">
-					${is_walkin ? 'Open Today’s Token Intake →' : 'Find Next Suitable Slot →'}
-				</button>
+				<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+					${this.state.phone_post_session_lookup ? `
+					<button id="rd-back-sessions-from-child" class="rd-btn-secondary" style="width:auto;">
+						← Back to Sessions
+					</button>` : ''}
+					<button id="rd-find-slot-btn" class="rd-btn-primary" style="${this.state.phone_post_session_lookup ? 'width:auto;' : ''}">
+						${is_walkin
+							? 'Open Today’s Token Intake →'
+							: (this.state.phone_post_session_lookup ? 'Continue to Booking →' : 'Find Next Suitable Slot →')}
+					</button>
+				</div>
 			</div>
 		`);
 
@@ -1302,8 +1822,18 @@ class ReceptionistDashboard {
 			this.state.step = 'guardian_found';
 			this.render_admission();
 		});
+		this.$body.find('#rd-toggle-context').on('click', () => {
+			const $strip = this.$body.find('#rd-phone-context-strip');
+			const isCollapsed = $strip.hasClass('is-collapsed');
+			$strip.toggleClass('is-collapsed', !isCollapsed);
+			this.$body.find('#rd-toggle-context').text(isCollapsed ? 'Hide Details' : 'Show Details');
+		});
 
 		this.$body.find('#rd-find-slot-btn').on('click', () => this._do_find_slot());
+		this.$body.find('#rd-back-sessions-from-child').on('click', () => {
+			this.state.step = 'session_offered';
+			this.render_admission();
+		});
 		this.$body.find('.rd-provisional-load').on('click', (e) => {
 			this.state.provisional_load_class = $(e.currentTarget).data('load-class');
 			this.render_admission();
@@ -1315,6 +1845,7 @@ class ReceptionistDashboard {
 	}
 
 	_do_find_slot() {
+		this.state.phone_context_collapsed = true;
 		this.$body.find('#rd-find-slot-btn').prop('disabled', true)
 			.html('<span class="rd-spinner"></span> Finding…');
 
@@ -1341,10 +1872,11 @@ class ReceptionistDashboard {
 							</div>
 						</div>
 						<button id="rd-back-child" class="rd-btn-secondary" style="width:100%;margin-top:8px;">
-							← Back
+							← Patient Context
 						</button>
 					`);
 					this.$body.find('#rd-back-child').on('click', () => {
+						this.state.phone_context_collapsed = false;
 						this.state.step = 'child_selected';
 						this.render_admission();
 					});
@@ -1395,6 +1927,7 @@ class ReceptionistDashboard {
 	}
 
 	_render_session_card(session, idx, is_selected) {
+		const hasPatientContext = !!this.state.child;
 		const hasOverride = this.state.override_token && this.state.session_idx === idx;
 		const bookingHint = hasOverride
 			? `Token ${frappe.utils.escape_html(String(this.state.override_token))} selected`
@@ -1437,20 +1970,31 @@ class ReceptionistDashboard {
 						</span>
 					</div>
 					<div class="rd-session-row-actions">
-						<button class="rd-btn-primary rd-book-best-btn"
-							data-idx="${idx}"
-							style="width:auto;padding:6px 10px;font-size:11px;">
-							Best Token
-						</button>
 						<button class="rd-btn-secondary rd-select-session-btn"
 							data-idx="${idx}"
 							style="width:auto;padding:6px 10px;font-size:11px;">
-							${hasOverride ? 'Token Selected' : 'Choose'}
+							Choose Token
 						</button>
 					</div>
 				</div>
 				${is_selected ? `
 					<div class="rd-session-inline-form">
+						${!hasPatientContext ? `
+						<div style="padding:10px 12px;border-radius:8px;background:var(--rd-panel-soft);margin-bottom:8px;border:1px solid var(--rd-border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+							<div>
+								<div class="rd-label">Selected Session</div>
+								<div style="font-size:12px;font-weight:700;margin-top:2px;">${bookingHint}</div>
+								<div class="rd-caption" style="margin-top:3px;">
+									Add patient details only if the caller wants this session.
+								</div>
+							</div>
+							<button class="rd-btn-primary rd-phone-add-patient"
+								data-idx="${idx}"
+								style="width:auto;min-width:190px;">
+								Add Patient Details
+							</button>
+						</div>` : ''}
+						${hasPatientContext ? `
 						${(this.state.is_special && session.suggested_special_token) ? `
 						<div style="padding:6px 10px;margin-bottom:8px;border-radius:6px;
 							background:#fef9c3;border:1px solid #d97706;
@@ -1499,6 +2043,7 @@ class ReceptionistDashboard {
 								Confirm Booking
 							</button>
 						</div>
+						` : ''}
 					</div>
 				` : ''}
 			</div>`;
@@ -1514,6 +2059,20 @@ class ReceptionistDashboard {
 		this.token_board.load(picked.queue_session, special_hint);
 	}
 
+	_select_best_token(nextIdx, { openBoard = false } = {}) {
+		if (Number.isNaN(nextIdx) || nextIdx < 0 || nextIdx >= this.state.sessions.length) return;
+		this.state.session_idx = nextIdx;
+		this.state.override_token = null;
+		const picked = this.state.sessions[nextIdx];
+		if (!picked) return;
+		this.state.token_board_open = openBoard;
+		this.token_board.load(picked.queue_session, null, () => {
+			const bestToken = this.token_board.pick_best_available(this.state.is_special);
+			this.state.override_token = bestToken || null;
+			this.render_admission();
+		});
+	}
+
 	// ── Step: Session Offered ─────────────────────────────────────────────────
 	_render_session_offered() {
 		const sessions    = this.state.sessions;
@@ -1524,25 +2083,29 @@ class ReceptionistDashboard {
 		this.$body.html(`
 			<div>
 				<div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;">
-					<button id="rd-back-child2" class="rd-btn-secondary" style="font-size:11px;">← Child</button>
+					<button id="rd-back-child2" class="rd-btn-secondary" style="font-size:11px;">
+						← ${this.state.phone_flow_mode === 'availability' && !this.state.child ? 'Availability Inquiry' : 'Patient Context'}
+					</button>
 					<span class="rd-label">Availability Board</span>
 				</div>
 
 				<div class="rd-card" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;margin-bottom:12px;">
 					<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-						<span class="rd-badge ${isReview ? 'rd-badge-green' : 'rd-badge-blue'}">
-							${isReview ? 'Review' : 'New'}
+						<span class="rd-badge ${(this.state.child ? isReview : this.state.phone_inquiry_load_class === 'review_load') ? 'rd-badge-green' : 'rd-badge-blue'}">
+							${this.state.child ? (isReview ? 'Review' : 'New') : (this.state.phone_inquiry_load_class === 'review_load' ? 'Review' : 'New')}
 						</span>
 						<span class="rd-badge rd-badge-gray">
 							${frappe.utils.escape_html(this.state.channel === 'phone' ? 'Phone' : 'Walk-in')}
 						</span>
 						${this.state.is_special ? '<span class="rd-badge" style="background:#fff7ed;color:#c2410c;border:1px solid #fdba74;">Special</span>' : ''}
-						<span class="rd-caption" style="font-weight:600;">
+						${this.state.child ? `<span class="rd-caption" style="font-weight:600;">
 							${frappe.utils.escape_html(this.state.child?.patient_name || this.state.child?.patient || '')}
-						</span>
+						</span>` : ''}
 					</div>
 					<div class="rd-caption" style="font-weight:600;">
-						Choose a session or book the best token directly
+						${this.state.child
+							? 'Choose a session or book the best token directly'
+							: 'Offer a session first, then add patient details only if the caller agrees'}
 					</div>
 				</div>
 
@@ -1562,27 +2125,42 @@ class ReceptionistDashboard {
 		`);
 
 		this.$body.find('#rd-back-child2').on('click', () => {
-			this.state.step = 'child_selected';
+			this.state.phone_context_collapsed = false;
+			if (this.state.phone_flow_mode === 'availability' && !this.state.child) {
+				this.state.step = 'search';
+				this.state.phone_post_session_lookup = false;
+			} else {
+				this.state.step = 'child_selected';
+			}
 			this.render_admission();
 		});
-		this.$body.find('.rd-session-pick-card, .rd-select-session-btn').on('click', (e) => {
+		this.$body.find('.rd-session-pick-card').on('click', (e) => {
+			if ($(e.target).closest('.rd-session-inline-form, .rd-session-row-actions, button, input, select, textarea, #rd-complaint-dd').length) {
+				return;
+			}
+			e.preventDefault();
+			const nextIdx = Number($(e.currentTarget).data('idx'));
+			if (Number.isNaN(nextIdx)) return;
+			this._select_best_token(nextIdx, { openBoard: false });
+		});
+		this.$body.find('.rd-select-session-btn').on('click', (e) => {
 			e.preventDefault();
 			e.stopPropagation();
-			const isChoose = $(e.currentTarget).hasClass('rd-select-session-btn');
 			const nextIdx = Number($(e.currentTarget).data('idx'));
 			if (Number.isNaN(nextIdx)) return;
 			if (nextIdx !== this.state.session_idx) this._select_session(nextIdx);
-			if (!isChoose && nextIdx === this.state.session_idx) return;
+			this.state.session_idx = nextIdx;
 			this.state.token_board_open = true;
 			this.render_admission();
 		});
-		this.$body.find('.rd-book-best-btn').on('click', (e) => {
+		this.$body.find('.rd-phone-add-patient').on('click', (e) => {
 			e.preventDefault();
 			e.stopPropagation();
 			const nextIdx = Number($(e.currentTarget).data('idx'));
-			if (Number.isNaN(nextIdx)) return;
-			this._select_session(nextIdx);
-			this.state.token_board_open = this.state.channel === 'walkin';
+			if (!Number.isNaN(nextIdx)) this.state.session_idx = nextIdx;
+			this.state.phone_post_session_lookup = true;
+			this.state.phone_context_collapsed = true;
+			this.state.step = 'search';
 			this.render_admission();
 		});
 		this.$body.find('.rd-confirm-booking-inline').on('click', (e) => {
@@ -1591,6 +2169,7 @@ class ReceptionistDashboard {
 			const bookingIdx = Number($(e.currentTarget).data('idx'));
 			const picked = this.state.sessions[bookingIdx];
 			if (!picked) return;
+			this.state.session_idx = bookingIdx;
 			this._do_confirm_booking(picked);
 		});
 		this._bind_booking_inputs();
@@ -1649,9 +2228,11 @@ class ReceptionistDashboard {
 		const $scope = this.state.channel === 'walkin' ? this.token_board.$context : this.$body;
 		const $btn = this.state.channel === 'walkin'
 			? $scope.find('#rd-board-confirm-booking').first()
-			: this.$body.find('.rd-confirm-booking-inline').filter((_, el) =>
-				Number($(el).data('idx')) === this.state.session_idx
-			).first();
+			: (this.state.phone_post_session_lookup
+				? this.$body.find('#rd-phone-context-confirm').first()
+				: this.$body.find('.rd-confirm-booking-inline').filter((_, el) =>
+					Number($(el).data('idx')) === this.state.session_idx
+				).first());
 		if ($btn.length) {
 			$btn.prop('disabled', true).html('<span class="rd-spinner"></span> Confirming…');
 		}
@@ -1839,6 +2420,10 @@ class ReceptionistDashboard {
 			complaint:        null,
 			weight_at_booking: null,
 			age_at_visit:     null,
+			phone_context_collapsed: false,
+			phone_flow_mode:  this.state.channel === 'phone' ? this.state.phone_flow_mode : 'availability',
+			phone_inquiry_load_class: this.state.channel === 'phone' ? this.state.phone_inquiry_load_class : 'non_review_load',
+			phone_post_session_lookup: false,
 			provisional_load_class: this.state.channel === 'walkin' ? this.state.provisional_load_class : null,
 			walkin_phase:     'token_pick',
 			walkin_notice:    null,
@@ -2059,7 +2644,7 @@ class TokenBoard {
 	// ── Public API ────────────────────────────────────────────────────────────
 
 	/** Load (or reload) the board for a given session. Optionally highlight a token. */
-	load(queue_session, highlight_token = null) {
+	load(queue_session, highlight_token = null, after_load = null) {
 		if (!queue_session) return;
 		this.current_session = queue_session;
 		if (highlight_token !== null) this.recommended_token = highlight_token;
@@ -2086,8 +2671,29 @@ class TokenBoard {
 				this.board_data = r.message;
 				this._update_session_label(r.message.session);
 				this._render_board();
+				if (typeof after_load === 'function') after_load(r.message);
 			},
 		});
+	}
+
+	pick_best_available(isSpecial = false) {
+		if (!this.board_data) return null;
+		const used = new Set((this.board_data.entries || [])
+			.filter(e => e.token_number)
+			.map(e => Number(e.token_number)));
+		const special = [...(this.board_data.special_buffer_reserved || [])].map(Number);
+		if (isSpecial) {
+			for (const token of special) {
+				if (!used.has(token)) return token;
+			}
+			return null;
+		}
+		const specialSet = new Set(special);
+		const maxToken = Number(this.board_data.max_token || 0);
+		for (let token = 1; token <= maxToken; token++) {
+			if (!used.has(token) && !specialSet.has(token)) return token;
+		}
+		return null;
 	}
 
 	/** Set/clear the recommended token ring without reloading from server. */
