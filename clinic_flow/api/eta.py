@@ -129,15 +129,22 @@ def recalculate_downstream_etas(queue_session: str) -> int:
     non_review_avg = _get_rolling_avg("non_review_load", session.practitioner, config) \
         or (config.default_non_review_consult_min or 5.0)
 
-    # Entries still to be processed — ordered by token_number (booking order)
+    session_status = session.status
+
+    # Entries still to be processed — for live sessions use queue_position so ETA
+    # follows the actual operational order after push-to-end/emergency disruption.
+    order_by = "token_number asc"
+    if session_status in ("Active", "Paused"):
+        order_by = "queue_position asc, token_number asc"
+
     pending = frappe.get_all(
         "Queue Entry",
         filters={
             "queue_session": queue_session,
             "status": ["in", ["Booked", "Called", "Ready Near Doctor"]],
         },
-        fields=["name", "token_number", "load_class"],
-        order_by="token_number asc",
+        fields=["name", "token_number", "queue_position", "load_class", "priority"],
+        order_by=order_by,
     )
 
     if not pending:
@@ -154,10 +161,26 @@ def recalculate_downstream_etas(queue_session: str) -> int:
         reference_time = max(reference_time, now_datetime())
 
     updated = 0
-    for entry in pending:
-        weighted_ahead = _weighted_time_ahead(
-            queue_session, entry.token_number, review_avg, non_review_avg
+    queued_ahead = 0.0
+    if session_status in ("Active", "Paused"):
+        current_with_doctor = frappe.db.get_value(
+            "Queue Entry",
+            {"queue_session": queue_session, "status": "With Doctor"},
+            ["name", "load_class"],
+            as_dict=True,
         )
+        if current_with_doctor:
+            queued_ahead += (
+                review_avg if current_with_doctor.load_class == "review_load" else non_review_avg
+            )
+
+    for entry in pending:
+        if session_status in ("Active", "Paused"):
+            weighted_ahead = queued_ahead
+        else:
+            weighted_ahead = _weighted_time_ahead(
+                queue_session, entry.token_number, review_avg, non_review_avg
+            )
 
         predicted = reference_time + timedelta(minutes=weighted_ahead)
         report_by = predicted - timedelta(
@@ -169,6 +192,8 @@ def recalculate_downstream_etas(queue_session: str) -> int:
             "report_by_time": report_by,
         })
         updated += 1
+        if session_status in ("Active", "Paused"):
+            queued_ahead += review_avg if entry.load_class == "review_load" else non_review_avg
 
     frappe.db.commit()
     return updated

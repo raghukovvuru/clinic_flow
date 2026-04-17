@@ -67,21 +67,25 @@ def get_next_token(queue_session: str) -> dict | None:
 	ready_statuses = ["Ready Near Doctor"]
 	legacy_statuses = ["Waiting"]
 
-	def _get_candidate(queue_type: str, statuses: list[str]) -> list[dict]:
+	def _get_candidate(queue_type: str | None, statuses: list[str], priority: str | None = None) -> list[dict]:
+		filters = {
+			"queue_session": queue_session,
+			"status": ["in", statuses],
+		}
+		if queue_type:
+			filters["queue_type"] = queue_type
+		if priority:
+			filters["priority"] = priority
 		return frappe.get_all(
 			"Queue Entry",
-			filters={
-				"queue_session": queue_session,
-				"queue_type": queue_type,
-				"status": ["in", statuses],
-			},
-			fields=["name", "token", "patient", "queue_type", "queue_position"],
+			filters=filters,
+			fields=["name", "token", "patient", "queue_type", "queue_position", "priority"],
 			order_by="queue_position asc",
 			limit=1,
 		)
 
 	# Step 1: Emergency bypass
-	emergency = _get_candidate("EMERGENCY", ready_statuses)
+	emergency = _get_candidate(None, ready_statuses, priority="emergency")
 	if emergency:
 		return emergency[0]
 
@@ -119,7 +123,7 @@ def get_next_token(queue_session: str) -> dict | None:
 	if candidate:
 		return candidate
 
-	emergency = _get_candidate("EMERGENCY", legacy_statuses)
+	emergency = _get_candidate(None, legacy_statuses, priority="emergency")
 	if emergency:
 		return emergency[0]
 
