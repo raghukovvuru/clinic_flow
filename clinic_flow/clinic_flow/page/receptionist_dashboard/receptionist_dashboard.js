@@ -809,7 +809,7 @@ function get_dashboard_html() {
 					style="display:flex;align-items:center;gap:5px;cursor:pointer;
 						font-size:12px;font-weight:600;color:var(--text-muted);
 						white-space:nowrap;"
-					title="Reserve a Special buffer slot for this patient">
+					title="Mark this patient as Special for later doctor-side priority handling">
 					<input type="checkbox" id="rd-special-toggle" style="cursor:pointer;">
 					Special
 				</label>
@@ -920,7 +920,7 @@ class ReceptionistDashboard {
 			step:            'search',  // search | guardian_found | guardian_not_found |
 			                            // register | child_selected | session_offered | confirmed
 			channel:         'phone',   // walkin | phone
-			is_special:      false,     // Special priority flag — uses buffer slots
+			is_special:      false,     // Special priority flag for later queue handling
 			mobile:          '',
 			guardian:        null,      // {name, guardian_name, mobile, relationship, notes}
 			children:        [],        // [{patient, patient_name, dob, age_display}]
@@ -2255,7 +2255,7 @@ class ReceptionistDashboard {
 									<div style="padding:6px 10px;margin-bottom:8px;border-radius:6px;
 										background:#fef9c3;border:1px solid #d97706;
 										font-size:12px;font-weight:600;color:#a16207;">
-										Suggested Special token:
+										Recommended token:
 										<strong>${frappe.utils.escape_html(String(selected.recommended_token))}</strong>
 										&nbsp;(highlighted on board — click to confirm)
 									</div>` : ''}

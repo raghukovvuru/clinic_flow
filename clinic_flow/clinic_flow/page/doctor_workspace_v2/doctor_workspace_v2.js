@@ -32,6 +32,7 @@ function get_workspace_v2_html() {
 			</div>
 			<div class="dw2-top-right">
 				<button class="dw2-btn dw2-btn-primary" id="dw2-btn-call-next">Call Next</button>
+				<button class="dw2-btn dw2-btn-secondary" id="dw2-btn-call-special" disabled>Call Next Special</button>
 				<button class="dw2-btn dw2-btn-secondary" id="dw2-btn-save" disabled>Save Draft</button>
 				<button class="dw2-btn dw2-btn-accent" id="dw2-btn-complete" disabled>Complete Visit</button>
 			</div>
@@ -668,6 +669,7 @@ class DoctorWorkspaceV2 {
 			lab_rows: [],
 			previous_drugs: [],
 			suggested_plans: [],
+			special_ready_count: 0,
 		};
 		this._queue_poll = null;
 		this._complaint_lookup = frappe.utils.debounce((value) => this._lookup_complaints(value), 250);
@@ -679,6 +681,7 @@ class DoctorWorkspaceV2 {
 
 	_bind() {
 		this.$root.find('#dw2-btn-call-next').on('click', () => this._call_next());
+		this.$root.find('#dw2-btn-call-special').on('click', () => this._call_next_special());
 		this.$root.find('#dw2-btn-save').on('click', () => this._save_draft());
 		this.$root.find('#dw2-btn-complete').on('click', () => this._complete_visit());
 		this.$root.find('#dw2-repeat-all-rx').on('click', () => this._repeat_previous_rx());
@@ -784,6 +787,7 @@ class DoctorWorkspaceV2 {
 		const has_session = !!this.state.queue_session;
 		const has_patient = !!this.state.current_encounter;
 		this.$root.find('#dw2-btn-call-next').prop('disabled', !has_session || this.state.session_paused);
+		this.$root.find('#dw2-btn-call-special').prop('disabled', !has_session || this.state.session_paused || !this.state.special_ready_count);
 		this.$root.find('#dw2-btn-save').prop('disabled', !has_patient);
 		this.$root.find('#dw2-btn-complete').prop('disabled', !has_patient);
 	}
@@ -797,6 +801,7 @@ class DoctorWorkspaceV2 {
 		if (!r.message) return;
 
 		this.state.session_paused = r.message.session?.status === 'Paused';
+		this.state.special_ready_count = Number(r.message.special_ready_count || 0);
 		this._set_action_state();
 		this._render_queue_preview(r.message.waiting || []);
 
@@ -838,7 +843,7 @@ class DoctorWorkspaceV2 {
 
 	_render_queue_preview(waiting) {
 		const preview = waiting.length
-			? waiting.slice(0, 5).map((row) => `${row.token} ${row.patient_name || ''}`.trim()).join('  •  ')
+			? waiting.slice(0, 5).map((row) => `${row.token} ${row.patient_name || ''}${row.priority === 'special' ? ' [Special]' : ''}`.trim()).join('  •  ')
 			: 'Ready queue empty';
 		this.$root.find('#dw2-queue-preview').text(preview);
 
@@ -852,7 +857,10 @@ class DoctorWorkspaceV2 {
 				<div style="min-width:28px;font-weight:700;color:#123f35;">${frappe.utils.escape_html(row.token || String(idx + 1))}</div>
 				<div style="min-width:0;">
 					<div style="font-weight:700;color:#111827;">${frappe.utils.escape_html(row.patient_name || 'Patient')}</div>
-					<div style="font-size:12px;color:#6b7280;">${frappe.utils.escape_html(row.queue_type || '')}</div>
+					<div style="font-size:12px;color:#6b7280;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+						<span>${frappe.utils.escape_html(row.queue_type || '')}</span>
+						${row.priority === 'special' ? '<span style="padding:2px 6px;border-radius:999px;background:#fff7ed;color:#c2410c;border:1px solid #fdba74;font-weight:700;">Special</span>' : ''}
+					</div>
 				</div>
 			</div>
 		`).join('');
@@ -887,6 +895,38 @@ class DoctorWorkspaceV2 {
 			frappe.show_alert({ message: 'Failed to call next patient', indicator: 'red' });
 		} finally {
 			this.$root.find('#dw2-btn-call-next').text('Call Next');
+			this._set_action_state();
+		}
+	}
+
+	async _call_next_special() {
+		if (!this.state.queue_session || !this.state.special_ready_count) return;
+		const $btn = this.$root.find('#dw2-btn-call-special').prop('disabled', true).text('Calling...');
+		try {
+			const r = await frappe.call({
+				method: 'clinic_flow.api.queue.call_next_special',
+				args: { queue_session: this.state.queue_session },
+			});
+			const payload = r.message;
+			if (!payload) return;
+			if (payload.status === 'empty') {
+				frappe.show_alert({ message: 'No special patient is ready near doctor', indicator: 'blue' });
+				return;
+			}
+			if (payload.status === 'paused') {
+				frappe.show_alert({ message: payload.message, indicator: 'orange' });
+				return;
+			}
+
+			this.state.current_entry = payload.queue_entry;
+			this.state.current_encounter = payload.encounter;
+			this._render_patient(payload);
+			this._set_action_state();
+			this._load_queue();
+		} catch (e) {
+			frappe.show_alert({ message: 'Failed to call next special patient', indicator: 'red' });
+		} finally {
+			this.$root.find('#dw2-btn-call-special').text('Call Next Special');
 			this._set_action_state();
 		}
 	}

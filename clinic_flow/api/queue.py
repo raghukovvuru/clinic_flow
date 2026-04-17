@@ -2,7 +2,7 @@ import math
 import frappe
 from frappe import _
 from frappe.utils import now_datetime, today
-from clinic_flow.queue.engine import get_next_token, _broadcast_queue_update
+from clinic_flow.queue.engine import get_next_token, get_next_special_token, _broadcast_queue_update
 
 
 def _canonical_priority_from_legacy(queue_type: str | None) -> str:
@@ -282,6 +282,32 @@ def call_next(queue_session: str) -> dict:
 	if not entry:
 		return {"status": "empty", "message": "Queue is empty"}
 
+	return _call_entry(queue_session, entry)
+
+
+@frappe.whitelist()
+def call_next_special(queue_session: str) -> dict:
+	"""
+	Doctor-only one-time override to pull the oldest eligible special patient
+	from Ready Near Doctor without rewriting stored queue order.
+	"""
+	frappe.only_for(["Healthcare Practitioner", "Physician", "System Manager", "Queue Manager"])
+
+	session_status = frappe.db.get_value("Queue Session", queue_session, "status")
+	if session_status == "Paused":
+		return {"status": "paused", "message": "Session is paused. Resume before calling patients."}
+	if session_status not in ("Active",):
+		return {"status": "error", "message": f"Session is {session_status}."}
+
+	entry = get_next_special_token(queue_session)
+	if not entry:
+		return {"status": "empty", "message": "No special patient is ready near doctor."}
+
+	return _call_entry(queue_session, entry, special_override=True)
+
+
+def _call_entry(queue_session: str, entry: dict, special_override: bool = False) -> dict:
+	"""Shared state transition for moving a queue entry into consultation."""
 	now = now_datetime()
 
 	session_doc = frappe.get_doc("Queue Session", queue_session)
@@ -292,12 +318,19 @@ def call_next(queue_session: str) -> dict:
 
 	encounter_name = _get_or_create_encounter(entry, queue_session)
 
-	frappe.db.set_value("Queue Entry", entry.name, {
+	entry_update = {
 		"status": "With Doctor",
 		"called_at": now,
 		"seen_at": now,
 		"patient_encounter": encounter_name,
-	})
+	}
+	if special_override:
+		meta = frappe.get_meta("Queue Entry")
+		if meta.has_field("special_override_by"):
+			entry_update["special_override_by"] = frappe.session.user
+		if meta.has_field("special_override_at"):
+			entry_update["special_override_at"] = now
+	frappe.db.set_value("Queue Entry", entry.name, entry_update)
 
 	_broadcast_queue_update(queue_session)
 
@@ -506,7 +539,7 @@ def get_queue_state(queue_session: str) -> dict:
 	waiting = frappe.get_all(
 		"Queue Entry",
 		filters={"queue_session": queue_session, "status": ["in", ["Ready Near Doctor", "Waiting"]]},
-		fields=["name", "token", "patient_name", "queue_type", "queue_position", "status"],
+		fields=["name", "token", "patient_name", "queue_type", "queue_position", "status", "priority"],
 		order_by="queue_position asc",
 		limit=10,
 	)
@@ -518,7 +551,7 @@ def get_queue_state(queue_session: str) -> dict:
 	current = frappe.get_all(
 		"Queue Entry",
 		filters={"queue_session": queue_session, "status": ["in", ["With Doctor", "Called"]]},
-		fields=["name", "token", "patient_name", "queue_type", "patient", "patient_encounter"],
+		fields=["name", "token", "patient_name", "queue_type", "priority", "patient", "patient_encounter"],
 		limit=1,
 	)
 	return {
@@ -531,6 +564,10 @@ def get_queue_state(queue_session: str) -> dict:
 		},
 		"current": current[0] if current else None,
 		"waiting": waiting,
+		"special_ready_count": sum(
+			1 for row in waiting
+			if row.get("status") == "Ready Near Doctor" and row.get("priority") == "special"
+		),
 	}
 
 

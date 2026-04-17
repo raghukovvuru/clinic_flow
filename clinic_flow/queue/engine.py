@@ -130,6 +130,29 @@ def get_next_token(queue_session: str) -> dict | None:
 	return None  # Queue is empty
 
 
+def get_next_special_token(queue_session: str) -> dict | None:
+	"""
+	Doctor-only one-time override for special patients.
+
+	Policy:
+	  - eligible only from Ready Near Doctor
+	  - oldest ready special patient goes next
+	  - does not rewrite stored queue order
+	"""
+	rows = frappe.get_all(
+		"Queue Entry",
+		filters={
+			"queue_session": queue_session,
+			"priority": "special",
+			"status": "Ready Near Doctor",
+		},
+		fields=["name", "token", "patient", "queue_type", "queue_position"],
+		order_by="queue_position asc",
+		limit=1,
+	)
+	return rows[0] if rows else None
+
+
 # ── Realtime broadcast ───────────────────────────────────────────────────────
 
 def _broadcast_queue_update(queue_session: str) -> None:
@@ -138,7 +161,7 @@ def _broadcast_queue_update(queue_session: str) -> None:
 	next_tokens = frappe.get_all(
 		"Queue Entry",
 		filters={"queue_session": queue_session, "status": ["in", ["Ready Near Doctor", "Waiting"]]},
-		fields=["token", "patient_name", "queue_type", "queue_position", "status"],
+		fields=["token", "patient_name", "queue_type", "queue_position", "status", "priority"],
 		order_by="queue_position asc",
 		limit=6,
 	)

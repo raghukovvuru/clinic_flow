@@ -92,9 +92,9 @@ def get_suggested_sessions(
         has started their session.
 
     is_special  — priority flag, orthogonal to channel.
-        Special patients use reserved buffer slots instead of the regular
-        walk-in / phone quota. Channel still governs the date window:
-        walk-in special = today, phone special = tomorrow onwards.
+        Special patients now share the same session suggestion pool and token
+        recommendation as normal bookings. The operational difference is
+        applied later through doctor-side queue handling.
 
     In all cases practitioner schedules are the source of truth, not whatever
     Queue Session records happen to already exist.
@@ -284,7 +284,7 @@ def _apply_channel_filter(
     is_special: bool = False,
     load_class: str = "non_review_load",
 ) -> list:
-    """Filter sessions by channel/special capacity and build result rows."""
+    """Filter sessions by channel capacity and build result rows."""
     config = frappe.get_single("Slot Partition Config")
     result = []
     for s in sessions:
@@ -293,11 +293,7 @@ def _apply_channel_filter(
         total_booked = (s.phone_booked_count or 0) + (s.walkin_count or 0)
         phone_quota  = int(planned * phone_pct / 100)
 
-        if is_special:
-            # Special patients use reserved buffer slots regardless of channel
-            buffer_list = _parse_special_positions(s.vip_buffer_positions)
-            available   = len(buffer_list) - (s.vip_buffer_used or 0)
-        elif channel == "phone":
+        if channel == "phone":
             available = phone_quota - (s.phone_booked_count or 0)
         else:  # walkin
             available = stretch - total_booked
@@ -329,13 +325,12 @@ def _apply_channel_filter(
             "likely_hour_band":      _estimate_hour_band(s, config, load_class),
         }
 
-        recommended_special = _recommended_token_for_session(s, is_special=True)
         recommended_normal = _recommended_token_for_session(s, is_special=False)
-        row["recommended_special_token"] = recommended_special
+        row["recommended_special_token"] = recommended_normal
         row["recommended_normal_token"] = recommended_normal
-        row["recommended_token"] = recommended_special if is_special else recommended_normal
+        row["recommended_token"] = recommended_normal
         if is_special:
-            row["suggested_special_token"] = recommended_special
+            row["suggested_special_token"] = recommended_normal
 
         result.append(row)
 
@@ -366,21 +361,12 @@ def _recommended_token_for_session(session: frappe._dict | dict, is_special: boo
         )
         if r and r[0]
     }
-    special = _parse_special_positions(session.get("vip_buffer_positions"))
-    special_set = set(special)
-
-    if is_special:
-        for token in special:
-            if token not in used:
-                return token
-        return None
-
     max_token = max(
         int(session.get("stretch_capacity") or session.get("planned_capacity") or 0),
         max(used, default=0),
     )
     for token in range(1, max_token + 1):
-        if token not in used and token not in special_set:
+        if token not in used:
             return token
     return None
 
@@ -454,7 +440,7 @@ def get_token_board(queue_session: str) -> dict:
     Returns:
       - session metadata
       - list of token entries (token_number, patient_name, load_class, status)
-      - vip_buffer_positions (reserved but unassigned buffer slots)
+      - token entries and max token for the board renderer
     """
     if not queue_session:
         frappe.throw(_("Queue Session is required."))
@@ -487,7 +473,6 @@ def get_token_board(queue_session: str) -> dict:
         order_by="token_number asc",
     )
 
-    buffer_list = _parse_special_positions(session.vip_buffer_positions)
     used_tokens = {e.token_number for e in entries if e.token_number}
 
     # Compute max token to know how many cells to draw
@@ -499,8 +484,11 @@ def get_token_board(queue_session: str) -> dict:
     return {
         "session": session,
         "entries": entries,
-        "special_buffer_available": [p for p in buffer_list if p not in used_tokens],
-        "special_buffer_reserved":  buffer_list,
+        # Phase 3: special is no longer a reserved-token workflow. Keep the
+        # token board visually simple and let special remain a queue priority
+        # concern only.
+        "special_buffer_available": [],
+        "special_buffer_reserved":  [],
         "max_token": max_token,
     }
 
@@ -527,12 +515,13 @@ def confirm_booking(
     Confirm a booking: assign a token number and create a QueueEntry.
 
     channel: 'phone' | 'walkin'
-    is_special: priority flag — uses reserved buffer slots, orthogonal to channel.
-        Special patients bypass the normal quota and take a buffer position.
-        channel still determines the date window (phone = advance, walkin = today).
+    is_special: priority flag, orthogonal to channel.
+        Special patients keep normal booking-time capacity and token behavior.
+        The operational difference is applied later in the live queue via
+        doctor-side override, not through reserved buffer positions.
     load_class: 'review_load' | 'non_review_load'
     token_number: optional override — receptionist selected a specific cell on the
-        token board. Validated against existing tokens and special buffer before use.
+        token board. Validated against existing tokens.
 
     Returns the new QueueEntry name and token_number.
     """
@@ -567,11 +556,7 @@ def confirm_booking(
     total_booked = (session_doc.phone_booked_count or 0) + (session_doc.walkin_count or 0)
 
     # Capacity check
-    if is_special:
-        buffer_list = _parse_special_positions(session_doc.vip_buffer_positions)
-        if (session_doc.vip_buffer_used or 0) >= len(buffer_list):
-            frappe.throw(_("No Special buffer positions available in this session."))
-    elif channel == "phone":
+    if channel == "phone":
         if (session_doc.phone_booked_count or 0) >= phone_quota:
             frappe.throw(_("Phone booking quota ({0}) is full for this session.").format(phone_quota))
     else:  # walkin
@@ -586,28 +571,13 @@ def confirm_booking(
             queue_session,
         )
     }
-    buffer_list = _parse_special_positions(session_doc.vip_buffer_positions)
-    buffer_set  = set(buffer_list)
-
     if token_number is not None:
         # Validate the override token
         token_number = int(token_number)
         if token_number in existing_tokens:
             frappe.throw(_("Token {0} is already assigned in this session.").format(token_number))
-        if not is_special and token_number in buffer_set:
-            frappe.throw(
-                _("Token {0} is a Special buffer position. Enable Special to assign it.").format(
-                    token_number
-                )
-            )
-        if is_special and token_number not in buffer_set:
-            frappe.throw(
-                _("Token {0} is not a Special buffer position.").format(token_number)
-            )
-    elif is_special:
-        token_number = _next_special_token(buffer_list, existing_tokens)
     else:
-        token_number = _next_normal_token(buffer_list, existing_tokens)
+        token_number = _next_normal_token(existing_tokens)
 
     # queue_position = token_number at booking time (ETA engine can reorder later)
     queue_position = token_number
@@ -651,6 +621,7 @@ def confirm_booking(
         load_class=load_class,
         priority=priority,
     )
+    _set_special_queue_entry_fields(entry, is_special=is_special)
     entry.status         = "Booked"
     entry.issued_by      = frappe.session.user
     entry.issued_by_role = "Reception"
@@ -672,10 +643,7 @@ def confirm_booking(
     # Update session counters
     update_fields: dict = {}
 
-    if is_special:
-        # Special patients use the buffer; don't count against phone/walkin quotas
-        update_fields["vip_buffer_used"] = (session_doc.vip_buffer_used or 0) + 1
-    elif channel == "phone":
+    if channel == "phone":
         update_fields["phone_booked_count"] = (session_doc.phone_booked_count or 0) + 1
     elif channel == "walkin":
         update_fields["walkin_count"] = (session_doc.walkin_count or 0) + 1
@@ -757,13 +725,14 @@ def _legacy_queue_type(channel: str, patient_type: str, priority: str) -> str:
     Transitional mapping into the legacy queue_type enum.
 
     Notes:
-    - We intentionally preserve the current special->EMERGENCY compatibility
-      behavior for now because downstream queue/Healthcare code still depends on
-      the old enum. This will be separated in later phases.
+    - Emergency still maps to legacy EMERGENCY because live dequeue semantics
+      depend on it today.
+    - Special no longer maps to EMERGENCY. It inherits the channel-backed legacy
+      queue type and uses canonical `priority` for its distinct behavior.
     - `patient_type` is accepted here to keep the mapping boundary explicit even
       though Phase 1 does not use it to derive FOLLOW_UP anymore.
     """
-    if priority in ("special", "emergency"):
+    if priority == "emergency":
         return "EMERGENCY"
     if (channel or "").strip().lower() == "phone":
         return "PRE_BOOKED"
@@ -789,14 +758,25 @@ def _set_canonical_queue_entry_fields(entry, channel: str, load_class: str, prio
             setattr(entry, fieldname, value)
 
 
-def _next_normal_token(buffer_positions: list[int], used_tokens: set) -> int:
-    """
-    Return the lowest positive integer that is not in used_tokens
-    and not in buffer_positions (reserved for Special patients).
-    """
-    buffer_set = set(buffer_positions)
+def _set_special_queue_entry_fields(entry, is_special: bool = False, reason: str = "") -> None:
+    """Best-effort special audit metadata for Queue Entry during the transition."""
+    if not is_special:
+        return
+    meta = frappe.get_meta("Queue Entry")
+    field_map = {
+        "marked_special_by": frappe.session.user,
+        "marked_special_at": now_datetime(),
+        "special_reason": reason or "",
+    }
+    for fieldname, value in field_map.items():
+        if meta.has_field(fieldname):
+            setattr(entry, fieldname, value)
+
+
+def _next_normal_token(used_tokens: set) -> int:
+    """Return the lowest positive integer that is not already used."""
     candidate = 1
-    while candidate in used_tokens or candidate in buffer_set:
+    while candidate in used_tokens:
         candidate += 1
     return candidate
 

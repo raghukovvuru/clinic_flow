@@ -19,6 +19,11 @@
   "channel",
   "patient_type",
   "priority",
+  "marked_special_by",
+  "marked_special_at",
+  "special_reason",
+  "special_override_by",
+  "special_override_at",
   "status",
   "queue_position",
   "called_at",
@@ -151,6 +156,40 @@
    "label": "Priority",
    "options": "\nnormal\nspecial\nemergency",
    "description": "Canonical vNext field. Operational priority independent of channel and patient type."
+  },
+  {
+   "fieldname": "marked_special_by",
+   "fieldtype": "Link",
+   "label": "Marked Special By",
+   "options": "User",
+   "read_only": 1,
+   "description": "Back-office audit: who marked this entry as special."
+  },
+  {
+   "fieldname": "marked_special_at",
+   "fieldtype": "Datetime",
+   "label": "Marked Special At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "special_reason",
+   "fieldtype": "Small Text",
+   "label": "Special Reason",
+   "read_only": 1
+  },
+  {
+   "fieldname": "special_override_by",
+   "fieldtype": "Link",
+   "label": "Special Override By",
+   "options": "User",
+   "read_only": 1,
+   "description": "Doctor user who explicitly called this special patient next."
+  },
+  {
+   "fieldname": "special_override_at",
+   "fieldtype": "Datetime",
+   "label": "Special Override At",
+   "read_only": 1
   },
   {
    "default": "Waiting",
