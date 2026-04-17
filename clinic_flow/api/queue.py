@@ -1,7 +1,7 @@
 import math
 import frappe
 from frappe import _
-from frappe.utils import now_datetime, today
+from frappe.utils import add_to_date, get_datetime, now_datetime, today
 from clinic_flow.queue.engine import get_next_token, get_next_special_token, _broadcast_queue_update
 
 
@@ -384,7 +384,7 @@ def resume_session(queue_session: str) -> dict:
 def end_session(queue_session: str, no_show_waiting: int = 1) -> dict:
 	"""
 	Ends an active or paused session.
-	- Marks remaining Waiting entries as No Show (if no_show_waiting=1).
+	- Marks remaining non-in-motion entries as No Show (if no_show_waiting=1).
 	- Returns list of active sessions the doctor can re-route patients to.
 	"""
 	frappe.only_for(["Healthcare Practitioner", "Physician", "System Manager", "Queue Manager"])
@@ -392,15 +392,21 @@ def end_session(queue_session: str, no_show_waiting: int = 1) -> dict:
 	if s.status not in ("Active", "Paused"):
 		frappe.throw(_(f"Session is already {s.status}."), frappe.ValidationError)
 
+	pending_statuses = ["Booked", "Waiting", "No Response", "Pushed to End"]
+	affected_pending = frappe.db.count(
+		"Queue Entry",
+		{"queue_session": queue_session, "status": ["in", pending_statuses]},
+	)
 	if no_show_waiting:
 		frappe.db.sql(
 			"UPDATE `tabQueue Entry` SET status='No Show' "
-			"WHERE queue_session=%s AND status='Waiting'",
-			(queue_session,),
+			"WHERE queue_session=%s AND status IN ('Booked', 'Waiting', 'No Response', 'Pushed to End')",
+			(queue_session,)
 		)
 
 	frappe.db.set_value("Queue Session", queue_session, "status", "Completed")
 	_broadcast_session_status(queue_session, "Completed", s.dept_abbr, s.practitioner)
+	_broadcast_queue_update(queue_session)
 
 	# Return other active sessions so the doctor can suggest re-routing
 	other_sessions = frappe.get_all(
@@ -409,7 +415,101 @@ def end_session(queue_session: str, no_show_waiting: int = 1) -> dict:
 				 "name": ["!=", queue_session]},
 		fields=["name", "session_name", "practitioner", "dept_abbr"],
 	)
-	return {"status": "completed", "other_sessions": other_sessions}
+	return {
+		"status": "completed",
+		"other_sessions": other_sessions,
+		"affected_pending": affected_pending,
+	}
+
+
+@frappe.whitelist()
+def cancel_session(queue_session: str, cancel_pending: int = 1) -> dict:
+	"""
+	Cancel a scheduled/active/paused session before it can continue normally.
+
+	Policy:
+	  - in-motion entries (Called / Ready Near Doctor / With Doctor) are not mutated here
+	  - untouched/desk-pending entries are marked No Show when cancel_pending=1
+	  - caller can use the returned counts to decide follow-up / reroute actions
+	"""
+	frappe.only_for(["Healthcare Practitioner", "Physician", "System Manager", "Queue Manager"])
+	s = frappe.get_doc("Queue Session", queue_session)
+	if s.status not in ("Scheduled", "Active", "Paused"):
+		frappe.throw(_(f"Session is {s.status}, cannot cancel."), frappe.ValidationError)
+
+	pending_statuses = ["Booked", "Waiting", "No Response", "Pushed to End"]
+	in_motion_statuses = ["Called", "Ready Near Doctor", "With Doctor"]
+	affected_pending = frappe.db.count(
+		"Queue Entry",
+		{"queue_session": queue_session, "status": ["in", pending_statuses]},
+	)
+	in_motion_count = frappe.db.count(
+		"Queue Entry",
+		{"queue_session": queue_session, "status": ["in", in_motion_statuses]},
+	)
+
+	if cancel_pending:
+		frappe.db.sql(
+			"UPDATE `tabQueue Entry` SET status='No Show' "
+			"WHERE queue_session=%s AND status IN ('Booked', 'Waiting', 'No Response', 'Pushed to End')",
+			(queue_session,)
+		)
+
+	frappe.db.set_value("Queue Session", queue_session, "status", "Cancelled")
+	_broadcast_session_status(queue_session, "Cancelled", s.dept_abbr, s.practitioner)
+	_broadcast_queue_update(queue_session)
+
+	other_sessions = frappe.get_all(
+		"Queue Session",
+		filters={
+			"status": ["in", ["Scheduled", "Active", "Paused"]],
+			"session_date": frappe.utils.today(),
+			"name": ["!=", queue_session],
+		},
+		fields=["name", "session_name", "practitioner", "dept_abbr"],
+	)
+	return {
+		"status": "cancelled",
+		"affected_pending": affected_pending,
+		"in_motion_count": in_motion_count,
+		"other_sessions": other_sessions,
+	}
+
+
+@frappe.whitelist()
+def extend_session(queue_session: str, extend_minutes: int = 30, stretch_capacity_delta: int = 0) -> dict:
+	"""
+	Extend the operational end-time/cushion for a session.
+
+	This keeps the same session identity but adjusts the end boundary so
+	reception and ETA logic have a clearer operational envelope.
+	"""
+	frappe.only_for(["Healthcare Practitioner", "Physician", "System Manager", "Queue Manager"])
+	s = frappe.get_doc("Queue Session", queue_session)
+	if s.status not in ("Scheduled", "Active", "Paused"):
+		frappe.throw(_(f"Session is {s.status}, cannot extend."), frappe.ValidationError)
+
+	extend_minutes = int(extend_minutes or 0)
+	stretch_capacity_delta = int(stretch_capacity_delta or 0)
+	if extend_minutes <= 0 and stretch_capacity_delta <= 0:
+		frappe.throw(_("Provide extension minutes or stretch capacity to extend the session."))
+
+	updates = {}
+	if extend_minutes > 0:
+		current_end = get_datetime(f"{s.session_date} {s.end_time}")
+		updates["end_time"] = add_to_date(current_end, minutes=extend_minutes).strftime("%H:%M:%S")
+	if stretch_capacity_delta > 0:
+		updates["stretch_capacity"] = int(s.stretch_capacity or s.planned_capacity or s.session_capacity or 0) + stretch_capacity_delta
+
+	frappe.db.set_value("Queue Session", queue_session, updates)
+	refreshed = frappe.get_doc("Queue Session", queue_session)
+	_broadcast_session_status(queue_session, refreshed.status, refreshed.dept_abbr, refreshed.practitioner)
+	_broadcast_queue_update(queue_session)
+	return {
+		"status": refreshed.status,
+		"end_time": refreshed.end_time,
+		"stretch_capacity": refreshed.stretch_capacity,
+	}
 
 
 @frappe.whitelist()
