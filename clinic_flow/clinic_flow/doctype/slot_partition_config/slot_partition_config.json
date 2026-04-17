@@ -121,26 +121,26 @@
    "fieldname": "release_hours_before",
    "fieldtype": "Float",
    "label": "Release Phone Slots (hours before session — v2)",
-   "description": "Unused phone slots convert to walk-in capacity this many hours before session start."
+   "description": "Configurable transitional rule: unused phone slots may convert to walk-in capacity this many hours before session start."
   },
   {
    "fieldname": "vip_buffer_section",
    "fieldtype": "Section Break",
-   "label": "VIP Buffer — v2"
+   "label": "Special Buffer — v2 (legacy field names kept)"
   },
   {
    "default": "10",
    "fieldname": "vip_buffer_count",
    "fieldtype": "Int",
-   "label": "VIP Buffer Tokens Per Session",
-   "description": "Total number of token positions to hold as VIP buffers per session."
+   "label": "Special Buffer Tokens Per Session",
+   "description": "Legacy compatibility setting. Total number of token positions previously reserved as VIP/special buffers per session."
   },
   {
    "default": "15",
    "fieldname": "vip_buffer_interval",
    "fieldtype": "Int",
-   "label": "VIP Buffer Interval",
-   "description": "Place one VIP buffer token every N positions (e.g. 15 = positions 15, 30, 45...)."
+   "label": "Special Buffer Interval",
+   "description": "Legacy compatibility setting. Place one special buffer token every N positions (e.g. 15 = positions 15, 30, 45...)."
   },
   {
    "fieldname": "eta_defaults_section",

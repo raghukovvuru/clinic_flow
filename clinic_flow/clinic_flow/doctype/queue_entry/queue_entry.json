@@ -122,7 +122,7 @@
    "in_standard_filter": 1,
    "label": "Queue Type",
    "options": "PRE_BOOKED\nWALK_IN\nEMERGENCY\nFOLLOW_UP",
-   "description": "Legacy field — used by v1 booking flow. New bookings use load_class."
+   "description": "Legacy compatibility field — old values include FOLLOW_UP, but new bookings should use channel + patient_type + priority instead."
   },
   {
    "fieldname": "load_class",

@@ -30,7 +30,8 @@ class QueueSession(Document):
 			# stretch = 110% of planned, rounded up
 			self.stretch_capacity = math.ceil(self.planned_capacity * 1.1)
 
-		# v2: generate VIP buffer positions if not already set
+		# v2: generate special-buffer positions if not already set.
+		# Field names still say vip_buffer_* for migration compatibility.
 		if not self.vip_buffer_positions:
 			self.vip_buffer_positions = json.dumps(
 				_compute_vip_buffer_positions(
@@ -53,7 +54,7 @@ class QueueSession(Document):
 
 def _compute_vip_buffer_positions(capacity: int, count: int, interval: int) -> list[int]:
 	"""
-	Pre-compute the VIP buffer token positions for a session.
+	Pre-compute the legacy special-buffer token positions for a session.
 
 	Positions are spaced `interval` apart, starting at `interval`.
 	Only positions within `capacity` are included. The total number of

@@ -202,20 +202,20 @@
   {
    "fieldname": "vip_buffer_section",
    "fieldtype": "Section Break",
-   "label": "VIP Buffer (v2)"
+   "label": "Special Buffer (v2 — legacy field names kept)"
   },
   {
    "fieldname": "vip_buffer_positions",
    "fieldtype": "Small Text",
-   "label": "VIP Buffer Positions",
+   "label": "Special Buffer Positions",
    "read_only": 1,
-   "description": "JSON list of token positions reserved as VIP buffers. e.g. [15, 30, 45, 60]"
+   "description": "Legacy compatibility field. JSON list of token positions previously reserved as special buffers. e.g. [15, 30, 45, 60]"
   },
   {
    "default": "0",
    "fieldname": "vip_buffer_used",
    "fieldtype": "Int",
-   "label": "VIP Buffer Used",
+   "label": "Special Buffer Used",
    "read_only": 1
   },
   {
