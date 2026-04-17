@@ -1491,7 +1491,7 @@ class ReceptionistDashboard {
 		if (!force && this.state.walkin_preview_sessions.length) {
 			if (!this.token_board.current_session) {
 				const picked = this.state.walkin_preview_sessions[this.state.session_idx] || this.state.walkin_preview_sessions[0];
-				if (picked) this.token_board.load(picked.queue_session, this.state.override_token || null);
+				if (picked) this.token_board.load(picked.queue_session, this.state.override_token || picked.recommended_token || null);
 			}
 			return;
 		}
@@ -1514,7 +1514,7 @@ class ReceptionistDashboard {
 					);
 					this.state.session_idx = current >= 0 ? current : 0;
 					const picked = this.state.walkin_preview_sessions[this.state.session_idx];
-					if (picked) this.token_board.load(picked.queue_session, this.state.override_token || null);
+					if (picked) this.token_board.load(picked.queue_session, this.state.override_token || picked.recommended_token || null);
 				} else {
 					this.token_board._clear_board();
 				}
@@ -2043,12 +2043,10 @@ class ReceptionistDashboard {
 				this.state.session_idx = this._best_session_idx(r.message);
 				this.state.override_token = null;
 				this.state.step = 'session_offered';
-				// Pre-highlight suggested special token on the board
 				const picked = r.message[this.state.session_idx] || r.message[0];
-				const special_hint = (this.state.is_special && picked.suggested_special_token)
-					? picked.suggested_special_token : null;
-				this.token_board.load(picked.queue_session, special_hint, () => {
-					const bestToken = this.token_board.pick_best_available(this.state.is_special);
+				const recommendedToken = picked?.recommended_token || null;
+				this.token_board.load(picked.queue_session, recommendedToken, () => {
+					const bestToken = recommendedToken || this.token_board.pick_best_available(this.state.is_special);
 					this.state.override_token = bestToken || null;
 					this.render_admission();
 				});
@@ -2058,34 +2056,20 @@ class ReceptionistDashboard {
 
 	_best_session_idx(sessions = []) {
 		if (!sessions.length) return 0;
-		let bestIdx = 0;
-		let bestScore = Infinity;
-		let bestSlots = -1;
-		sessions.forEach((session, idx) => {
-			const score = Number(session.load_ratio || 0) + (session.available_slots > 0 ? 0 : 10);
-			const slots = Number(session.available_slots || 0);
-			if (score < bestScore || (score === bestScore && slots > bestSlots)) {
-				bestScore = score;
-				bestSlots = slots;
-				bestIdx = idx;
-			}
-		});
-		return bestIdx;
+		const recommendedIdx = sessions.findIndex((session) => !!session.is_recommended);
+		return recommendedIdx >= 0 ? recommendedIdx : 0;
 	}
 
 	_group_sessions_by_date() {
 		const groups = new Map();
-		const ranked = [...(this.state.sessions || [])].sort((a, b) => {
-			const aScore = Number(a.load_ratio || 0) + (a.available_slots > 0 ? 0 : 10);
-			const bScore = Number(b.load_ratio || 0) + (b.available_slots > 0 ? 0 : 10);
-			if (aScore !== bScore) return aScore - bScore;
-			return Number(b.available_slots || 0) - Number(a.available_slots || 0);
-		});
-		ranked.forEach((session) => {
-			const idx = this.state.sessions.findIndex((row) => row.queue_session === session.queue_session);
+		(this.state.sessions || []).forEach((session, idx) => {
 			const key = session.session_date;
 			if (!groups.has(key)) groups.set(key, []);
-			groups.get(key).push({ ...session, _idx: idx, _rank: ranked.findIndex((r) => r.queue_session === session.queue_session) });
+			groups.get(key).push({
+				...session,
+				_idx: idx,
+				_rank: Number.isFinite(Number(session.recommendation_rank)) ? Number(session.recommendation_rank) : idx,
+			});
 		});
 		return Array.from(groups.entries()).map(([date, sessions]) => ({
 			date,
@@ -2192,9 +2176,7 @@ class ReceptionistDashboard {
 		this.state.session_idx = nextIdx;
 		this.state.override_token = null;
 		const picked = this.state.sessions[nextIdx];
-		const special_hint = (this.state.is_special && picked.suggested_special_token)
-			? picked.suggested_special_token : null;
-		this.token_board.load(picked.queue_session, special_hint);
+		this.token_board.load(picked.queue_session, picked.recommended_token || null);
 	}
 
 	_select_best_token(nextIdx, { openBoard = false } = {}) {
@@ -2204,8 +2186,8 @@ class ReceptionistDashboard {
 		const picked = this.state.sessions[nextIdx];
 		if (!picked) return;
 		this.state.token_board_open = openBoard;
-		this.token_board.load(picked.queue_session, null, () => {
-			const bestToken = this.token_board.pick_best_available(this.state.is_special);
+		this.token_board.load(picked.queue_session, picked.recommended_token || null, () => {
+			const bestToken = picked.recommended_token || this.token_board.pick_best_available(this.state.is_special);
 			this.state.override_token = bestToken || null;
 			this.render_admission();
 		});
@@ -2269,12 +2251,12 @@ class ReceptionistDashboard {
 										: 'Best token will be auto-assigned';
 									return hasPatientContext ? `
 									<div class="rd-availability-selection-dock">
-									${(this.state.is_special && selected.suggested_special_token) ? `
+									${(this.state.is_special && selected.recommended_token) ? `
 									<div style="padding:6px 10px;margin-bottom:8px;border-radius:6px;
 										background:#fef9c3;border:1px solid #d97706;
 										font-size:12px;font-weight:600;color:#a16207;">
 										Suggested Special token:
-										<strong>${frappe.utils.escape_html(String(selected.suggested_special_token))}</strong>
+										<strong>${frappe.utils.escape_html(String(selected.recommended_token))}</strong>
 										&nbsp;(highlighted on board — click to confirm)
 									</div>` : ''}
 									<div style="padding:7px 9px;border-radius:8px;background:var(--bg-color);margin-bottom:8px;">

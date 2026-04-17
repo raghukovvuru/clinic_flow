@@ -117,13 +117,18 @@ def get_suggested_sessions(
         end   = today_date
 
     sessions = _sessions_for_date_range(start, end)
-    return _apply_channel_filter(
+    filtered = _apply_channel_filter(
         sessions,
         channel,
         phone_pct,
         is_special=bool(is_special),
         load_class=load_class,
     )
+    ranked = sorted(filtered, key=_recommendation_key)
+    for idx, row in enumerate(ranked):
+        row["recommendation_rank"] = idx
+        row["is_recommended"] = idx == 0
+    return ranked
 
 
 # ---------------------------------------------------------------------------
@@ -324,24 +329,60 @@ def _apply_channel_filter(
             "likely_hour_band":      _estimate_hour_band(s, config, load_class),
         }
 
+        recommended_special = _recommended_token_for_session(s, is_special=True)
+        recommended_normal = _recommended_token_for_session(s, is_special=False)
+        row["recommended_special_token"] = recommended_special
+        row["recommended_normal_token"] = recommended_normal
+        row["recommended_token"] = recommended_special if is_special else recommended_normal
         if is_special:
-            used = {
-                r[0]
-                for r in frappe.db.sql(
-                    "SELECT token_number FROM `tabQueue Entry` "
-                    "WHERE queue_session = %s AND token_number > 0",
-                    s.name,
-                )
-            }
-            avail_buf = [
-                p for p in _parse_special_positions(s.vip_buffer_positions)
-                if p not in used
-            ]
-            row["suggested_special_token"] = avail_buf[0] if avail_buf else None
+            row["suggested_special_token"] = recommended_special
 
         result.append(row)
 
     return result
+
+
+def _recommendation_key(session: dict) -> tuple[float, float]:
+    """
+    Preserve the current recommendation heuristic while moving ownership into
+    backend: lower load_ratio first, then higher available_slots.
+    """
+    score = float(session.get("load_ratio") or 0) + (0 if (session.get("available_slots") or 0) > 0 else 10)
+    slots = float(session.get("available_slots") or 0)
+    return (score, -slots)
+
+
+def _recommended_token_for_session(session: frappe._dict | dict, is_special: bool = False) -> int | None:
+    """Return the next recommended token number for a given session."""
+    queue_session = session.get("name") or session.get("queue_session")
+    if not queue_session:
+        return None
+
+    used = {
+        int(r[0])
+        for r in frappe.db.sql(
+            "SELECT token_number FROM `tabQueue Entry` WHERE queue_session = %s AND token_number > 0",
+            queue_session,
+        )
+        if r and r[0]
+    }
+    special = _parse_special_positions(session.get("vip_buffer_positions"))
+    special_set = set(special)
+
+    if is_special:
+        for token in special:
+            if token not in used:
+                return token
+        return None
+
+    max_token = max(
+        int(session.get("stretch_capacity") or session.get("planned_capacity") or 0),
+        max(used, default=0),
+    )
+    for token in range(1, max_token + 1):
+        if token not in used and token not in special_set:
+            return token
+    return None
 
 
 def _stress_label(load_ratio: float) -> str:
