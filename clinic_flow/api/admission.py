@@ -320,7 +320,7 @@ def _apply_channel_filter(
             "load_ratio":            _load_ratio(s),
             "stress_label":          _stress_label(_load_ratio(s)),
             "stress_color":          _stress_color(_load_ratio(s)),
-            "fit_label":             _fit_label(_load_ratio(s)),
+            "fit_label":             _fit_label(_load_ratio(s), load_class),
             "likely_hour_band":      _estimate_hour_band(s, config, load_class),
         }
 
@@ -360,12 +360,13 @@ def _stress_color(load_ratio: float) -> str:
     return "#b91c1c"
 
 
-def _fit_label(load_ratio: float) -> str:
+def _fit_label(load_ratio: float, load_class: str = "non_review_load") -> str:
+    is_review = (load_class or "").strip() == "review_load"
     if load_ratio < 0.4:
-        return "Good for New"
+        return "Good for Review" if is_review else "Good for New"
     if load_ratio < 0.75:
         return "Balanced"
-    return "Better for Review"
+    return "Better for New" if is_review else "Better for Review"
 
 
 def _estimate_hour_band(session: frappe._dict, config, load_class: str) -> str:
