@@ -779,6 +779,12 @@ function get_dashboard_html() {
 		<span id="rd-topbar-date" style="font-size:12px;font-weight:600;color:var(--text-muted);"></span>
 		<div id="rd-topbar-sessions" style="display:flex;gap:10px;flex-wrap:wrap;flex:1;"></div>
 		<div id="rd-topbar-doctor" style="font-size:12px;color:var(--text-muted);"></div>
+		<button id="rd-emergency-btn"
+			style="border:none;background:#b91c1c;color:#fff;border-radius:999px;
+				padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;
+				box-shadow:0 8px 20px rgba(185,28,28,0.18);white-space:nowrap;">
+			Issue Emergency
+		</button>
 	</div>
 
 	<!-- ── MODE SWITCH ──────────────────────────────────────────────────────── -->
@@ -911,6 +917,7 @@ class ReceptionistDashboard {
 		this.$topbar   = this.$root.find('#rd-topbar-sessions');
 		this.$topdate  = this.$root.find('#rd-topbar-date');
 		this.$topdoc   = this.$root.find('#rd-topbar-doctor');
+		this.$emergency = this.$root.find('#rd-emergency-btn');
 		this.$body     = this.$root.find('#rd-admission-body');
 		this.$steps    = this.$root.find('#rd-steps');
 		this.$channels = this.$root.find('#rd-mode-bar');
@@ -952,6 +959,7 @@ class ReceptionistDashboard {
 		this.live_panel = new LiveSessionPanel(this, this.$root.find('#rd-right'));
 
 		this._bind_channel_tabs();
+		this._bind_global_actions();
 		this._apply_mode_layout();
 		this.load_top_bar();
 		this.render_admission();
@@ -1031,6 +1039,144 @@ class ReceptionistDashboard {
 				this.state.walkin_notice = 'Token guidance refreshed because Special mode changed.';
 			}
 			this._reset_to_search();
+		});
+	}
+
+	_bind_global_actions() {
+		this.$emergency.on('click', () => this._open_emergency_dialog());
+	}
+
+	_open_emergency_dialog(prefill = {}) {
+		frappe.call({
+			method: 'clinic_flow.api.emergency.get_emergency_sessions',
+			callback: (r) => {
+				const sessions = r.message || [];
+				if (!sessions.length) {
+					frappe.show_alert({
+						message: 'No active session is available for emergency intake right now.',
+						indicator: 'orange',
+					});
+					return;
+				}
+				const defaultMode = prefill.mode || (this.state.channel === 'phone' ? 'phone' : 'walkin');
+				const defaultSession = prefill.queue_session || this.live_panel.current_session || sessions[0].name;
+				const dialog = new frappe.ui.Dialog({
+					title: prefill.title || 'Emergency Intake',
+					fields: [
+						{
+							fieldname: 'mode',
+							fieldtype: 'Select',
+							label: 'Flow',
+							options: 'walkin\nphone',
+							default: defaultMode,
+							reqd: 1,
+							hidden: !!prefill.method,
+						},
+						{
+							fieldname: 'queue_session',
+							fieldtype: 'Select',
+							label: 'Active Session',
+							options: sessions.map(s => `${s.name}|${s.session_name || s.name}${s.dept_abbr ? ` (${s.dept_abbr})` : ''}`).join('\n'),
+							default: defaultSession,
+							reqd: 1,
+						},
+						{
+							fieldname: 'patient',
+							fieldtype: 'Link',
+							label: 'Existing Patient',
+							options: 'Patient',
+							default: prefill.patient || '',
+						},
+						{
+							fieldname: 'display_label',
+							fieldtype: 'Data',
+							label: 'Display Label',
+							default: prefill.display_label || '',
+						},
+						{
+							fieldname: 'mobile',
+							fieldtype: 'Data',
+							label: 'Mobile',
+							default: prefill.mobile || '',
+						},
+						{
+							fieldname: 'complaint_summary',
+							fieldtype: 'Small Text',
+							label: 'Urgency Note',
+							default: prefill.complaint_summary || '',
+						},
+						{ fieldname: 'emergency_note', fieldtype: 'HTML' },
+					],
+					primary_action_label: prefill.primary_action_label || 'Issue Emergency Token',
+					primary_action: (values) => this._submit_emergency_dialog(dialog, values, prefill),
+				});
+
+				const updateMode = () => {
+					const mode = dialog.get_value('mode') || 'walkin';
+					if (!prefill.method) {
+						dialog.get_primary_btn().text(mode === 'phone' ? 'Create Emergency Alert' : 'Issue Emergency Token');
+					}
+					const note = mode === 'phone'
+						? 'Phone emergency creates an alert only. The real queue entry is created later on arrival.'
+						: 'Walk-in emergency issues a real queue entry immediately. Formalities can be finished after the patient is settled.';
+					dialog.fields_dict.emergency_note.$wrapper.html(`
+						<div style="font-size:11px;color:var(--text-muted);line-height:1.5;
+							background:var(--rd-panel-soft);border:1px solid var(--border-color);
+							border-radius:8px;padding:8px 10px;">
+							${frappe.utils.escape_html(note)}
+						</div>
+					`);
+				};
+				dialog.fields_dict.mode.df.onchange = updateMode;
+				updateMode();
+				dialog.show();
+			},
+		});
+	}
+
+	_submit_emergency_dialog(dialog, values, prefill = {}) {
+		const mode = values.mode || 'walkin';
+		const method = prefill.method || (
+			mode === 'phone'
+				? 'clinic_flow.api.emergency.create_emergency_alert'
+				: 'clinic_flow.api.emergency.issue_emergency_token'
+		);
+		const args = {
+			queue_session: values.queue_session,
+			patient: values.patient || undefined,
+			display_label: values.display_label || '',
+			mobile: values.mobile || '',
+			complaint_summary: values.complaint_summary || '',
+		};
+		if (prefill.intake_name) {
+			args.intake_name = prefill.intake_name;
+		}
+
+		dialog.get_primary_btn().prop('disabled', true);
+		frappe.call({
+			method,
+			args,
+			callback: (r) => {
+				dialog.hide();
+				if (!r.message) return;
+				const successMessage = prefill.success_message || (
+					method.includes('confirm_emergency_arrival')
+						? 'Emergency arrival confirmed'
+						: method.includes('create_emergency_alert')
+							? 'Emergency alert created'
+							: 'Emergency token issued'
+				);
+				frappe.show_alert({
+					message: successMessage,
+					indicator: method.includes('create_emergency_alert') ? 'orange' : 'red',
+				});
+				this.load_top_bar();
+				if (args.queue_session) {
+					this.live_panel.$session_sel.val(args.queue_session);
+					this.live_panel.load(args.queue_session);
+				}
+			},
+			error: () => dialog.get_primary_btn().prop('disabled', false),
 		});
 	}
 
@@ -3590,6 +3736,10 @@ class LiveSessionPanel {
 		});
 	}
 
+	refresh() {
+		if (this.current_session) this.load(this.current_session);
+	}
+
 	_render(data) {
 		// Preserve _expanding so an open reception form is not collapsed
 		// by background reloads or resume actions.
@@ -3610,11 +3760,18 @@ class LiveSessionPanel {
 			<span class="rd-caption">
 				<strong>${counts.total_booked}</strong> total
 			</span>
+			<span class="rd-caption">
+				<strong>${counts.emergency_pending || 0}</strong> emergency pending
+			</span>
 		`);
 	}
 
 	_render_pipeline(data) {
 		const sections = [];
+
+		if (data.emergency_pending && data.emergency_pending.length) {
+			sections.push(this._section_emergency_pending(data.emergency_pending));
+		}
 
 		// WITH DOCTOR
 		if (data.with_doctor.length) {
@@ -3691,6 +3848,66 @@ class LiveSessionPanel {
 					</div>
 				</div>
 			</div>
+		</div>`;
+	}
+
+	_section_emergency_pending(entries) {
+		const cards = entries.map(e => {
+			const token = e.token_number ? `Token ${frappe.utils.escape_html(String(e.token_number))}` : 'Alert only';
+			const summary = e.complaint_summary
+				? `<div class="rd-caption" style="margin-top:3px;">${frappe.utils.escape_html(e.complaint_summary)}</div>`
+				: '';
+			const statusTone = e.status === 'Alerted' ? '#b45309' : '#b91c1c';
+			const actions = e.status === 'Alerted'
+				? `
+					<button class="rd-action-btn rd-action-btn-red rd-confirm-emergency-arrival-btn"
+						data-intake="${frappe.utils.escape_html(e.name)}"
+						data-session="${frappe.utils.escape_html(e.queue_session || '')}"
+						data-patient="${frappe.utils.escape_html(e.patient || '')}"
+						data-label="${frappe.utils.escape_html(e.display_label || '')}"
+						data-mobile="${frappe.utils.escape_html(e.mobile || '')}"
+						data-complaint="${frappe.utils.escape_html(e.complaint_summary || '')}">
+						Confirm Arrival
+					</button>`
+				: `
+					<button class="rd-action-btn rd-action-btn-green rd-mark-emergency-reconciled-btn"
+						data-intake="${frappe.utils.escape_html(e.name)}">
+						Mark Reconciled
+					</button>`;
+			return `
+				<div class="rd-patient-card" style="border-color:#fecaca;background:#fff7f7;">
+					<div style="display:flex;align-items:flex-start;gap:8px;">
+						<div style="min-width:54px;text-align:center;">
+							<div style="font-size:10px;font-weight:700;color:${statusTone};text-transform:uppercase;">
+								${frappe.utils.escape_html(e.status)}
+							</div>
+							<div style="font-size:18px;font-weight:900;color:${statusTone};line-height:1.1;">
+								${frappe.utils.escape_html(token)}
+							</div>
+						</div>
+						<div style="flex:1;">
+							<div style="font-size:12px;font-weight:700;">
+								${frappe.utils.escape_html(e.patient_name || e.display_label || 'Emergency Intake')}
+							</div>
+							<div class="rd-caption">
+								${frappe.utils.escape_html(e.channel === 'phone' ? 'Phone emergency' : 'Walk-in emergency')}
+								${e.queue_status ? ` · ${frappe.utils.escape_html(e.queue_status)}` : ''}
+							</div>
+							${summary}
+						</div>
+						<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
+							${actions}
+						</div>
+					</div>
+				</div>`;
+		}).join('');
+
+		return `
+		<div class="rd-pipeline-section">
+			<div class="rd-pipeline-header" style="color:#b91c1c;">
+				Emergency Pending (${entries.length})
+			</div>
+			${cards}
 		</div>`;
 	}
 
@@ -4012,11 +4229,33 @@ class LiveSessionPanel {
 			this._action_resume(entry);
 		});
 
-			// Call pushed-to-end patient again
-			this.$panel.find('.rd-call-pushed-btn').on('click', (e) => {
-				const entry = $(e.currentTarget).data('entry');
-				this._action_call_to_reception(entry);
+		// Call pushed-to-end patient again
+		this.$panel.find('.rd-call-pushed-btn').on('click', (e) => {
+			const entry = $(e.currentTarget).data('entry');
+			this._action_call_to_reception(entry);
+		});
+
+		this.$panel.find('.rd-confirm-emergency-arrival-btn').on('click', (e) => {
+			const $btn = $(e.currentTarget);
+			this.dashboard._open_emergency_dialog({
+				title: 'Confirm Emergency Arrival',
+				method: 'clinic_flow.api.emergency.confirm_emergency_arrival',
+				primary_action_label: 'Confirm Arrival',
+				success_message: 'Emergency arrival confirmed',
+				intake_name: $btn.data('intake'),
+				mode: 'walkin',
+				queue_session: $btn.data('session'),
+				patient: $btn.data('patient'),
+				display_label: $btn.data('label'),
+				mobile: $btn.data('mobile'),
+				complaint_summary: $btn.data('complaint'),
 			});
+		});
+
+		this.$panel.find('.rd-mark-emergency-reconciled-btn').on('click', (e) => {
+			const intake = $(e.currentTarget).data('intake');
+			this._action_mark_emergency_reconciled(intake);
+		});
 	}
 
 	// ── Individual actions ────────────────────────────────────────────────────
@@ -4121,4 +4360,33 @@ class LiveSessionPanel {
 			},
 			});
 		}
+
+	_action_mark_emergency_reconciled(intake_name) {
+		frappe.prompt(
+			[
+				{
+					fieldname: 'notes',
+					fieldtype: 'Small Text',
+					label: 'Notes',
+				},
+			],
+			(values) => {
+				frappe.call({
+					method: 'clinic_flow.api.emergency.mark_emergency_reconciled',
+					args: {
+						intake_name,
+						notes: values.notes || '',
+					},
+					callback: (r) => {
+						if (r.message) {
+							frappe.show_alert({ message: 'Emergency reconciliation completed', indicator: 'green' });
+							this.load(this.current_session);
+						}
+					},
+				});
+			},
+			'Mark Emergency Reconciled',
+			'Complete'
+		);
+	}
 }

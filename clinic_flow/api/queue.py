@@ -18,6 +18,18 @@ def _canonical_priority_from_legacy(queue_type: str | None) -> str:
 	return "normal"
 
 
+def _emergency_count(queue_session: str, statuses: list[str]) -> int:
+	"""Compatibility helper while emergency moves fully to canonical priority."""
+	return frappe.db.count(
+		"Queue Entry",
+		{
+			"queue_session": queue_session,
+			"status": ["in", statuses],
+			"priority": "emergency",
+		},
+	)
+
+
 @frappe.whitelist()
 def get_today_schedules() -> dict:
 	"""
@@ -673,6 +685,9 @@ def get_queue_state_for_display(dept: str = "all") -> dict:
 		last_called_at = str(last_called_rows[0].called_at) if last_called_rows else None
 
 		prac = prac_map.get(session.practitioner, frappe._dict())
+		emergency_active = bool(
+			_emergency_count(session.name, ["Ready Near Doctor", "With Doctor", "Called"])
+		)
 		return {
 			"session":              session.name,
 			"session_status":       session.status,
@@ -686,6 +701,7 @@ def get_queue_state_for_display(dept: str = "all") -> dict:
 			"practitioner_image":   prac.get("image") or "",
 			"service_unit":         su_map.get(session.practitioner, ""),
 			"dept_abbr":            session.dept_abbr,
+			"emergency_active":     emergency_active,
 		}
 
 	payloads = [_build_session_payload(s) for s in sessions]
@@ -1084,6 +1100,8 @@ def get_live_session_state(queue_session: str) -> dict:
 	due_soon      = _fetch(["Booked", "Waiting"],  "queue_position asc", limit=5)
 	no_response   = _fetch(["No Response"],        "no_response_at asc")
 	pushed_to_end = _fetch(["Pushed to End"],      "queue_position asc")
+	from clinic_flow.api.emergency import get_open_emergency_intakes
+	emergency_pending = get_open_emergency_intakes(queue_session)
 
 	total_booked    = frappe.db.count(
 		"Queue Entry",
@@ -1095,6 +1113,9 @@ def get_live_session_state(queue_session: str) -> dict:
 		{"queue_session": queue_session,
 		 "status": ["in", ["Completed", "Done"]]}
 	)
+	emergency_active = bool(
+		_emergency_count(queue_session, ["Ready Near Doctor", "With Doctor", "Called"])
+	)
 
 	return {
 		"session":         session,
@@ -1104,10 +1125,13 @@ def get_live_session_state(queue_session: str) -> dict:
 		"due_soon":        due_soon,
 		"no_response":     no_response,
 		"pushed_to_end":   pushed_to_end,
+		"emergency_pending": emergency_pending,
+		"emergency_active": emergency_active,
 		"counts": {
 			"total_booked":    total_booked,
 			"completed_today": completed_today,
 			"remaining":       max(0, total_booked - completed_today),
+			"emergency_pending": len(emergency_pending),
 		},
 	}
 

@@ -19,6 +19,7 @@ def search_patients(query: str) -> list:
 		SELECT name, patient_name, mobile, sex, dob
 		FROM `tabPatient`
 		WHERE (patient_name LIKE %(q)s OR mobile LIKE %(q)s)
+		  AND patient_name NOT LIKE 'Emergency %%'
 		  AND status != 'Disabled'
 		ORDER BY patient_name
 		LIMIT 10
