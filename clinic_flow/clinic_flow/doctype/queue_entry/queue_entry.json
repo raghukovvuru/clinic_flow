@@ -16,6 +16,9 @@
   "dept_abbr",
   "queue_type",
   "load_class",
+  "channel",
+  "patient_type",
+  "priority",
   "status",
   "queue_position",
   "called_at",
@@ -124,6 +127,30 @@
    "label": "Load Class",
    "options": "\nreview_load\nnon_review_load",
    "description": "v2 field — review_load (shorter consult) or non_review_load (longer consult)."
+  },
+  {
+   "fieldname": "channel",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Channel",
+   "options": "\nphone\nwalkin",
+   "description": "Canonical vNext field. Booking source: phone or walkin."
+  },
+  {
+   "fieldname": "patient_type",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Patient Type",
+   "options": "\nnew\nreview",
+   "description": "Canonical vNext field. Stored snapshot of the patient type at booking time."
+  },
+  {
+   "fieldname": "priority",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Priority",
+   "options": "\nnormal\nspecial\nemergency",
+   "description": "Canonical vNext field. Operational priority independent of channel and patient type."
   },
   {
    "default": "Waiting",

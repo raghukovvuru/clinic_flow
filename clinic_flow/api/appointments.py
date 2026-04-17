@@ -78,6 +78,12 @@ def get_availability(practitioner: str, queue_type: str) -> list:
 	Source of truth is the Practitioner Schedule. Queue Sessions are materialized
 	on demand as Scheduled/Active operational instances when needed elsewhere.
 	Scans up to 30 days out.
+
+	Phase 1 note:
+	`queue_type` here is still a legacy compatibility concept used by the older
+	appointment path. The canonical vNext model is channel + patient_type +
+	priority; do not extend this function with new business logic unless it is
+	explicitly part of the legacy path.
 	"""
 	config = frappe.get_single("Slot Partition Config")
 	pct_map = {

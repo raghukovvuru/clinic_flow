@@ -3,6 +3,10 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import today, getdate, get_datetime, add_to_date, now_datetime
+from clinic_flow.api.admission import (
+	_canonical_priority,
+	_set_canonical_queue_entry_fields,
+)
 
 
 class QueueMixin(Document):
@@ -215,6 +219,20 @@ class QueueMixin(Document):
 			"issued_by": frappe.session.user,
 			"issued_by_role": "Reception",
 		})
+		# Phase 1 compatibility: persist canonical semantics alongside legacy
+		# custom_queue_type / queue_type without changing check-in behavior yet.
+		load_class = "review_load" if self.custom_queue_type == "FOLLOW_UP" else "non_review_load"
+		channel = "phone" if self.custom_queue_type == "PRE_BOOKED" else "walkin"
+		priority = _canonical_priority(
+			is_special=False,
+			emergency=self.custom_queue_type == "EMERGENCY",
+		)
+		_set_canonical_queue_entry_fields(
+			entry,
+			channel=channel,
+			load_class=load_class,
+			priority=priority,
+		)
 		entry.insert(ignore_permissions=True)
 
 		# Only increment slot counters on a live session — if the doctor is between

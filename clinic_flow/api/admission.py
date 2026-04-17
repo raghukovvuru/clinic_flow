@@ -571,13 +571,12 @@ def confirm_booking(
     # queue_position = token_number at booking time (ETA engine can reorder later)
     queue_position = token_number
 
-    # Map to queue_type
-    if is_special:
-        queue_type = "EMERGENCY"
-    elif channel == "phone":
-        queue_type = "PRE_BOOKED"
-    else:
-        queue_type = "WALK_IN"
+    # Canonical vNext semantics are written alongside the legacy queue_type
+    # during the refactor period. Keep the legacy mapping behavior intact for
+    # now so downstream Healthcare / queue code does not change unexpectedly.
+    patient_type = _canonical_patient_type(load_class)
+    priority = _canonical_priority(is_special=is_special, emergency=False)
+    queue_type = _legacy_queue_type(channel, patient_type, priority)
 
     # Build token label (for display, e.g. PED-042)
     dept_abbr   = session_doc.dept_abbr or "TKN"
@@ -605,6 +604,12 @@ def confirm_booking(
     entry.queue_position = queue_position
     entry.queue_type     = queue_type
     entry.load_class     = load_class
+    _set_canonical_queue_entry_fields(
+        entry,
+        channel=channel,
+        load_class=load_class,
+        priority=priority,
+    )
     entry.status         = "Booked"
     entry.issued_by      = frappe.session.user
     entry.issued_by_role = "Reception"
@@ -686,6 +691,61 @@ def _parse_special_positions(raw: str | None) -> list[int]:
         return sorted(int(p) for p in positions)
     except Exception:
         return []
+
+
+def _canonical_patient_type(load_class: str) -> str:
+    """Translate v2 load_class into the canonical patient type."""
+    return "review" if (load_class or "").strip() == "review_load" else "new"
+
+
+def _canonical_priority(is_special: bool = False, emergency: bool = False) -> str:
+    """
+    Canonical priority model used by the refactor:
+      normal | special | emergency
+    Phase 1 only dual-writes this alongside legacy queue_type semantics.
+    """
+    if emergency:
+        return "emergency"
+    if is_special:
+        return "special"
+    return "normal"
+
+
+def _legacy_queue_type(channel: str, patient_type: str, priority: str) -> str:
+    """
+    Transitional mapping into the legacy queue_type enum.
+
+    Notes:
+    - We intentionally preserve the current special->EMERGENCY compatibility
+      behavior for now because downstream queue/Healthcare code still depends on
+      the old enum. This will be separated in later phases.
+    - `patient_type` is accepted here to keep the mapping boundary explicit even
+      though Phase 1 does not use it to derive FOLLOW_UP anymore.
+    """
+    if priority in ("special", "emergency"):
+        return "EMERGENCY"
+    if (channel or "").strip().lower() == "phone":
+        return "PRE_BOOKED"
+    return "WALK_IN"
+
+
+def _set_canonical_queue_entry_fields(entry, channel: str, load_class: str, priority: str) -> None:
+    """
+    Best-effort dual-write of canonical queue semantics.
+
+    The guards keep runtime safe before DocType migration/reload has happened.
+    Once the Queue Entry schema includes these fields, the values will start
+    persisting automatically without further behavior changes.
+    """
+    meta = frappe.get_meta("Queue Entry")
+    field_map = {
+        "channel": channel,
+        "patient_type": _canonical_patient_type(load_class),
+        "priority": priority,
+    }
+    for fieldname, value in field_map.items():
+        if meta.has_field(fieldname):
+            setattr(entry, fieldname, value)
 
 
 def _next_normal_token(buffer_positions: list[int], used_tokens: set) -> int:

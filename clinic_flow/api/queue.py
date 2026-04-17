@@ -5,6 +5,19 @@ from frappe.utils import now_datetime, today
 from clinic_flow.queue.engine import get_next_token, _broadcast_queue_update
 
 
+def _canonical_priority_from_legacy(queue_type: str | None) -> str:
+	"""
+	Phase 1 compatibility helper.
+
+	Current runtime still relies on legacy queue_type, but later phases will move
+	to canonical `priority`. Keep the mapping in one place so future readers do
+	not have to reverse-engineer the semantics from UI terminology.
+	"""
+	if queue_type == "EMERGENCY":
+		return "emergency"
+	return "normal"
+
+
 @frappe.whitelist()
 def get_today_schedules() -> dict:
 	"""
