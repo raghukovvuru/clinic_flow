@@ -338,10 +338,16 @@ These should become compatibility shims, not primary architecture.
 
 ### Review for removal
 
-- `Appointment Type.custom_queue_type`
+The first low-risk cleanup set has now been removed by patch:
+
 - `Patient Appointment.custom_original_encounter`
 - `Patient Encounter.custom_awaiting_lab_return`
 - `Patient Encounter.custom_lab_return_queued`
+
+Still pending review:
+
+- `Appointment Type.custom_queue_type`
+- `Patient Appointment.custom_dept_abbr`
 
 ## Bottom Line
 

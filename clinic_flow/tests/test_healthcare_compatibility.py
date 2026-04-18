@@ -37,6 +37,23 @@ class TestHealthcareCompatibility(IntegrationTestCase):
 						f"{doctype}.{fieldname} should have {attr}={expected_value}",
 					)
 
+	def test_deprecated_healthcare_custom_fields_are_absent(self):
+		expected_missing = {
+			"Patient Appointment": ("custom_original_encounter",),
+			"Patient Encounter": (
+				"custom_awaiting_lab_return",
+				"custom_lab_return_queued",
+			),
+		}
+
+		for doctype, fieldnames in expected_missing.items():
+			meta = frappe.get_meta(doctype)
+			for fieldname in fieldnames:
+				self.assertIsNone(
+					meta.get_field(fieldname),
+					f"{doctype}.{fieldname} should be absent",
+				)
+
 	def test_patient_appointment_controller_is_extended(self):
 		controller = get_controller("Patient Appointment")
 		module = controller.__module__
@@ -54,5 +71,9 @@ class TestHealthcareCompatibility(IntegrationTestCase):
 		content = patches_path.read_text()
 		self.assertIn(
 			"clinic_flow.patches.v16_0.ensure_required_healthcare_custom_fields",
+			content,
+		)
+		self.assertIn(
+			"clinic_flow.patches.v16_0.remove_deprecated_healthcare_custom_fields",
 			content,
 		)
