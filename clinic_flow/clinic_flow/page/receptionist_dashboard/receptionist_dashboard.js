@@ -41,6 +41,24 @@ function _display_token(row_or_token, token_number = null) {
 	return '—';
 }
 
+// Returns elapsed time since a called_to_reception_at datetime string.
+// { label: "2:14", urgent: true } — urgent when >= 120 seconds elapsed.
+function _call_elapsed(dt_str) {
+	if (!dt_str) return null;
+	const called = new Date(dt_str.replace(' ', 'T'));
+	if (isNaN(called.getTime())) return null;
+	const elapsed = Math.floor((Date.now() - called.getTime()) / 1000);
+	if (elapsed < 0) return null;
+	const m = Math.floor(elapsed / 60);
+	const s = elapsed % 60;
+	return {
+		label: `${m}:${String(s).padStart(2, '0')}`,
+		elapsed,
+		urgent: elapsed >= 120,
+		pct: Math.min(100, Math.round(elapsed / 300 * 100)), // 5 min = 100%
+	};
+}
+
 function _eta_slot(predicted, windowEnd = null) {
 	const start = _eta_fmt(predicted);
 	if (!start || start === '—') return '—';
@@ -862,10 +880,10 @@ function get_dashboard_html() {
 	box-shadow: 0 8px 18px rgba(17, 24, 39, 0.05);
 }
 .rd-patient-card.with-doctor {
-	border-color: #1d4ed8; background: #eff6ff;
+	border-color: #cbd5e1; background: #f8fafc; opacity: 0.82;
 }
 .rd-patient-card.ready   { border-color: #7c3aed; background: #faf5ff; }
-.rd-patient-card.called  { border-color: #1d4ed8; background: #eff6ff; }
+.rd-patient-card.called  { border-color: #1d4ed8; border-left: 3px solid #1d4ed8; background: #eff6ff; }
 .rd-patient-card.no-resp { border-color: #ea580c; background: #fff7ed; }
 .rd-patient-card.emergency {
 	border-color:#ef4444;
@@ -4497,12 +4515,12 @@ class LiveSessionPanel {
 		const since = e.seen_at ? frappe.datetime.str_to_user(e.seen_at, true) : '';
 		return `
 		<div class="rd-pipeline-section">
-			<div class="rd-pipeline-header" style="color:#1d4ed8;">
+			<div class="rd-pipeline-header" style="color:var(--rd-muted);">
 				▶ With Doctor
 			</div>
 			<div class="rd-patient-card with-doctor">
 				<div style="display:flex;align-items:center;gap:8px;">
-					<span class="rd-rail-token" style="color:#1d4ed8;min-width:74px;">
+					<span class="rd-rail-token" style="color:var(--rd-muted);min-width:74px;">
 						${frappe.utils.escape_html(_display_token(e))}
 					</span>
 					<div style="flex:1;">
@@ -4516,8 +4534,8 @@ class LiveSessionPanel {
 							${since ? '&nbsp;· Since ' + frappe.utils.escape_html(since) : ''}
 						</div>
 					</div>
-					<div class="rd-rail-card-side" style="color:#1d4ed8;">
-						Doctor workspace controls completion
+					<div class="rd-rail-card-side" style="color:var(--rd-muted);">
+						With doctor
 					</div>
 				</div>
 			</div>
@@ -4623,7 +4641,21 @@ class LiveSessionPanel {
 		const cards = entries.map(e => {
 			const call_time = e.called_to_reception_at
 				? frappe.datetime.str_to_user(e.called_to_reception_at, true) : '';
+			const elapsed  = _call_elapsed(e.called_to_reception_at);
 			const is_expanding = (this._expanding === e.name);
+
+			const elapsed_html = elapsed ? (() => {
+				const color = elapsed.urgent ? '#ea580c' : 'var(--rd-muted)';
+				const bar   = elapsed.urgent
+					? `<div style="height:3px;border-radius:2px;background:var(--rd-border);margin-top:4px;">
+						<div style="height:100%;border-radius:2px;width:${elapsed.pct}%;
+							background:${elapsed.pct >= 100 ? '#dc2626' : '#ea580c'};"></div>
+					   </div>`
+					: '';
+				return `<div style="font-size:10px;color:${color};margin-top:2px;font-weight:${elapsed.urgent ? 700 : 400};">
+					${frappe.utils.escape_html(elapsed.label)} at reception
+				</div>${bar}`;
+			})() : '';
 
 			return `
 			<div class="rd-patient-card called"
@@ -4638,6 +4670,7 @@ class LiveSessionPanel {
 							${frappe.utils.escape_html(e.patient_name || e.patient)}
 						</div>
 						${call_time ? `<div class="rd-rail-card-meta">Called ${frappe.utils.escape_html(call_time)}</div>` : ''}
+						${elapsed_html}
 					</div>
 					<div style="display:flex;gap:4px;">
 						<button class="rd-action-btn rd-action-btn-green rd-rail-btn-positive rd-complete-reception-btn"
