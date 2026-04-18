@@ -868,8 +868,9 @@ function get_dashboard_html() {
 .rd-patient-card.called  { border-color: #1d4ed8; background: #eff6ff; }
 .rd-patient-card.no-resp { border-color: #ea580c; background: #fff7ed; }
 .rd-patient-card.emergency {
-	border-color:#fecaca;
-	background:linear-gradient(180deg, #fff8f8 0%, #fff3f3 100%);
+	border-color:#ef4444;
+	border-left:3px solid #dc2626;
+	background:linear-gradient(180deg, #fff1f2 0%, #ffe4e6 100%);
 }
 .rd-action-btn {
 	padding: 4px 10px; border-radius: 7px; font-size: 11px; font-weight: 700;
@@ -4644,7 +4645,8 @@ class LiveSessionPanel {
 							✓ Reception
 						</button>
 						<button class="rd-action-btn rd-action-btn-orange rd-rail-btn-warning rd-no-response-btn"
-							data-entry="${frappe.utils.escape_html(e.name)}">
+							data-entry="${frappe.utils.escape_html(e.name)}"
+							title="No Response">
 							N/R
 						</button>
 					</div>
@@ -4787,10 +4789,9 @@ class LiveSessionPanel {
 
 	_section_pushed_to_end(entries) {
 		const cards = entries.map(e => `
-			<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;
-				border-radius:5px;background:var(--bg-color);margin-bottom:4px;">
-				<span style="font-size:12px;font-weight:700;color:var(--text-muted);min-width:24px;">
-					${frappe.utils.escape_html(String(e.token_number))}
+			<div class="rd-patient-card" style="display:flex;align-items:center;gap:8px;">
+				<span class="rd-rail-token" style="color:var(--rd-muted);min-width:74px;">
+					${frappe.utils.escape_html(_display_token(e))}
 				</span>
 				<span style="font-size:12px;color:var(--text-muted);flex:1;">
 					${frappe.utils.escape_html(e.patient_name || e.patient)}
