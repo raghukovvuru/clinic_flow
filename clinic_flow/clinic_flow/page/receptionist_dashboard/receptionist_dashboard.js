@@ -873,6 +873,23 @@ function get_dashboard_html() {
 	color:#64726c;
 	border-bottom-color:rgba(185, 201, 192, 0.9);
 }
+.rd-pipeline-header.is-passive {
+	color:var(--rd-muted);
+	border-bottom-color:rgba(185, 201, 192, 0.45);
+}
+@keyframes rd-pulse {
+	0%, 100% { opacity: 1; }
+	50%       { opacity: 0.3; }
+}
+.rd-in-session-dot {
+	display:inline-block;
+	width:6px; height:6px;
+	border-radius:50%;
+	background:#16a34a;
+	margin-right:5px;
+	vertical-align:middle;
+	animation:rd-pulse 2s ease-in-out infinite;
+}
 .rd-patient-card {
 	border: 1px solid var(--rd-border); border-radius: 10px;
 	padding: 8px 10px; margin-bottom: 6px;
@@ -883,7 +900,7 @@ function get_dashboard_html() {
 	border-color: #cbd5e1; background: #f8fafc; opacity: 0.82;
 }
 .rd-patient-card.ready   { border-color: #7c3aed; background: #faf5ff; }
-.rd-patient-card.called  { border-color: #1d4ed8; border-left: 3px solid #1d4ed8; background: #eff6ff; }
+.rd-patient-card.called  { border-color: #1d4ed8; border-left: 3px solid #1d4ed8; background: #eff6ff; overflow: hidden; }
 .rd-patient-card.no-resp { border-color: #ea580c; background: #fff7ed; }
 .rd-patient-card.emergency {
 	border-color:#ef4444;
@@ -1022,10 +1039,11 @@ function get_dashboard_html() {
 	border-radius: 8px;
 	font-size: 12px;
 	outline: none;
-	background: #fff;
+	background: var(--rd-panel-tint);
 	width: 100%;
 	color: var(--rd-text);
 	min-height: 36px;
+	transition: border-color .15s, box-shadow .15s;
 }
 .rd-recep-input:focus {
 	border-color: var(--rd-primary);
@@ -1039,11 +1057,10 @@ function get_dashboard_html() {
 	margin-bottom:8px;
 }
 .rd-recep-head-title {
-	font-size:11px;
-	font-weight:800;
-	letter-spacing:.06em;
-	text-transform:uppercase;
-	color:#64726c;
+	font-size:12px;
+	font-weight:700;
+	letter-spacing:.01em;
+	color:var(--rd-text);
 }
 .rd-recep-fee-band {
 	font-size:11px;
@@ -1322,9 +1339,10 @@ function get_dashboard_html() {
 	color:var(--rd-muted);
 }
 .rd-ops-stat-value {
-	font-size:24px;
+	font-size:26px;
 	line-height:1;
 	font-weight:900;
+	letter-spacing:-.02em;
 	color:var(--rd-text);
 }
 .rd-ops-stat-note {
@@ -4515,7 +4533,7 @@ class LiveSessionPanel {
 		const since = e.seen_at ? frappe.datetime.str_to_user(e.seen_at, true) : '';
 		return `
 		<div class="rd-pipeline-section">
-			<div class="rd-pipeline-header" style="color:var(--rd-muted);">
+			<div class="rd-pipeline-header is-passive">
 				▶ With Doctor
 			</div>
 			<div class="rd-patient-card with-doctor">
@@ -4534,8 +4552,8 @@ class LiveSessionPanel {
 							${since ? '&nbsp;· Since ' + frappe.utils.escape_html(since) : ''}
 						</div>
 					</div>
-					<div class="rd-rail-card-side" style="color:var(--rd-muted);">
-						With doctor
+					<div class="rd-rail-card-side" style="color:var(--rd-muted);display:flex;align-items:center;">
+						<span class="rd-in-session-dot"></span>In session
 					</div>
 				</div>
 			</div>
@@ -4703,10 +4721,8 @@ class LiveSessionPanel {
 					return `
 				<div class="rd-recep-form">
 					<div class="rd-recep-head">
-						<div class="rd-recep-head-title">
-							Complete Reception
-						</div>
-						<div class="rd-caption">Desk stage</div>
+						<div class="rd-recep-head-title">Complete Reception</div>
+						<div class="rd-caption">Collect payment · weigh · send up</div>
 					</div>
 					${fee_html}
 					<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
@@ -4729,11 +4745,11 @@ class LiveSessionPanel {
 							<button class="rd-action-btn rd-action-btn-green rd-rail-btn-primary rd-confirm-reception-btn"
 								style="flex:1;"
 								data-entry="${frappe.utils.escape_html(e.name)}">
-								Complete Reception
+								Send to Doctor
 							</button>
-						<button class="rd-action-btn rd-action-btn-red rd-rail-btn-neutral rd-cancel-recep-btn"
+						<button class="rd-action-btn rd-rail-btn-neutral rd-cancel-recep-btn"
 							data-entry="${frappe.utils.escape_html(e.name)}">
-							✕
+							Cancel
 						</button>
 					</div>
 				</div>`;
@@ -4993,7 +5009,7 @@ class LiveSessionPanel {
 					this.dashboard.token_board.load(this.current_session);
 				}
 			},
-			error: () => { $btn.prop('disabled', false).text('Confirm & Send to Doctor'); },
+			error: () => { $btn.prop('disabled', false).text('Send to Doctor'); },
 		});
 	}
 
