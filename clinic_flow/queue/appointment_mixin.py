@@ -175,8 +175,15 @@ class QueueMixin(Document):
 		between_sessions = session.status == "Completed"
 
 		from clinic_flow.queue.engine import build_token, get_next_sequence, _broadcast_queue_update
+		from clinic_flow.queue.service_point import resolve_queue_code
 
-		dept = session.dept_abbr or self.custom_dept_abbr or "GEN"
+		dept = resolve_queue_code(
+			service_point=session.service_point,
+			dept_abbr=session.dept_abbr,
+			practitioner=session.practitioner,
+			department=session.department,
+			fallback=self.custom_dept_abbr or "GEN",
+		)
 		seq = get_next_sequence(session.name, self.custom_queue_type)
 		token = build_token(dept, self.custom_queue_type, seq)
 

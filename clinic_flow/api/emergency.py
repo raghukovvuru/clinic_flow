@@ -5,6 +5,7 @@ from frappe.utils import now_datetime, today
 from clinic_flow.api.admission import _canonical_priority, _set_canonical_queue_entry_fields, _next_normal_token
 from clinic_flow.api.eta import recalculate_downstream_etas
 from clinic_flow.queue.engine import _broadcast_queue_update, build_display_token
+from clinic_flow.queue.service_point import resolve_queue_code
 
 
 def _active_sessions() -> list[dict]:
@@ -88,7 +89,15 @@ def _issue_queue_entry_from_intake(intake_name: str, patient: str | None = None)
 	entry.department = session.department
 	entry.dept_abbr = session.dept_abbr
 	entry.token_number = token_number
-	entry.token = build_display_token(session.dept_abbr or "EMR", token_number)
+	# Emergency shares queue identity with the session. The "EMR" literal
+	# is intentionally retired: urgency is conveyed via status/UX, not prefix.
+	queue_code = resolve_queue_code(
+		service_point=session.service_point,
+		dept_abbr=session.dept_abbr,
+		practitioner=session.practitioner,
+		department=session.department,
+	)
+	entry.token = build_display_token(queue_code, token_number)
 	entry.queue_position = _next_queue_position(intake.queue_session)
 	entry.queue_type = "EMERGENCY"
 	entry.load_class = "non_review_load"

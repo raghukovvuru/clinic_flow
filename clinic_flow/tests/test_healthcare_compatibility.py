@@ -92,6 +92,25 @@ class TestHealthcareCompatibility(IntegrationTestCase):
 			content,
 		)
 
+	def test_legacy_session_fallback_still_resolves_queue_code(self):
+		"""
+		Healthcare-boundary compat: a session with no service_point must still
+		resolve a queue code from dept_abbr (legacy Medical Department source).
+		"""
+		from clinic_flow.queue.service_point import resolve_queue_code
+
+		session = self._make_queue_session()
+		self.assertFalse(bool(session.service_point))
+		self.assertTrue(bool(session.dept_abbr))
+
+		resolved = resolve_queue_code(
+			service_point=session.service_point,
+			dept_abbr=session.dept_abbr,
+			practitioner=session.practitioner,
+			department=session.department,
+		)
+		self.assertEqual(resolved, session.dept_abbr)
+
 	def test_call_next_prioritizes_emergency_entries(self):
 		session = self._make_queue_session()
 		self._make_queue_entry(

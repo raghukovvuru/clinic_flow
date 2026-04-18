@@ -14,6 +14,7 @@ import frappe
 from frappe import _
 from frappe.utils import getdate, now_datetime, today, get_datetime, add_to_date
 from clinic_flow.queue.engine import build_display_token
+from clinic_flow.queue.service_point import resolve_queue_code, resolve_service_point
 
 
 # ---------------------------------------------------------------------------
@@ -205,7 +206,17 @@ def _sessions_for_date_range(start, end) -> list:
                 continue
 
             slot      = day_map[day_name]
-            dept_abbr = dept_abbr_map.get(slot.department or "", "")
+            legacy_dept_abbr = dept_abbr_map.get(slot.department or "", "")
+            service_point = resolve_service_point(
+                practitioner=practitioner, department=slot.department,
+            )
+            dept_abbr = resolve_queue_code(
+                service_point=service_point,
+                dept_abbr=legacy_dept_abbr,
+                practitioner=practitioner,
+                department=slot.department,
+                fallback="",
+            )
             if not dept_abbr:
                 # dept_abbr is mandatory on Queue Session — skip
                 continue
@@ -240,6 +251,7 @@ def _sessions_for_date_range(start, end) -> list:
                     "session_date":     current,
                     "start_time":       str(slot.from_time),
                     "end_time":         str(slot.to_time),
+                    "service_point":    service_point,
                     "dept_abbr":        dept_abbr,
                     "session_capacity": int(slot.capacity or 20),
                     "status":           "Scheduled",
@@ -591,7 +603,13 @@ def confirm_booking(
     queue_type = _legacy_queue_type(channel, patient_type, priority)
 
     # Build token label (for display, e.g. PED-042)
-    dept_abbr   = session_doc.dept_abbr or "TKN"
+    dept_abbr = resolve_queue_code(
+        service_point=session_doc.service_point,
+        dept_abbr=session_doc.dept_abbr,
+        practitioner=session_doc.practitioner,
+        department=session_doc.department,
+        fallback="TKN",
+    )
     token_label = build_display_token(dept_abbr, token_number)
 
     # ── Create Patient Appointment (Healthcare integration) ──────────────────

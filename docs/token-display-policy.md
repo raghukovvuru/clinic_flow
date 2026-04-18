@@ -55,23 +55,23 @@ Guidelines:
 
 Queue code should come from an explicit short code field, not from ad hoc string slicing.
 
-Current practical source:
+Primary source (vNext):
 
-- department abbreviation / short queue code
+- `Service Point.queue_code`
 
-Existing field that can serve this role for now:
+Transitional / fallback sources (retained during migration):
 
-- `Medical Department.custom_dept_abbr`
+- `Queue Session.dept_abbr` — cached mirror of the linked Service Point's queue_code
+- `Medical Department.custom_dept_abbr` — legacy config source; still seeded onto new sessions when no Service Point is linked
 
-This field is therefore **not debt in concept**.
+See `service-point-policy.md` for the full rationale and migration plan.
 
-It remains useful if its role is clarified as:
+Resolution order (hot path, read-only):
 
-- front-facing queue code
-
-rather than:
-
-- legacy token-format fragment
+1. `Queue Session.service_point` → `Service Point.queue_code`
+2. `Queue Session.dept_abbr`
+3. Practitioner's `Medical Department.custom_dept_abbr`
+4. `"GEN"` (final fallback)
 
 ## Scope Separation
 
@@ -120,21 +120,26 @@ This keeps:
 ## Recommended Near-Term Plan
 
 1. Keep `token_number` unchanged.
-2. Treat `custom_dept_abbr` as the current queue code source.
-3. Introduce a display-token helper in backend.
-4. Update front-facing surfaces to use displayed token:
+2. Prefer `Service Point.queue_code` as the queue code source; fall back to `dept_abbr` for sessions that predate the migration.
+3. Keep the display-token helper (`build_display_token`) unchanged.
+4. Front-facing surfaces continue to use the displayed token:
    - receptionist dashboard
    - TV / queue board
    - token slip / print
    - doctor workspace where useful
 5. Leave backend ordering and queue semantics untouched.
 
+## Emergency Prefix Policy
+
+Emergency tokens use the **same queue prefix as their session**, not a separate `EMR` prefix.
+
+- `PD-112` (emergency in pediatrics) — correct
+- `EMR-112` — retired; no longer a fallback either
+
+Urgency is conveyed via status and UX, not by the token prefix. When no queue code can be resolved at all, the final fallback is `GEN`, not `EMR`.
+
 ## Future Cleanup
 
-Later, consider renaming or formalizing the queue-code field so it is no longer framed as a legacy abbreviation field.
-
-Possible future direction:
-
-- dedicated `queue_code` / `display_queue_code`
-
-But that is a follow-up cleanup, not a blocker for adopting prefixed displayed tokens now.
+- Drop the `dept_abbr` cache once enough time has passed that all live sessions carry `service_point`
+- Stop reading `Medical Department.custom_dept_abbr` for queue code purposes (keep the field — it is still a Healthcare integration concern)
+- Consider making `Queue Session.service_point` required in a later phase

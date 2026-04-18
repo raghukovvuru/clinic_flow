@@ -3,6 +3,11 @@ import frappe
 from frappe import _
 from frappe.utils import add_to_date, get_datetime, now_datetime, today
 from clinic_flow.queue.engine import get_next_token, get_next_special_token, _broadcast_queue_update
+from clinic_flow.queue.service_point import (
+	resolve_department_name,
+	resolve_queue_code,
+	resolve_service_point,
+)
 
 
 def _canonical_priority_from_legacy(queue_type: str | None) -> str:
@@ -99,15 +104,21 @@ def start_session(
 			frappe.PermissionError,
 		)
 
-	# ── Dept abbr + full name ─────────────────────────────────────────────
-	dept_abbr = ""
+	# ── Resolve queue identity (Service Point → dept_abbr cache) ─────────
+	service_point = resolve_service_point(
+		practitioner=prac.name, department=prac.department,
+	)
+	dept_abbr = resolve_queue_code(
+		service_point=service_point,
+		practitioner=prac.name,
+		department=prac.department,
+		fallback="",
+	)
 	dept_name = prac.department or ""
 	if prac.department:
 		row = frappe.db.get_value(
-			"Medical Department", prac.department,
-			["custom_dept_abbr", "department"], as_dict=True,
+			"Medical Department", prac.department, ["department"], as_dict=True,
 		) or {}
-		dept_abbr = row.get("custom_dept_abbr") or ""
 		dept_name = row.get("department") or prac.department
 
 	# ── Re-use today's active/paused/scheduled session if one exists ─────────
@@ -118,7 +129,7 @@ def start_session(
 			"session_date": today(),
 			"status": ["in", ["Scheduled", "Active", "Paused"]],
 		},
-		fields=["name", "status", "session_name", "dept_abbr"],
+		fields=["name", "status", "session_name", "dept_abbr", "service_point"],
 		order_by="modified desc",
 		limit=1,
 	)
@@ -127,12 +138,12 @@ def start_session(
 		if s.status == "Scheduled":
 			frappe.db.set_value("Queue Session", s.name, "status", "Active")
 			s.status = "Active"
-		# Re-resolve dept_name from the existing session's dept_abbr (may differ from prac's current dept)
-		existing_dept_name = dept_name
-		if s.dept_abbr and s.dept_abbr != dept_abbr:
-			existing_dept_name = frappe.db.get_value(
-				"Medical Department", {"custom_dept_abbr": s.dept_abbr}, "department"
-			) or s.dept_abbr
+		existing_dept_name = (
+			resolve_department_name(service_point=s.service_point, dept_abbr=s.dept_abbr)
+			or dept_name
+			or s.dept_abbr
+			or ""
+		)
 		return {"session": s.name, "session_name": s.session_name,
 				"dept_abbr": s.dept_abbr, "dept_name": existing_dept_name,
 				"status": s.status, "created": False}
@@ -169,6 +180,7 @@ def start_session(
 		"session_date":     today(),
 		"start_time":       from_time,
 		"end_time":         to_time,
+		"service_point":    service_point,
 		"dept_abbr":        dept_abbr,
 		"session_capacity": session_cap,
 		"status":           "Active",
@@ -192,7 +204,8 @@ def get_session(queue_session: str) -> dict | None:
 		return None
 	s = frappe.db.get_value(
 		"Queue Session", queue_session,
-		["name", "session_name", "status", "session_date", "dept_abbr", "practitioner"],
+		["name", "session_name", "status", "session_date", "dept_abbr",
+		 "service_point", "practitioner"],
 		as_dict=True,
 	)
 	if not (s and s.status in ("Active", "Paused") and str(s.session_date) == today()):
@@ -202,13 +215,11 @@ def get_session(queue_session: str) -> dict | None:
 	)
 	if own_practitioner and s.practitioner != own_practitioner:
 		return None
-	# Enrich with full department name
-	dept_name = ""
-	if s.dept_abbr:
-		dept_name = frappe.db.get_value(
-			"Medical Department", {"custom_dept_abbr": s.dept_abbr}, "department"
-		) or s.dept_abbr
-	s["dept_name"] = dept_name
+	s["dept_name"] = (
+		resolve_department_name(service_point=s.service_point, dept_abbr=s.dept_abbr)
+		or s.dept_abbr
+		or ""
+	)
 	return s
 
 
@@ -698,19 +709,18 @@ def get_active_session_for_user() -> dict | None:
 		"Queue Session",
 		filters={"practitioner": practitioner, "session_date": today(),
 				 "status": ["in", ["Active", "Paused"]]},
-		fields=["name", "session_name", "dept_abbr", "status"],
+		fields=["name", "session_name", "dept_abbr", "service_point", "status"],
 		order_by="modified desc",
 		limit=1,
 	)
 	if not sessions:
 		return None
 	s = sessions[0]
-	dept_name = ""
-	if s.dept_abbr:
-		dept_name = frappe.db.get_value(
-			"Medical Department", {"custom_dept_abbr": s.dept_abbr}, "department"
-		) or s.dept_abbr
-	s["dept_name"] = dept_name
+	s["dept_name"] = (
+		resolve_department_name(service_point=s.service_point, dept_abbr=s.dept_abbr)
+		or s.dept_abbr
+		or ""
+	)
 	return s
 
 
