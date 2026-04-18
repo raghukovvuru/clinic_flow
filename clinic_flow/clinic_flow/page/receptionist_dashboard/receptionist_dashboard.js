@@ -41,6 +41,37 @@ function _display_token(row_or_token, token_number = null) {
 	return '—';
 }
 
+function _eta_slot(predicted, windowEnd = null) {
+	const start = _eta_fmt(predicted);
+	if (!start || start === '—') return '—';
+	const end = _eta_fmt(windowEnd);
+	if (!end || end === '—') return start;
+	return `${start}-${end}`;
+}
+
+function _report_by_label(reportBy) {
+	const report = _eta_fmt(reportBy);
+	if (!report || report === '—') return '—';
+	return `By ${report}`;
+}
+
+function _report_band(reportBy) {
+	if (!reportBy) return 'Later';
+	const report = _eta_fmt(reportBy);
+	if (!report || report === '—') return 'Later';
+	const [hh, mm] = report.split(':').map(Number);
+	if (Number.isNaN(hh) || Number.isNaN(mm)) return 'Later';
+	const totalMinutes = hh * 60 + mm;
+	const rounded = Math.round(totalMinutes / 30) * 30;
+	const normalized = ((rounded % 1440) + 1440) % 1440;
+	const bandHour = Math.floor(normalized / 60);
+	const bandMinute = normalized % 60;
+	const suffix = bandHour >= 12 ? 'PM' : 'AM';
+	const hour12 = ((bandHour + 11) % 12) + 1;
+	const minuteText = String(bandMinute).padStart(2, '0');
+	return `Around ${hour12}:${minuteText} ${suffix}`;
+}
+
 frappe.pages['receptionist-dashboard'].on_page_load = function (wrapper) {
 	frappe.ui.make_app_page({
 		parent: wrapper,
@@ -75,6 +106,42 @@ function get_dashboard_html() {
 	color: var(--rd-text);
 }
 #rd-root * { box-sizing: border-box; }
+.rd-topbar-shell {
+	flex-shrink:0;
+	padding:8px 20px;
+	background:linear-gradient(180deg, #fffdfb 0%, #f7faf8 100%);
+	border-bottom:1px solid var(--rd-border);
+	display:flex;
+	align-items:center;
+	justify-content:space-between;
+	gap:14px;
+	flex-wrap:wrap;
+}
+.rd-topbar-title {
+	display:flex;
+	flex-direction:column;
+	gap:2px;
+}
+.rd-topbar-kicker {
+	font-size:10px;
+	font-weight:800;
+	text-transform:uppercase;
+	letter-spacing:.08em;
+	color:var(--rd-muted);
+}
+.rd-topbar-heading {
+	font-size:15px;
+	font-weight:800;
+	color:var(--rd-text);
+}
+.rd-topbar-meta {
+	display:flex;
+	align-items:center;
+	gap:8px;
+	flex-wrap:wrap;
+	font-size:12px;
+	color:var(--rd-muted);
+}
 .rd-shell-grid {
 	display:grid;
 	grid-template-columns:minmax(520px, 1.2fr) minmax(420px, 1fr) 320px;
@@ -227,17 +294,118 @@ function get_dashboard_html() {
 	top:0;
 }
 .rd-walkin-selected-token {
-	padding:8px 10px;
-	border:1px solid var(--border-color);
-	border-radius:8px;
-	background:var(--card-bg);
-	margin-bottom:8px;
+	padding:12px 14px;
+	border:1px solid var(--rd-border-strong);
+	border-radius:12px;
+	background:
+		linear-gradient(180deg, rgba(20, 98, 77, 0.06) 0%, rgba(255,255,255,0.98) 100%);
+	margin-bottom:10px;
+	box-shadow:0 10px 24px rgba(17, 24, 39, 0.05);
 }
 .rd-walkin-confirm {
 	border:1px solid var(--border-color);
 	border-radius:8px;
 	background:var(--card-bg);
 	padding:10px;
+}
+.rd-walkin-token-hero {
+	display:flex;
+	align-items:flex-start;
+	justify-content:space-between;
+	gap:12px;
+}
+.rd-walkin-token-badge {
+	display:flex;
+	flex-direction:column;
+	gap:4px;
+	min-width:84px;
+}
+.rd-walkin-token-badge .token-label {
+	font-size:10px;
+	font-weight:800;
+	text-transform:uppercase;
+	letter-spacing:.08em;
+	color:var(--rd-primary);
+}
+.rd-walkin-token-badge .token-value {
+	font-size:34px;
+	line-height:1;
+	font-weight:900;
+	color:var(--rd-primary);
+}
+.rd-walkin-stage-card {
+	border:1px solid var(--rd-border);
+	border-radius:12px;
+	background:linear-gradient(180deg, rgba(255,255,255,.98) 0%, rgba(247,250,248,.96) 100%);
+	padding:12px 14px;
+	box-shadow:0 8px 20px rgba(17, 24, 39, 0.04);
+}
+.rd-walkin-stage-title {
+	font-size:14px;
+	font-weight:800;
+	color:var(--rd-text);
+	margin-bottom:4px;
+}
+.rd-walkin-stage-meta {
+	font-size:11px;
+	color:#5f6d67;
+	margin-bottom:10px;
+}
+.rd-walkin-board-shell {
+	border:1px solid var(--rd-border);
+	border-radius:14px;
+	background:
+		linear-gradient(180deg, rgba(20, 98, 77, 0.04) 0%, rgba(255,255,255,0.98) 100%);
+	padding:14px;
+	box-shadow:0 12px 28px rgba(17, 24, 39, 0.05);
+	min-height:100%;
+}
+.rd-walkin-board-head {
+	display:flex;
+	align-items:flex-start;
+	justify-content:space-between;
+	gap:12px;
+	margin-bottom:12px;
+}
+.rd-walkin-board-copy {
+	display:flex;
+	flex-direction:column;
+	gap:4px;
+}
+.rd-walkin-board-title {
+	font-size:15px;
+	font-weight:800;
+	color:var(--rd-text);
+}
+.rd-walkin-board-grid {
+	display:flex;
+	flex-wrap:wrap;
+	gap:7px;
+	align-content:flex-start;
+}
+.rd-walkin-board-groups {
+	display:flex;
+	flex-direction:column;
+	gap:12px;
+}
+.rd-walkin-board-group {
+	display:flex;
+	flex-direction:column;
+	gap:8px;
+}
+.rd-walkin-board-band {
+	display:flex;
+	align-items:center;
+	justify-content:space-between;
+	gap:8px;
+	padding-top:2px;
+}
+.rd-walkin-board-band-title {
+	font-size:12px;
+	font-weight:800;
+	text-transform:uppercase;
+	letter-spacing:.06em;
+	color:var(--rd-primary);
 }
 @media (max-width: 1600px) {
 	.rd-shell-grid {
@@ -621,16 +789,41 @@ function get_dashboard_html() {
 	font-size: 10px; font-weight: 700; cursor: default;
 	transition: box-shadow .1s; position: relative; flex-shrink: 0;
 }
+.rd-token-cell.has-eta {
+	width: 54px;
+	height: 40px;
+	padding: 0;
+	border-radius: 10px;
+	background: #f8fcfa;
+	box-shadow: 0 1px 2px rgba(17, 24, 39, 0.03);
+}
 .rd-token-cell.clickable { cursor: pointer; }
-.rd-token-cell.clickable:hover { box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.16); }
+.rd-token-cell.clickable:hover { box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.10), 0 6px 14px rgba(17, 24, 39, 0.05); }
 .rd-token-cell.recommended {
 	box-shadow: 0 0 0 3px var(--primary) !important;
 }
 .rd-token-cell.override-selected {
-	box-shadow: 0 0 0 3px #16a34a !important;
+	box-shadow: 0 0 0 3px #0f766e !important;
+	border-color: #0f766e !important;
+	background: linear-gradient(180deg, rgba(13, 148, 136, 0.16) 0%, rgba(240, 253, 250, 1) 100%) !important;
 }
 .rd-token-cell .rd-cell-sub {
 	font-size: 7px; font-weight: 400; line-height: 1; margin-top: 1px;
+}
+.rd-token-cell .rd-cell-eta {
+	font-size: 8px;
+	font-weight: 700;
+	line-height: 1.1;
+	margin-top: 2px;
+	opacity: .9;
+}
+.rd-token-cell .rd-cell-report {
+	display:none;
+}
+.rd-token-cell.has-eta > span:first-child {
+	font-size: 15px;
+	font-weight: 900;
+	line-height: 1;
 }
 
 /* detail drawer */
@@ -641,15 +834,32 @@ function get_dashboard_html() {
 /* live session panel */
 .rd-pipeline-section { margin-bottom: 14px; }
 .rd-pipeline-header {
-	font-size: 10px; font-weight: 700; text-transform: uppercase;
+	font-size: 10px; font-weight: 800; text-transform: uppercase;
 	letter-spacing: 1px; color: var(--rd-muted);
-	padding: 4px 0 6px; border-bottom: 1px solid var(--rd-border);
-	margin-bottom: 6px;
+	padding: 5px 0 7px; border-bottom: 1px solid rgba(185, 201, 192, 0.75);
+	margin-bottom: 7px;
+}
+.rd-pipeline-header.is-urgent {
+	color:#b91c1c;
+	border-bottom-color:rgba(248, 113, 113, 0.45);
+}
+.rd-pipeline-header.is-active {
+	color:#1d4ed8;
+	border-bottom-color:rgba(59, 130, 246, 0.4);
+}
+.rd-pipeline-header.is-ready {
+	color:#7c3aed;
+	border-bottom-color:rgba(168, 85, 247, 0.35);
+}
+.rd-pipeline-header.is-due {
+	color:#64726c;
+	border-bottom-color:rgba(185, 201, 192, 0.9);
 }
 .rd-patient-card {
-	border: 1px solid var(--rd-border); border-radius: 8px;
-	padding: 8px 10px; margin-bottom: 6px; background: var(--rd-panel);
-	box-shadow: 0 1px 2px rgba(17, 24, 39, 0.03);
+	border: 1px solid var(--rd-border); border-radius: 10px;
+	padding: 8px 10px; margin-bottom: 6px;
+	background: linear-gradient(180deg, rgba(255,255,255,.99) 0%, rgba(248,250,249,.96) 100%);
+	box-shadow: 0 8px 18px rgba(17, 24, 39, 0.05);
 }
 .rd-patient-card.with-doctor {
 	border-color: #1d4ed8; background: #eff6ff;
@@ -657,8 +867,12 @@ function get_dashboard_html() {
 .rd-patient-card.ready   { border-color: #7c3aed; background: #faf5ff; }
 .rd-patient-card.called  { border-color: #1d4ed8; background: #eff6ff; }
 .rd-patient-card.no-resp { border-color: #ea580c; background: #fff7ed; }
+.rd-patient-card.emergency {
+	border-color:#fecaca;
+	background:linear-gradient(180deg, #fff8f8 0%, #fff3f3 100%);
+}
 .rd-action-btn {
-	padding: 4px 10px; border-radius: 5px; font-size: 11px; font-weight: 600;
+	padding: 4px 10px; border-radius: 7px; font-size: 11px; font-weight: 700;
 	cursor: pointer; border: 1.5px solid; transition: all .15s; white-space: nowrap;
 }
 .rd-action-btn:hover { opacity: .85; }
@@ -670,17 +884,174 @@ function get_dashboard_html() {
 .rd-action-btn-orange:hover { background: #ea580c; color: #fff; }
 .rd-action-btn-red    { border-color: #dc2626; color: #991b1b; background: transparent; }
 .rd-action-btn-red:hover    { background: #dc2626; color: #fff; }
+.rd-rail-utility-btn {
+	padding: 5px 9px;
+	border-radius: 8px;
+	font-size: 11px;
+	font-weight: 700;
+}
+.rd-rail-btn-primary {
+	background:#16a34a;
+	color:#fff;
+	border-color:#16a34a;
+	box-shadow:0 6px 14px rgba(22, 163, 74, 0.16);
+}
+.rd-rail-btn-primary:hover {
+	opacity:.92;
+}
+.rd-rail-btn-positive {
+	background:#f0fdf4;
+}
+.rd-rail-btn-warning {
+	background:#fff7ed;
+}
+.rd-rail-btn-neutral {
+	background:#fff;
+	border-color:#cbd5e1;
+	color:#64748b;
+}
+.rd-rail-btn-neutral:hover {
+	background:#f8fafc;
+	color:#334155;
+	border-color:#94a3b8;
+}
+.rd-emergency-token {
+	font-size: 22px;
+	font-weight: 900;
+	line-height: 1;
+	color: #b91c1c;
+}
+.rd-emergency-status {
+	display:inline-flex;
+	align-items:center;
+	padding:2px 8px;
+	border-radius:999px;
+	font-size:10px;
+	font-weight:800;
+	text-transform:uppercase;
+	letter-spacing:.05em;
+	background:#fee2e2;
+	color:#b91c1c;
+	margin-bottom:6px;
+}
+.rd-rail-token {
+	font-size:18px;
+	font-weight:900;
+	line-height:1;
+	letter-spacing:-0.02em;
+}
+.rd-rail-card-title {
+	font-size:12px;
+	font-weight:800;
+	color:var(--rd-text);
+}
+.rd-rail-card-meta {
+	font-size:11px;
+	color:#64726c;
+	margin-top:2px;
+}
+.rd-rail-card-side {
+	display:flex;
+	flex-direction:column;
+	align-items:flex-end;
+	justify-content:center;
+	gap:4px;
+	text-align:right;
+}
+.rd-due-soon-block {
+	border:1px dashed rgba(185, 201, 192, 0.95);
+	border-radius:10px;
+	background:linear-gradient(180deg, rgba(255,255,255,.98) 0%, rgba(245, 248, 246, .95) 100%);
+	padding:10px;
+	box-shadow:0 4px 12px rgba(15, 23, 42, 0.03);
+}
+.rd-due-soon-copy {
+	font-size:11px;
+	color:#64726c;
+	margin-bottom:8px;
+}
+.rd-due-token-chip {
+	display:inline-flex;
+	align-items:center;
+	justify-content:center;
+	padding:5px 10px;
+	border-radius:8px;
+	background:#ffffff;
+	border:1px solid rgba(203, 213, 225, 0.95);
+	box-shadow:0 2px 8px rgba(15, 23, 42, 0.04);
+	font-size:12px;
+	font-weight:800;
+	cursor:pointer;
+	transition:all .15s;
+}
+.rd-due-token-chip:hover {
+	border-color:#93c5fd;
+	background:#eff6ff;
+	color:#1d4ed8;
+}
 .rd-recep-form {
-	margin-top: 8px; padding: 8px; border-radius: 6px;
-	background: var(--rd-panel-soft); border: 1px solid var(--rd-border);
+	margin-top: 8px;
+	padding: 10px;
+	border-radius: 10px;
+	background: linear-gradient(180deg, rgba(255,255,255,.96) 0%, rgba(241, 247, 244, .92) 100%);
+	border: 1px solid rgba(185, 201, 192, 0.95);
+	box-shadow: inset 0 1px 0 rgba(255,255,255,.6);
 }
 .rd-recep-input {
-	padding: 6px 8px; border: 1.5px solid var(--rd-border); border-radius: 5px;
-	font-size: 12px; outline: none; background: #fff; width: 100%; color: var(--rd-text);
+	padding: 8px 10px;
+	border: 1.5px solid #d7e0db;
+	border-radius: 8px;
+	font-size: 12px;
+	outline: none;
+	background: #fff;
+	width: 100%;
+	color: var(--rd-text);
+	min-height: 36px;
 }
 .rd-recep-input:focus {
 	border-color: var(--rd-primary);
 	box-shadow: 0 0 0 3px rgba(20, 98, 77, 0.12);
+}
+.rd-recep-head {
+	display:flex;
+	align-items:center;
+	justify-content:space-between;
+	gap:8px;
+	margin-bottom:8px;
+}
+.rd-recep-head-title {
+	font-size:11px;
+	font-weight:800;
+	letter-spacing:.06em;
+	text-transform:uppercase;
+	color:#64726c;
+}
+.rd-recep-fee-band {
+	font-size:11px;
+	font-weight:700;
+	border-radius:8px;
+	padding:6px 8px;
+	margin-bottom:8px;
+}
+.rd-recep-fee-band.covered {
+	color:#166534;
+	background:#f0fdf4;
+	border:1px solid #bbf7d0;
+}
+.rd-recep-fee-band.due {
+	color:#b45309;
+	background:#fffbeb;
+	border:1px solid #fde68a;
+}
+.rd-recep-fee-band.pending {
+	color:#64748b;
+	background:#f8fafc;
+	border:1px solid #e2e8f0;
+}
+.rd-recep-actions {
+	display:flex;
+	gap:6px;
+	align-items:center;
 }
 .rd-walkin-panel {
 	padding: 10px 12px;
@@ -780,29 +1151,212 @@ function get_dashboard_html() {
 	gap:8px;
 	flex-wrap:wrap;
 }
+.rd-ops-rail {
+	display:flex;
+	flex-direction:column;
+	gap:10px;
+	padding:10px;
+	border-bottom:1px solid var(--rd-border);
+	background:
+		linear-gradient(180deg, rgba(20, 98, 77, 0.09) 0%, rgba(20, 98, 77, 0.03) 100%),
+		linear-gradient(180deg, #f4f8f6 0%, #eef4f1 100%);
+}
+.rd-ops-head {
+	display:flex;
+	align-items:flex-start;
+	justify-content:space-between;
+	gap:10px;
+}
+.rd-ops-actions {
+	display:flex;
+	flex-direction:column;
+	gap:8px;
+}
+.rd-ops-action-btn {
+	border-radius:999px;
+	padding:7px 12px;
+	font-size:12px;
+	font-weight:700;
+	cursor:pointer;
+	white-space:nowrap;
+}
+.rd-ops-action-btn.phone {
+	border:1px solid #fdba74;
+	background:#fff7ed;
+	color:#9a3412;
+}
+.rd-ops-action-btn.emergency {
+	border:none;
+	background:#b91c1c;
+	color:#fff;
+	box-shadow:0 8px 20px rgba(185,28,28,0.18);
+}
+.rd-ops-summary-grid {
+	display:grid;
+	grid-template-columns:repeat(2, minmax(0, 1fr));
+	gap:8px;
+}
+.rd-ops-summary-card {
+	border:1px solid var(--rd-border);
+	border-radius:12px;
+	background:linear-gradient(180deg, rgba(255,255,255,.98) 0%, rgba(246, 250, 247, .94) 100%);
+	padding:10px 12px;
+	box-shadow:0 12px 28px rgba(17, 24, 39, 0.07);
+}
+.rd-ops-session-list {
+	display:flex;
+	flex-direction:column;
+	gap:6px;
+	max-height:152px;
+	overflow-y:auto;
+}
+.rd-ops-session-chip {
+	display:flex;
+	align-items:flex-start;
+	justify-content:space-between;
+	gap:10px;
+	padding:10px 11px;
+	border-radius:10px;
+	border:1px solid var(--rd-border);
+	background:rgba(255,255,255,.98);
+	font-size:11px;
+	font-weight:600;
+	box-shadow:0 6px 14px rgba(15, 23, 42, 0.05);
+}
+.rd-ops-session-chip.active {
+	border-color:#86efac;
+	background:linear-gradient(180deg, #f5fff8 0%, #ecfdf3 100%);
+}
+.rd-ops-session-chip.paused {
+	border-color:#fcd34d;
+	background:linear-gradient(180deg, #fffdf4 0%, #fffbeb 100%);
+}
+.rd-ops-session-code {
+	font-size:12px;
+	font-weight:800;
+	color:var(--rd-text);
+	white-space:nowrap;
+	overflow:hidden;
+	text-overflow:ellipsis;
+}
+.rd-ops-session-meta {
+	font-size:11px;
+	color:#607069;
+	margin-top:2px;
+	white-space:nowrap;
+	overflow:hidden;
+	text-overflow:ellipsis;
+}
+.rd-ops-lozenge {
+	display:inline-flex;
+	align-items:center;
+	justify-content:center;
+	padding:2px 8px;
+	border-radius:999px;
+	font-size:10px;
+	font-weight:800;
+	letter-spacing:.04em;
+	text-transform:uppercase;
+}
+.rd-ops-lozenge.live {
+	background:#dcfce7;
+	color:#15803d;
+}
+.rd-ops-lozenge.paused {
+	background:#fef3c7;
+	color:#b45309;
+}
+.rd-ops-session-token {
+	font-size:18px;
+	font-weight:900;
+	line-height:1.1;
+	color:var(--rd-text);
+	margin-top:7px;
+	text-align:right;
+}
+.rd-ops-stat-grid {
+	display:grid;
+	grid-template-columns:repeat(2, minmax(0, 1fr));
+	gap:8px;
+	margin-top:8px;
+}
+.rd-ops-stat-tile {
+	border:1px solid rgba(217, 225, 220, 0.95);
+	border-radius:10px;
+	background:rgba(255,255,255,.98);
+	padding:9px 10px;
+	min-height:68px;
+	display:flex;
+	flex-direction:column;
+	justify-content:space-between;
+	box-shadow:0 6px 16px rgba(15, 23, 42, 0.05);
+}
+.rd-ops-stat-tile.emergency {
+	border-color:#fecaca;
+	background:linear-gradient(180deg, #fff8f8 0%, #fff3f3 100%);
+}
+.rd-ops-stat-label {
+	font-size:10px;
+	font-weight:800;
+	text-transform:uppercase;
+	letter-spacing:.06em;
+	color:var(--rd-muted);
+}
+.rd-ops-stat-value {
+	font-size:24px;
+	line-height:1;
+	font-weight:900;
+	color:var(--rd-text);
+}
+.rd-ops-stat-note {
+	font-size:10px;
+	color:#73807a;
+}
+.rd-intake-hint {
+	border:1px solid var(--rd-border);
+	border-radius:10px;
+	background:linear-gradient(180deg, rgba(20, 98, 77, 0.04) 0%, rgba(255,255,255,0.95) 100%);
+	padding:12px 14px;
+	box-shadow:0 8px 20px rgba(17, 24, 39, 0.03);
+}
+.rd-intake-hint-grid {
+	display:grid;
+	grid-template-columns:repeat(2, minmax(0, 1fr));
+	gap:10px;
+	margin-top:10px;
+}
+.rd-intake-hint-card {
+	border:1px solid rgba(217, 225, 220, 0.9);
+	border-radius:9px;
+	background:rgba(255,255,255,.88);
+	padding:10px 11px;
+}
+.rd-intake-hint-title {
+	font-size:11px;
+	font-weight:800;
+	color:var(--rd-text);
+	margin-bottom:4px;
+}
+#rd-left {
+	background:linear-gradient(180deg, rgba(255,255,255,0.88) 0%, rgba(244,246,245,0.92) 100%);
+}
+#rd-right {
+	background:linear-gradient(180deg, rgba(247,250,248,0.9) 0%, rgba(244,246,245,0.95) 100%);
+}
 </style>
 
 <div id="rd-root" style="display:flex;flex-direction:column;height:calc(100vh - 60px);overflow:hidden;">
 
 	<!-- ── TOP BAR ─────────────────────────────────────────────────────────── -->
-	<div id="rd-topbar"
-		style="flex-shrink:0;padding:8px 20px;background:var(--card-bg);
-			border-bottom:1px solid var(--border-color);
-			display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-		<span id="rd-topbar-date" style="font-size:12px;font-weight:600;color:var(--text-muted);"></span>
-		<div id="rd-topbar-sessions" style="display:flex;gap:10px;flex-wrap:wrap;flex:1;"></div>
-		<div id="rd-topbar-doctor" style="font-size:12px;color:var(--text-muted);"></div>
-		<button id="rd-emergency-alert-btn"
-			style="border:1px solid #fdba74;background:#fff7ed;color:#9a3412;border-radius:999px;
-				padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">
-			Phone Alert
-		</button>
-		<button id="rd-emergency-btn"
-			style="border:none;background:#b91c1c;color:#fff;border-radius:999px;
-				padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;
-				box-shadow:0 8px 20px rgba(185,28,28,0.18);white-space:nowrap;">
-			Issue Emergency
-		</button>
+	<div id="rd-topbar" class="rd-topbar-shell">
+		<div class="rd-topbar-title">
+			<div class="rd-topbar-kicker">Reception Control</div>
+			<div id="rd-topbar-heading" class="rd-topbar-heading">Phone Booking Workspace</div>
+		</div>
+		<div class="rd-topbar-meta">
+			<span id="rd-topbar-date"></span>
+			<span id="rd-topbar-doctor"></span>
+		</div>
 	</div>
 
 	<!-- ── MODE SWITCH ──────────────────────────────────────────────────────── -->
@@ -828,7 +1382,10 @@ function get_dashboard_html() {
 			<!-- Left header -->
 			<div style="padding:10px 16px;border-bottom:1px solid var(--border-color);flex-shrink:0;
 				display:flex;align-items:center;justify-content:space-between;">
-				<div class="rd-label">Admit Patient</div>
+				<div>
+					<div class="rd-label">Task Workspace</div>
+					<div id="rd-workspace-subtitle" class="rd-caption" style="margin-top:2px;">Phone intake and booking flow</div>
+				</div>
 				<label id="rd-special-label"
 					style="display:flex;align-items:center;gap:5px;cursor:pointer;
 						font-size:12px;font-weight:600;color:var(--text-muted);
@@ -898,6 +1455,28 @@ function get_dashboard_html() {
 
 		<!-- RIGHT: Live Session Panel ──────────────────────────────────────── -->
 		<div id="rd-right" style="display:flex;flex-direction:column;overflow:hidden;">
+			<div class="rd-ops-rail">
+				<div class="rd-ops-head">
+					<div>
+						<div class="rd-label">Operations Rail</div>
+						<div class="rd-caption" style="margin-top:3px;">Live queue context stays visible while reception works.</div>
+					</div>
+					<div class="rd-ops-actions">
+						<button id="rd-emergency-alert-btn" class="rd-ops-action-btn phone">Phone Alert</button>
+						<button id="rd-emergency-btn" class="rd-ops-action-btn emergency">Issue Emergency</button>
+					</div>
+				</div>
+				<div class="rd-ops-summary-grid">
+					<div class="rd-ops-summary-card">
+						<div class="rd-label">Live Snapshot</div>
+						<div id="rd-live-counts" style="display:flex;flex-direction:column;gap:4px;margin-top:6px;"></div>
+					</div>
+					<div class="rd-ops-summary-card">
+						<div class="rd-label">Active Queues</div>
+						<div id="rd-topbar-sessions" class="rd-ops-session-list" style="margin-top:6px;"></div>
+					</div>
+				</div>
+			</div>
 			<!-- Header: session selector + refresh -->
 			<div style="padding:8px 10px;border-bottom:1px solid var(--border-color);
 				flex-shrink:0;display:flex;align-items:center;gap:6px;">
@@ -913,10 +1492,6 @@ function get_dashboard_html() {
 						color:var(--text-muted);font-size:18px;line-height:1;
 						padding:0 4px;flex-shrink:0;">⟳</button>
 			</div>
-			<!-- Counts bar -->
-			<div id="rd-live-counts"
-				style="padding:5px 10px;border-bottom:1px solid var(--border-color);
-					flex-shrink:0;display:flex;gap:12px;"></div>
 			<!-- Pipeline body -->
 			<div id="rd-live-panel" style="flex:1;overflow-y:auto;padding:10px;"></div>
 		</div>
@@ -935,6 +1510,8 @@ class ReceptionistDashboard {
 		this.$topbar   = this.$root.find('#rd-topbar-sessions');
 		this.$topdate  = this.$root.find('#rd-topbar-date');
 		this.$topdoc   = this.$root.find('#rd-topbar-doctor');
+		this.$topheading = this.$root.find('#rd-topbar-heading');
+		this.$workspaceSubtitle = this.$root.find('#rd-workspace-subtitle');
 		this.$emergencyAlert = this.$root.find('#rd-emergency-alert-btn');
 		this.$emergency = this.$root.find('#rd-emergency-btn');
 		this.$body     = this.$root.find('#rd-admission-body');
@@ -999,21 +1576,31 @@ class ReceptionistDashboard {
 			callback: (r) => {
 				if (!r.message) return;
 				const { sessions } = r.message;
-				if (!sessions || !sessions.length) {
-					this.$root.find('#rd-topbar').hide();
-					return;
-				}
-				this.$root.find('#rd-topbar').show();
-				this.$topbar.html(sessions.map(s => `
-					<span style="font-size:11px;font-weight:600;padding:3px 10px;
-						border-radius:999px;
-						background:${s.session_status === 'Active' ? '#dcfce7' : '#fef9c3'};
-						color:${s.session_status === 'Active' ? '#15803d' : '#a16207'};">
-						${frappe.utils.escape_html(s.dept_abbr || s.practitioner_name)}
-						&nbsp;·&nbsp;${s.session_status === 'Active' ? '▶' : '⏸'}
-						&nbsp;Token ${frappe.utils.escape_html(s.current_token || '—')}
-					</span>
-				`).join(''));
+				this.$topdoc.text(
+					sessions && sessions.length
+						? `${sessions.length} active queue${sessions.length === 1 ? '' : 's'}`
+						: 'No active queues'
+				);
+				this.$topbar.html((sessions || []).map(s => `
+					<div class="rd-ops-session-chip ${s.session_status === 'Active' ? 'active' : 'paused'}">
+						<div style="min-width:0;">
+							<div class="rd-ops-session-code">
+								${frappe.utils.escape_html(s.dept_abbr || s.practitioner_name)}
+							</div>
+							<div class="rd-ops-session-meta">
+								${frappe.utils.escape_html(s.practitioner_name || '')}
+							</div>
+						</div>
+						<div style="text-align:right;flex-shrink:0;">
+							<div class="rd-ops-lozenge ${s.session_status === 'Active' ? 'live' : 'paused'}">
+								${s.session_status === 'Active' ? 'Live' : 'Paused'}
+							</div>
+							<div class="rd-ops-session-token">
+								${frappe.utils.escape_html(s.current_token || '—')}
+							</div>
+						</div>
+					</div>
+				`).join('') || `<div class="rd-caption">No active queues right now.</div>`);
 
 				// Refresh ETAs for all active sessions every 60 s so report times
 				// stay current even when no booking/completion events have fired.
@@ -1167,6 +1754,12 @@ class ReceptionistDashboard {
 		this.$root.toggleClass('walkin-mode', isWalkin);
 		this.$root.toggleClass('board-open', boardOpen);
 		this.$root.find('#rd-board-close').toggle(!isWalkin && boardOpen);
+		this.$topheading.text(isWalkin ? 'Walk-in Intake Workspace' : 'Phone Booking Workspace');
+		this.$workspaceSubtitle.text(
+			isWalkin
+				? 'Live token intake and queue handoff'
+				: 'Phone intake, session comparison, and booking'
+		);
 	}
 
 	// ── Step indicator ───────────────────────────────────────────────────────
@@ -1321,6 +1914,24 @@ class ReceptionistDashboard {
 							<button id="rd-find-slot-btn" class="rd-btn-primary" style="width:auto;padding:9px 18px;">
 								Find Sessions
 							</button>
+						</div>
+					</div>
+					<div class="rd-intake-hint">
+						<div class="rd-flow-card-head" style="margin-bottom:0;">
+							<div>
+								<div class="rd-flow-card-title">Fast Phone Path</div>
+								<div class="rd-caption" style="margin-top:3px;">Keep the call moving: identify patient type, offer the best session, then collect details only if the caller accepts.</div>
+							</div>
+						</div>
+						<div class="rd-intake-hint-grid">
+							<div class="rd-intake-hint-card">
+								<div class="rd-intake-hint-title">Availability-first</div>
+								<div class="rd-caption">Best for live calls. Compare upcoming sessions quickly, then continue with patient details after the caller agrees.</div>
+							</div>
+							<div class="rd-intake-hint-card">
+								<div class="rd-intake-hint-title">Emergency stays separate</div>
+								<div class="rd-caption">Urgent cases should use the operations rail on the right. Emergency is an interrupt, not part of routine booking.</div>
+							</div>
 						</div>
 					</div>
 					</div>
@@ -2977,7 +3588,10 @@ class TokenBoard {
 
 		frappe.call({
 			method: 'clinic_flow.api.admission.get_token_board',
-			args: { queue_session },
+			args: {
+				queue_session,
+				load_class: this.dashboard._effective_load_class(),
+			},
 			callback: (r) => {
 				if (!r.message) return;
 				this.board_data = r.message;
@@ -3066,22 +3680,24 @@ class TokenBoard {
 		}
 
 		const cells = [];
+		const groupedCells = new Map();
+		const tokenEstimates = data.token_estimates || {};
 		for (let n = 1; n <= max_token; n++) {
 			const entry = entries_map[n] || null;
 			const state = this._cell_state(n, entry, vip_set);
 			const style = TokenBoard.CELL_STYLES[state] || TokenBoard.CELL_STYLES.available;
 			const is_rec = (n === this.recommended_token);
 			const is_clickable = (state === 'available' || entry !== null);
-
 			const classes = [
 				'rd-token-cell',
+				this.dashboard.state.channel === 'walkin' ? 'has-eta' : '',
 				is_clickable ? 'clickable' : '',
 				is_rec ? 'recommended' : '',
 			].filter(Boolean).join(' ');
 
 			const opacity = (state === 'pushed_to_end') ? 'opacity:.4;' : '';
 
-			cells.push(`
+			const cellHtml = `
 				<div class="${classes}"
 					data-token="${n}"
 					data-state="${state}"
@@ -3091,12 +3707,44 @@ class TokenBoard {
 					<span>${n}</span>
 					${style.sub ? `<span class="rd-cell-sub">${style.sub}</span>` : ''}
 				</div>
-			`);
+			`;
+			cells.push(cellHtml);
+			if (this.dashboard.state.channel === 'walkin') {
+				const band = _report_band(tokenEstimates[n]?.report_by_time);
+				if (!groupedCells.has(band)) groupedCells.set(band, []);
+				groupedCells.get(band).push(cellHtml);
+			}
 		}
 
+		const boardBody = this.dashboard.state.channel === 'walkin'
+			? `<div class="rd-walkin-board-groups">
+				${Array.from(groupedCells.entries()).map(([band, bandCells]) => `
+					<div class="rd-walkin-board-group">
+						<div class="rd-walkin-board-band">
+							<div class="rd-walkin-board-band-title">${frappe.utils.escape_html(band)}</div>
+							<div class="rd-caption">${bandCells.length} tokens</div>
+						</div>
+						<div class="rd-walkin-board-grid">
+							${bandCells.join('')}
+						</div>
+					</div>
+				`).join('')}
+			</div>`
+			: `<div class="rd-walkin-board-grid">${cells.join('')}</div>`;
+
 		this.$grid.html(`
-			<div style="display:flex;flex-wrap:wrap;gap:5px;align-content:flex-start;">
-				${cells.join('')}
+			<div class="rd-walkin-board-shell">
+				<div class="rd-walkin-board-head">
+					<div class="rd-walkin-board-copy">
+						<div class="rd-label" style="margin:0;">Step 1</div>
+						<div class="rd-walkin-board-title">Choose token for walk-in intake</div>
+						<div class="rd-caption">Pick the token first. Guardian lookup and child confirmation continue on the right.</div>
+					</div>
+					<div class="rd-caption" style="font-weight:700;white-space:nowrap;">
+						${max_token} tokens
+					</div>
+				</div>
+				${boardBody}
 			</div>
 		`);
 
@@ -3121,20 +3769,51 @@ class TokenBoard {
 
 		const session = db.state.walkin_preview_sessions[db.state.session_idx] || null;
 		const hasToken = !!db.state.override_token;
-		const tokenText = hasToken
-			? `Token ${frappe.utils.escape_html(String(db.state.override_token))} selected`
-			: 'Pick a token above to continue';
+		const tokenValue = hasToken
+			? frappe.utils.escape_html(String(db.state.override_token))
+			: '—';
+		const reportBy = hasToken && this.board_data && this.board_data.token_estimates
+			? _report_by_label(this.board_data.token_estimates[db.state.override_token]?.report_by_time)
+			: '—';
+		const tokenEta = hasToken && this.board_data && this.board_data.token_estimates
+			? _eta_slot(
+				this.board_data.token_estimates[db.state.override_token]?.predicted_doctor_time,
+				this.board_data.token_estimates[db.state.override_token]?.estimated_window_end
+			)
+			: '—';
 		this.$context.show().html(`
 			<div class="rd-walkin-dock">
 				<div class="rd-walkin-selected-token">
-					<div class="rd-label" style="margin-bottom:4px;">Selected Token</div>
-					<div style="font-size:15px;font-weight:800;">${tokenText}</div>
-					<div class="rd-caption" style="margin-top:4px;">
-						${session ? `${frappe.utils.escape_html(session.practitioner_name || session.session_name)} · ${frappe.utils.escape_html(session.start_time)}-${frappe.utils.escape_html(session.end_time)}` : 'No active session'}
+					<div class="rd-walkin-token-hero">
+						<div style="flex:1;min-width:0;">
+							<div class="rd-label" style="margin-bottom:4px;">Walk-in Intake</div>
+							<div class="rd-walkin-stage-title">
+								${hasToken ? 'Token selected. Continue with guardian mobile.' : 'Pick a token to start intake.'}
+							</div>
+							<div class="rd-walkin-stage-meta">
+								${session ? `${frappe.utils.escape_html(session.practitioner_name || session.session_name)} · ${frappe.utils.escape_html(session.start_time)}-${frappe.utils.escape_html(session.end_time)}` : 'No active session'}
+								${hasToken && reportBy !== '—' ? ` · ${frappe.utils.escape_html(reportBy)}` : ''}
+							</div>
+						</div>
+						<div class="rd-walkin-token-badge">
+							<span class="token-label">Token</span>
+							<span class="token-value">${tokenValue}</span>
+						</div>
 					</div>
 				</div>
-				${hasToken ? `
-				<div class="rd-walkin-panel" style="padding:0;">
+				<div class="rd-walkin-stage-card">
+					<div class="rd-walkin-stage-title">${hasToken ? 'Continue Intake' : 'Waiting for Token'}</div>
+					<div class="rd-walkin-stage-meta">
+						${hasToken
+							? `Search by guardian mobile to continue. ${reportBy !== '—' ? `${frappe.utils.escape_html(reportBy)}.` : ''}`
+							: 'Select the token on the left first. The intake steps will appear here immediately after selection.'}
+					</div>
+					${hasToken ? `
+					<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+						${reportBy !== '—' ? `<span class="rd-badge rd-badge-amber">${frappe.utils.escape_html(reportBy)}</span>` : ''}
+						${tokenEta !== '—' ? `<span class="rd-badge rd-badge-blue">Likely ${frappe.utils.escape_html(tokenEta)}</span>` : ''}
+					</div>` : ''}
+					${hasToken ? `
 					<div style="margin-bottom:8px;">
 						<div class="rd-label" style="margin-bottom:4px;">Parent / Guardian Mobile</div>
 						<input id="rd-board-mobile-input" class="rd-input"
@@ -3144,9 +3823,12 @@ class TokenBoard {
 					</div>
 					<button id="rd-board-search-btn" class="rd-btn-primary"
 						style="width:100%;">
-						Search
-					</button>
-				</div>` : ''}
+						Search Guardian
+					</button>` : `
+					<div class="rd-caption">
+						Review/New and Special controls above change the guidance, but the actual intake begins only after a token is chosen.
+					</div>`}
+				</div>
 			</div>
 			${db.state.walkin_notice ? `
 			<div class="rd-walkin-note">
@@ -3204,11 +3886,11 @@ class TokenBoard {
 		const g = db.state.guardian;
 		const children = db.state.children || [];
 		this.$context.show().html(`
-			<div class="rd-walkin-panel">
+			<div class="rd-walkin-stage-card">
 				<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">
 					<div>
 						<div class="rd-label">Guardian Found</div>
-						<div style="font-size:14px;font-weight:700;">${frappe.utils.escape_html(g.guardian_name)}</div>
+						<div class="rd-walkin-stage-title">${frappe.utils.escape_html(g.guardian_name)}</div>
 						<div class="rd-caption">${frappe.utils.escape_html(g.mobile)}</div>
 					</div>
 					<button id="rd-board-change-mobile" class="rd-btn-secondary" style="font-size:11px;">Change</button>
@@ -3253,7 +3935,7 @@ class TokenBoard {
 	_render_walkin_guardian_not_found() {
 		const db = this.dashboard;
 		this.$context.show().html(`
-			<div class="rd-walkin-panel">
+			<div class="rd-walkin-stage-card">
 				<div class="rd-card" style="border-color:#f87171;margin-bottom:10px;">
 					<div style="font-size:13px;font-weight:600;color:#dc2626;margin-bottom:4px;">
 						No guardian found
@@ -3286,10 +3968,10 @@ class TokenBoard {
 		const is_new = db.state._register_mode === 'new';
 		const g = db.state.guardian;
 		this.$context.show().html(`
-			<div class="rd-walkin-panel">
+			<div class="rd-walkin-stage-card">
 				<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
 					<button id="rd-board-reg-back" class="rd-btn-secondary" style="font-size:11px;">←</button>
-					<span style="font-size:13px;font-weight:700;">
+					<span class="rd-walkin-stage-title" style="margin:0;">
 						${is_new ? 'Register New Guardian & Child' : 'Add Child to ' + frappe.utils.escape_html(g.guardian_name)}
 					</span>
 				</div>
@@ -3339,11 +4021,11 @@ class TokenBoard {
 		if (!c || !vt || !s) return this._render_context_dock();
 		const is_review = vt.load_class === 'review_load';
 		this.$context.show().html(`
-			<div class="rd-walkin-panel rd-walkin-confirm">
+			<div class="rd-walkin-stage-card rd-walkin-confirm">
 				<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
 					<div>
 						<div class="rd-label">Selected Child</div>
-						<div style="font-size:14px;font-weight:700;">${frappe.utils.escape_html(c.patient_name || c.patient)}</div>
+						<div class="rd-walkin-stage-title" style="margin:0;">${frappe.utils.escape_html(c.patient_name || c.patient)}</div>
 						<div class="rd-caption">
 							Token <strong>${frappe.utils.escape_html(String(db.state.override_token || '—'))}</strong>
 							· ${frappe.utils.escape_html(s.practitioner_name || s.session_name)}
@@ -3401,7 +4083,7 @@ class TokenBoard {
 		const s = db.state.sessions[db.state.session_idx];
 		if (!b || !c || !s) return this._render_context_dock();
 		this.$context.show().html(`
-			<div class="rd-walkin-panel">
+			<div class="rd-walkin-stage-card">
 				<div class="rd-confirm-slip">
 					<div style="font-size:28px;font-weight:900;color:#15803d;margin-bottom:4px;">
 						${frappe.utils.escape_html(String(b.token_number))}
@@ -3731,18 +4413,28 @@ class LiveSessionPanel {
 
 	_render_counts(counts) {
 		this.$counts.html(`
-			<span class="rd-caption">
-				<strong>${counts.completed_today}</strong> done
-			</span>
-			<span class="rd-caption">
-				<strong>${counts.remaining}</strong> remaining
-			</span>
-			<span class="rd-caption">
-				<strong>${counts.total_booked}</strong> total
-			</span>
-			<span class="rd-caption">
-				<strong>${counts.emergency_pending || 0}</strong> emergency pending
-			</span>
+			<div class="rd-ops-stat-grid">
+				<div class="rd-ops-stat-tile">
+					<div class="rd-ops-stat-label">Done Today</div>
+					<div class="rd-ops-stat-value">${counts.completed_today}</div>
+					<div class="rd-ops-stat-note">Completed consultations</div>
+				</div>
+				<div class="rd-ops-stat-tile">
+					<div class="rd-ops-stat-label">Remaining</div>
+					<div class="rd-ops-stat-value">${counts.remaining}</div>
+					<div class="rd-ops-stat-note">Still active in queue</div>
+				</div>
+				<div class="rd-ops-stat-tile">
+					<div class="rd-ops-stat-label">In Session</div>
+					<div class="rd-ops-stat-value">${counts.total_booked}</div>
+					<div class="rd-ops-stat-note">Booked for selected queue</div>
+				</div>
+				<div class="rd-ops-stat-tile emergency">
+					<div class="rd-ops-stat-label">Emergency Pending</div>
+					<div class="rd-ops-stat-value">${counts.emergency_pending || 0}</div>
+					<div class="rd-ops-stat-note">Requires reconciliation</div>
+				</div>
+			</div>
 		`);
 	}
 
@@ -3809,21 +4501,21 @@ class LiveSessionPanel {
 			</div>
 			<div class="rd-patient-card with-doctor">
 				<div style="display:flex;align-items:center;gap:8px;">
-					<span style="font-size:18px;font-weight:900;color:#1d4ed8;">
+					<span class="rd-rail-token" style="color:#1d4ed8;min-width:74px;">
 						${frappe.utils.escape_html(_display_token(e))}
 					</span>
 					<div style="flex:1;">
-						<div style="font-size:13px;font-weight:700;">
+						<div class="rd-rail-card-title">
 							${frappe.utils.escape_html(e.patient_name || e.patient)}
 						</div>
-						<div class="rd-caption">
+						<div class="rd-rail-card-meta">
 							${e.load_class === 'review_load'
 								? '<span class="rd-badge rd-badge-green" style="font-size:9px;">Review</span>'
 								: '<span class="rd-badge rd-badge-blue" style="font-size:9px;">New</span>'}
 							${since ? '&nbsp;· Since ' + frappe.utils.escape_html(since) : ''}
 						</div>
 					</div>
-					<div class="rd-caption" style="font-weight:600;color:#1d4ed8;">
+					<div class="rd-rail-card-side" style="color:#1d4ed8;">
 						Doctor workspace controls completion
 					</div>
 				</div>
@@ -3840,7 +4532,7 @@ class LiveSessionPanel {
 			const statusTone = e.status === 'Alerted' ? '#b45309' : '#b91c1c';
 			const actions = e.status === 'Alerted'
 				? `
-					<button class="rd-action-btn rd-action-btn-red rd-confirm-emergency-arrival-btn"
+					<button class="rd-action-btn rd-action-btn-red rd-rail-utility-btn rd-confirm-emergency-arrival-btn"
 						data-intake="${frappe.utils.escape_html(e.name)}"
 						data-session="${frappe.utils.escape_html(e.queue_session || '')}"
 						data-patient="${frappe.utils.escape_html(e.patient || '')}"
@@ -3850,32 +4542,32 @@ class LiveSessionPanel {
 						Confirm Arrival
 					</button>`
 				: `
-					<button class="rd-action-btn rd-action-btn-green rd-mark-emergency-reconciled-btn"
+					<button class="rd-action-btn rd-action-btn-green rd-rail-utility-btn rd-mark-emergency-reconciled-btn"
 						data-intake="${frappe.utils.escape_html(e.name)}">
 						Mark Reconciled
 					</button>`;
 			return `
-				<div class="rd-patient-card" style="border-color:#fecaca;background:#fff7f7;">
-					<div style="display:flex;align-items:flex-start;gap:8px;">
-						<div style="min-width:54px;text-align:center;">
-							<div style="font-size:10px;font-weight:700;color:${statusTone};text-transform:uppercase;">
+				<div class="rd-patient-card emergency">
+					<div style="display:flex;align-items:flex-start;gap:10px;">
+						<div style="min-width:62px;text-align:center;">
+							<div class="rd-emergency-status" style="background:${e.status === 'Alerted' ? '#fef3c7' : '#fee2e2'};color:${statusTone};">
 								${frappe.utils.escape_html(e.status)}
 							</div>
-							<div style="font-size:18px;font-weight:900;color:${statusTone};line-height:1.1;">
+							<div class="rd-emergency-token" style="color:${statusTone};">
 								${token}
 							</div>
 						</div>
 						<div style="flex:1;">
-							<div style="font-size:12px;font-weight:700;">
+							<div style="font-size:12px;font-weight:800;color:var(--rd-text);">
 								${frappe.utils.escape_html(e.patient_name || e.display_label || 'Emergency Intake')}
 							</div>
-							<div class="rd-caption">
+							<div class="rd-caption" style="margin-top:2px;">
 								${frappe.utils.escape_html(e.channel === 'phone' ? 'Phone emergency' : 'Walk-in emergency')}
 								${e.queue_status ? ` · ${frappe.utils.escape_html(e.queue_status)}` : ''}
 							</div>
 							${summary}
 						</div>
-						<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
+						<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;justify-content:center;">
 							${actions}
 						</div>
 					</div>
@@ -3884,7 +4576,7 @@ class LiveSessionPanel {
 
 		return `
 		<div class="rd-pipeline-section">
-			<div class="rd-pipeline-header" style="color:#b91c1c;">
+			<div class="rd-pipeline-header is-urgent">
 				Emergency Pending (${entries.length})
 			</div>
 			${cards}
@@ -3896,22 +4588,22 @@ class LiveSessionPanel {
 			const is_review = e.load_class === 'review_load';
 			return `
 			<div class="rd-patient-card ready" style="display:flex;align-items:center;gap:8px;">
-					<span style="font-size:14px;font-weight:800;color:#7c3aed;min-width:28px;">
+					<span class="rd-rail-token" style="color:#7c3aed;min-width:74px;">
 						${frappe.utils.escape_html(_display_token(e))}
 					</span>
 				<div style="flex:1;">
-					<div style="font-size:12px;font-weight:600;">
+					<div class="rd-rail-card-title">
 						${frappe.utils.escape_html(e.patient_name || e.patient)}
 						${is_review
 							? '<span class="rd-badge rd-badge-green" style="font-size:9px;margin-left:4px;">Review</span>'
 							: '<span class="rd-badge rd-badge-blue" style="font-size:9px;margin-left:4px;">New</span>'}
 					</div>
 						${e.reception_done_at
-							? `<div class="rd-caption">Ready since ${frappe.utils.escape_html(frappe.datetime.str_to_user(e.reception_done_at, true))}</div>`
+							? `<div class="rd-rail-card-meta">Ready since ${frappe.utils.escape_html(frappe.datetime.str_to_user(e.reception_done_at, true))}</div>`
 							: ''}
-						${e.weight_recorded ? `<div class="rd-caption">${e.weight_recorded} kg</div>` : ''}
+						${e.weight_recorded ? `<div class="rd-rail-card-meta">${e.weight_recorded} kg</div>` : ''}
 					</div>
-					<div class="rd-caption" style="font-weight:600;color:#7c3aed;">
+					<div class="rd-rail-card-side" style="color:#7c3aed;">
 						Waiting for doctor call
 					</div>
 				</div>`;
@@ -3919,7 +4611,7 @@ class LiveSessionPanel {
 
 		return `
 		<div class="rd-pipeline-section">
-			<div class="rd-pipeline-header" style="color:#7c3aed;">
+			<div class="rd-pipeline-header is-ready">
 				Ready Near Doctor (${entries.length})
 			</div>
 			${cards}
@@ -3937,21 +4629,21 @@ class LiveSessionPanel {
 				data-entry="${frappe.utils.escape_html(e.name)}"
 				data-patient="${frappe.utils.escape_html(e.patient || '')}">
 				<div style="display:flex;align-items:center;gap:8px;margin-bottom:${is_expanding ? '8px' : '0'};">
-					<span style="font-size:14px;font-weight:800;color:#1d4ed8;min-width:28px;">
+					<span class="rd-rail-token" style="color:#1d4ed8;min-width:74px;">
 						${frappe.utils.escape_html(_display_token(e))}
 					</span>
 					<div style="flex:1;">
-						<div style="font-size:12px;font-weight:600;">
+						<div class="rd-rail-card-title">
 							${frappe.utils.escape_html(e.patient_name || e.patient)}
 						</div>
-						${call_time ? `<div class="rd-caption">Called ${frappe.utils.escape_html(call_time)}</div>` : ''}
+						${call_time ? `<div class="rd-rail-card-meta">Called ${frappe.utils.escape_html(call_time)}</div>` : ''}
 					</div>
 					<div style="display:flex;gap:4px;">
-						<button class="rd-action-btn rd-action-btn-green rd-complete-reception-btn"
+						<button class="rd-action-btn rd-action-btn-green rd-rail-btn-positive rd-complete-reception-btn"
 							data-entry="${frappe.utils.escape_html(e.name)}">
 							✓ Reception
 						</button>
-						<button class="rd-action-btn rd-action-btn-orange rd-no-response-btn"
+						<button class="rd-action-btn rd-action-btn-orange rd-rail-btn-warning rd-no-response-btn"
 							data-entry="${frappe.utils.escape_html(e.name)}">
 							N/R
 						</button>
@@ -3962,28 +4654,24 @@ class LiveSessionPanel {
 					const fd = this._fee_data[e.name];
 					let fee_html = '';
 					if (!fd) {
-						fee_html = `<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">
-							Checking fee validity…</div>`;
+						fee_html = `<div class="rd-recep-fee-band pending">Checking fee validity…</div>`;
 					} else if (fd.covered) {
-						fee_html = `<div style="font-size:11px;font-weight:600;color:#16a34a;
-							background:#f0fdf4;border:1px solid #bbf7d0;border-radius:5px;
-							padding:4px 8px;margin-bottom:6px;">
+						fee_html = `<div class="rd-recep-fee-band covered">
 							✓ Fee Validity — Covered
 							${fd.validity_till ? `<span style="font-weight:400;color:var(--text-muted);">
 								(valid till ${frappe.datetime.str_to_user(fd.validity_till)})</span>` : ''}
 						</div>`;
 					} else {
 						const amt = fd.charge ? `₹${fd.charge}` : '—';
-						fee_html = `<div style="font-size:11px;font-weight:600;color:#b45309;
-							background:#fffbeb;border:1px solid #fde68a;border-radius:5px;
-							padding:4px 8px;margin-bottom:6px;">
-							Payment Due: ${amt}
-						</div>`;
+						fee_html = `<div class="rd-recep-fee-band due">Payment Due: ${amt}</div>`;
 					}
 					return `
 				<div class="rd-recep-form">
-					<div style="font-size:11px;font-weight:700;margin-bottom:6px;color:var(--text-muted);">
-						COMPLETE RECEPTION
+					<div class="rd-recep-head">
+						<div class="rd-recep-head-title">
+							Complete Reception
+						</div>
+						<div class="rd-caption">Desk stage</div>
 					</div>
 					${fee_html}
 					<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
@@ -4002,13 +4690,13 @@ class LiveSessionPanel {
 					<input class="rd-recep-input rd-weight" type="number"
 						placeholder="Weight (kg)" min="0" step="0.1"
 						style="margin-bottom:6px;" />
-					<div style="display:flex;gap:6px;">
-							<button class="rd-action-btn rd-action-btn-green rd-confirm-reception-btn"
+					<div class="rd-recep-actions">
+							<button class="rd-action-btn rd-action-btn-green rd-rail-btn-primary rd-confirm-reception-btn"
 								style="flex:1;"
 								data-entry="${frappe.utils.escape_html(e.name)}">
 								Complete Reception
 							</button>
-						<button class="rd-action-btn rd-action-btn-red rd-cancel-recep-btn"
+						<button class="rd-action-btn rd-action-btn-red rd-rail-btn-neutral rd-cancel-recep-btn"
 							data-entry="${frappe.utils.escape_html(e.name)}">
 							✕
 						</button>
@@ -4020,7 +4708,7 @@ class LiveSessionPanel {
 
 		return `
 		<div class="rd-pipeline-section">
-			<div class="rd-pipeline-header" style="color:#1d4ed8;">
+			<div class="rd-pipeline-header is-active">
 				At Reception — Called (${entries.length})
 			</div>
 			${cards}
@@ -4029,10 +4717,7 @@ class LiveSessionPanel {
 
 	_section_due_soon(entries) {
 		const tokens = entries.map(e =>
-			`<span style="display:inline-block;padding:3px 8px;border-radius:5px;
-				background:var(--bg-color);border:1px solid var(--border-color);
-				font-size:12px;font-weight:700;cursor:pointer;"
-				class="rd-call-to-reception-inline"
+			`<span class="rd-call-to-reception-inline rd-due-token-chip"
 				data-entry="${frappe.utils.escape_html(e.name)}"
 				title="${frappe.utils.escape_html(e.patient_name || e.patient)}">
 				${frappe.utils.escape_html(_display_token(e))}
@@ -4041,8 +4726,11 @@ class LiveSessionPanel {
 
 		return `
 		<div class="rd-pipeline-section">
-			<div class="rd-pipeline-header">Due Soon</div>
-			<div style="display:flex;gap:5px;flex-wrap:wrap;">${tokens}</div>
+			<div class="rd-pipeline-header is-due">Due Soon</div>
+			<div class="rd-due-soon-block">
+				<div class="rd-due-soon-copy">Next patients likely to be called to reception.</div>
+				<div style="display:flex;gap:6px;flex-wrap:wrap;">${tokens}</div>
+			</div>
 		</div>`;
 	}
 

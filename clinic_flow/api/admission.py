@@ -446,7 +446,7 @@ def _estimate_hour_band(session: frappe._dict, config, load_class: str) -> str:
 # ---------------------------------------------------------------------------
 
 @frappe.whitelist()
-def get_token_board(queue_session: str) -> dict:
+def get_token_board(queue_session: str, load_class: str = "non_review_load") -> dict:
     """
     Return the full token board state for a session.
 
@@ -457,6 +457,8 @@ def get_token_board(queue_session: str) -> dict:
     """
     if not queue_session:
         frappe.throw(_("Queue Session is required."))
+    if load_class not in ("review_load", "non_review_load"):
+        load_class = "non_review_load"
 
     session = frappe.db.get_value(
         "Queue Session",
@@ -494,6 +496,14 @@ def get_token_board(queue_session: str) -> dict:
         max((e.token_number for e in entries if e.token_number), default=0),
     )
 
+    token_estimates = {}
+    from clinic_flow.api.eta import estimate
+    for token_number in range(1, max_token + 1):
+        try:
+            token_estimates[token_number] = estimate(queue_session, token_number, load_class)
+        except Exception:
+            continue
+
     return {
         "session": session,
         "entries": entries,
@@ -503,6 +513,8 @@ def get_token_board(queue_session: str) -> dict:
         "special_buffer_available": [],
         "special_buffer_reserved":  [],
         "max_token": max_token,
+        "load_class": load_class,
+        "token_estimates": token_estimates,
     }
 
 
