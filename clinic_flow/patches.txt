@@ -7,3 +7,4 @@
 clinic_flow.patches.v16_0.ensure_required_healthcare_custom_fields
 clinic_flow.patches.v16_0.remove_deprecated_healthcare_custom_fields
 clinic_flow.patches.v16_0.backfill_display_tokens
+clinic_flow.patches.v16_0.create_service_points

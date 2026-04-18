@@ -7,6 +7,7 @@
  "field_order": [
   "session_name",
   "department",
+  "service_point",
   "dept_abbr",
   "practitioner",
   "session_date",
@@ -53,10 +54,19 @@
    "options": "Medical Department"
   },
   {
+   "fieldname": "service_point",
+   "fieldtype": "Link",
+   "label": "Service Point",
+   "options": "Service Point",
+   "search_index": 1,
+   "description": "Canonical queue identity. When set, queue_code is sourced from Service Point; dept_abbr is a cached mirror."
+  },
+  {
    "fieldname": "dept_abbr",
    "fieldtype": "Data",
    "label": "Department Abbreviation",
-   "search_index": 1
+   "search_index": 1,
+   "description": "Cached mirror of service_point.queue_code when service_point is set. Retained as fallback during the Service Point migration."
   },
   {
    "fieldname": "practitioner",

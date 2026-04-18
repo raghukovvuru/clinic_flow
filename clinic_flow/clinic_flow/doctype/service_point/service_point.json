@@ -1,0 +1,144 @@
+{
+ "actions": [],
+ "autoname": "field:queue_code",
+ "creation": "2026-04-18 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "queue_code",
+  "display_label",
+  "category",
+  "is_active",
+  "sort_order",
+  "links_section",
+  "department",
+  "default_practitioner",
+  "service_unit",
+  "display_section",
+  "tv_group"
+ ],
+ "fields": [
+  {
+   "fieldname": "queue_code",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Queue Code",
+   "reqd": 1,
+   "unique": 1,
+   "description": "Short, front-facing code used as the token prefix (e.g. PD, CD, PH). Uppercase and stable."
+  },
+  {
+   "fieldname": "display_label",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Display Label",
+   "reqd": 1,
+   "description": "Human-readable name used on dashboards and TV displays (e.g. 'Pediatrics Dr. A')."
+  },
+  {
+   "default": "consult",
+   "fieldname": "category",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Category",
+   "options": "consult\npharmacy\nlab\nnursing\nprocedure\nother",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Is Active"
+  },
+  {
+   "default": "0",
+   "fieldname": "sort_order",
+   "fieldtype": "Int",
+   "label": "Sort Order",
+   "description": "Display ordering hint for dashboards and TV boards."
+  },
+  {
+   "fieldname": "links_section",
+   "fieldtype": "Section Break",
+   "label": "Links"
+  },
+  {
+   "fieldname": "department",
+   "fieldtype": "Link",
+   "label": "Department",
+   "options": "Medical Department"
+  },
+  {
+   "fieldname": "default_practitioner",
+   "fieldtype": "Link",
+   "label": "Default Practitioner",
+   "options": "Healthcare Practitioner",
+   "description": "Optional default practitioner. Leave blank for non-consult queues (pharmacy, lab, nursing)."
+  },
+  {
+   "fieldname": "service_unit",
+   "fieldtype": "Data",
+   "label": "Service Unit",
+   "description": "Free-form reference (room/counter label). Promote to a Link later only when actually used."
+  },
+  {
+   "fieldname": "display_section",
+   "fieldtype": "Section Break",
+   "label": "Display"
+  },
+  {
+   "fieldname": "tv_group",
+   "fieldtype": "Data",
+   "label": "TV Group",
+   "description": "Optional tag. Service Points sharing a tv_group render on the same TV board."
+  }
+ ],
+ "links": [],
+ "modified": "2026-04-18 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Clinic Flow",
+ "name": "Service Point",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Queue Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Queue Viewer",
+   "share": 1
+  }
+ ],
+ "sort_field": "sort_order",
+ "sort_order": "ASC",
+ "states": [],
+ "track_changes": 1
+}
