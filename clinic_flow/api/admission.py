@@ -13,6 +13,7 @@ from datetime import timedelta
 import frappe
 from frappe import _
 from frappe.utils import getdate, now_datetime, today, get_datetime, add_to_date
+from clinic_flow.queue.engine import build_display_token
 
 
 # ---------------------------------------------------------------------------
@@ -591,7 +592,7 @@ def confirm_booking(
 
     # Build token label (for display, e.g. PED-042)
     dept_abbr   = session_doc.dept_abbr or "TKN"
-    token_label = f"{dept_abbr}-{token_number:03d}"
+    token_label = build_display_token(dept_abbr, token_number)
 
     # ── Create Patient Appointment (Healthcare integration) ──────────────────
     # This keeps the Marley Healthcare appointment calendar in sync and ensures

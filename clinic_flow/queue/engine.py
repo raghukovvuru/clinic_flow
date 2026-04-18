@@ -6,22 +6,29 @@ from frappe.utils import now_datetime, today
 
 # ── Token formatter ──────────────────────────────────────────────────────────
 
+def build_display_token(queue_code: str, token_number: int | str) -> str:
+	"""
+	Build the front-facing token label.
+
+	Internal queue ordering remains numeric via token_number. This helper only
+	composes the visible token so multiple active queues remain distinguishable
+	in shared waiting areas.
+	"""
+	code = (queue_code or "GEN").strip().upper()
+	try:
+		number = int(token_number)
+	except (TypeError, ValueError):
+		return code
+	return f"{code}-{number:03d}"
+
 def build_token(dept_abbr: str, queue_type: str, sequence: int) -> str:
 	"""
-	Format: DEPT-CODE-SEQ
-	Example: CARD-WLK-009
-	queue_type maps to code via Appointment Type.custom_queue_code
-	Fallback codes if Appointment Type not found:
-	  PRE_BOOKED → PRE, WALK_IN → WLK, EMERGENCY → EMR, FOLLOW_UP → FLW
+	Legacy compatibility wrapper.
+
+	Display tokens no longer encode queue type. Keep the old function signature
+	so legacy call sites continue to work while we standardize the visible token.
 	"""
-	FALLBACK_CODES = {
-		"PRE_BOOKED": "PRE",
-		"WALK_IN": "WLK",
-		"EMERGENCY": "EMR",
-		"FOLLOW_UP": "FLW",
-	}
-	code = FALLBACK_CODES.get(queue_type, "GEN")
-	return f"{dept_abbr.upper()}-{code}-{str(sequence).zfill(3)}"
+	return build_display_token(dept_abbr, sequence)
 
 
 def get_next_sequence(queue_session: str, queue_type: str) -> int:

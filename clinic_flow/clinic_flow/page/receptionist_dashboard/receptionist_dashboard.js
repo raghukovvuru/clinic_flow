@@ -28,6 +28,19 @@ function _age_from_dob(dob_str) {
 	return `${days}d`;
 }
 
+function _display_token(row_or_token, token_number = null) {
+	if (row_or_token && typeof row_or_token === 'object') {
+		if (row_or_token.token) return String(row_or_token.token);
+		if (row_or_token.token_number !== undefined && row_or_token.token_number !== null) {
+			return String(row_or_token.token_number);
+		}
+		return '—';
+	}
+	if (row_or_token) return String(row_or_token);
+	if (token_number !== null && token_number !== undefined) return String(token_number);
+	return '—';
+}
+
 frappe.pages['receptionist-dashboard'].on_page_load = function (wrapper) {
 	frappe.ui.make_app_page({
 		parent: wrapper,
@@ -2584,7 +2597,7 @@ class ReceptionistDashboard {
 				<!-- Confirmation slip -->
 				<div class="rd-confirm-slip">
 					<div style="font-size:28px;font-weight:900;color:#15803d;margin-bottom:4px;">
-						${frappe.utils.escape_html(String(b.token_number))}
+						${frappe.utils.escape_html(_display_token(b))}
 					</div>
 					<div style="font-size:12px;font-weight:600;color:#15803d;margin-bottom:12px;">
 						Token Number
@@ -2677,7 +2690,7 @@ class ReceptionistDashboard {
 				.cap { font-size: 12px; color: #666; margin-bottom: 4px; }
 				hr { margin: 16px 0; }
 			</style></head><body>
-			<div class="t">${frappe.utils.escape_html(String(b.token_number))}</div>
+			<div class="t">${frappe.utils.escape_html(_display_token(b))}</div>
 			<hr>
 			<div class="label">Patient</div>
 			<div class="val">${frappe.utils.escape_html(c.patient_name || c.patient)}${age_str ? ' · ' + frappe.utils.escape_html(age_str) : ''}</div>
@@ -3797,7 +3810,7 @@ class LiveSessionPanel {
 			<div class="rd-patient-card with-doctor">
 				<div style="display:flex;align-items:center;gap:8px;">
 					<span style="font-size:18px;font-weight:900;color:#1d4ed8;">
-						${frappe.utils.escape_html(String(e.token_number))}
+						${frappe.utils.escape_html(_display_token(e))}
 					</span>
 					<div style="flex:1;">
 						<div style="font-size:13px;font-weight:700;">
@@ -3820,7 +3833,7 @@ class LiveSessionPanel {
 
 	_section_emergency_pending(entries) {
 		const cards = entries.map(e => {
-			const token = e.token_number ? `Token ${frappe.utils.escape_html(String(e.token_number))}` : 'Alert only';
+			const token = e.token ? frappe.utils.escape_html(_display_token(e)) : 'Alert only';
 			const summary = e.complaint_summary
 				? `<div class="rd-caption" style="margin-top:3px;">${frappe.utils.escape_html(e.complaint_summary)}</div>`
 				: '';
@@ -3849,7 +3862,7 @@ class LiveSessionPanel {
 								${frappe.utils.escape_html(e.status)}
 							</div>
 							<div style="font-size:18px;font-weight:900;color:${statusTone};line-height:1.1;">
-								${frappe.utils.escape_html(token)}
+								${token}
 							</div>
 						</div>
 						<div style="flex:1;">
@@ -3883,9 +3896,9 @@ class LiveSessionPanel {
 			const is_review = e.load_class === 'review_load';
 			return `
 			<div class="rd-patient-card ready" style="display:flex;align-items:center;gap:8px;">
-				<span style="font-size:14px;font-weight:800;color:#7c3aed;min-width:28px;">
-					${frappe.utils.escape_html(String(e.token_number))}
-				</span>
+					<span style="font-size:14px;font-weight:800;color:#7c3aed;min-width:28px;">
+						${frappe.utils.escape_html(_display_token(e))}
+					</span>
 				<div style="flex:1;">
 					<div style="font-size:12px;font-weight:600;">
 						${frappe.utils.escape_html(e.patient_name || e.patient)}
@@ -3925,7 +3938,7 @@ class LiveSessionPanel {
 				data-patient="${frappe.utils.escape_html(e.patient || '')}">
 				<div style="display:flex;align-items:center;gap:8px;margin-bottom:${is_expanding ? '8px' : '0'};">
 					<span style="font-size:14px;font-weight:800;color:#1d4ed8;min-width:28px;">
-						${frappe.utils.escape_html(String(e.token_number))}
+						${frappe.utils.escape_html(_display_token(e))}
 					</span>
 					<div style="flex:1;">
 						<div style="font-size:12px;font-weight:600;">
@@ -4022,7 +4035,7 @@ class LiveSessionPanel {
 				class="rd-call-to-reception-inline"
 				data-entry="${frappe.utils.escape_html(e.name)}"
 				title="${frappe.utils.escape_html(e.patient_name || e.patient)}">
-				${frappe.utils.escape_html(String(e.token_number))}
+				${frappe.utils.escape_html(_display_token(e))}
 			</span>`
 		).join('');
 
@@ -4045,7 +4058,7 @@ class LiveSessionPanel {
 			<div class="rd-patient-card no-resp">
 				<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
 					<span style="font-size:14px;font-weight:800;color:#ea580c;min-width:28px;">
-						${frappe.utils.escape_html(String(e.token_number))}
+						${frappe.utils.escape_html(_display_token(e))}
 					</span>
 					<div style="flex:1;">
 						<div style="font-size:12px;font-weight:600;">

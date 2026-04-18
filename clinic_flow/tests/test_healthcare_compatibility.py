@@ -11,6 +11,7 @@ from clinic_flow.api.emergency import (
 	mark_emergency_reconciled,
 )
 from clinic_flow.api.queue import call_next, call_next_special
+from clinic_flow.queue.engine import build_display_token
 
 
 class TestHealthcareCompatibility(IntegrationTestCase):
@@ -99,7 +100,7 @@ class TestHealthcareCompatibility(IntegrationTestCase):
 			status="Ready Near Doctor",
 			queue_position=2,
 			token_number=2,
-			token="TST-WLK-002",
+			token="TST-002",
 		)
 		emergency = self._make_queue_entry(
 			session.name,
@@ -107,7 +108,7 @@ class TestHealthcareCompatibility(IntegrationTestCase):
 			status="Ready Near Doctor",
 			queue_position=3,
 			token_number=3,
-			token="TST-EMR-003",
+			token="TST-003",
 			priority="emergency",
 		)
 
@@ -131,7 +132,7 @@ class TestHealthcareCompatibility(IntegrationTestCase):
 			status="Ready Near Doctor",
 			queue_position=2,
 			token_number=2,
-			token="TST-WLK-002",
+			token="TST-002",
 			priority="special",
 		)
 		newer = self._make_queue_entry(
@@ -140,7 +141,7 @@ class TestHealthcareCompatibility(IntegrationTestCase):
 			status="Ready Near Doctor",
 			queue_position=5,
 			token_number=5,
-			token="TST-WLK-005",
+			token="TST-005",
 			priority="special",
 		)
 
@@ -187,6 +188,10 @@ class TestHealthcareCompatibility(IntegrationTestCase):
 		self.assertEqual(
 			frappe.db.get_value("Queue Entry", entry_name, "priority"),
 			"emergency",
+		)
+		self.assertEqual(
+			frappe.db.get_value("Queue Entry", entry_name, "token"),
+			build_display_token(session.dept_abbr, issued["token_number"]),
 		)
 		self.assertEqual(
 			frappe.db.get_value("Queue Entry", entry_name, "status"),
