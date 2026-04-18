@@ -31,6 +31,9 @@ app_include_css = []
 app_include_js = []
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
+# Note: load-bearing customizations on upstream Healthcare doctypes are currently
+# patch-managed, not reliably fixture-managed, because live site Custom Field rows
+# may not carry module = "Clinic Flow".
 fixtures = [
 	{
 		"dt": "Custom Field",
