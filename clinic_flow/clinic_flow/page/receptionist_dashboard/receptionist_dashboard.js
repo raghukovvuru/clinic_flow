@@ -41,6 +41,19 @@ function _display_token(row_or_token, token_number = null) {
 	return '—';
 }
 
+// Returns short elapsed string from a datetime string: "3m", "1h 4m"
+function _elapsed_short(dt_str) {
+	if (!dt_str) return '';
+	const d = new Date(dt_str.replace(' ', 'T'));
+	if (isNaN(d.getTime())) return '';
+	const mins = Math.floor((Date.now() - d.getTime()) / 60000);
+	if (mins < 1)  return '<1m';
+	if (mins < 60) return `${mins}m`;
+	const h = Math.floor(mins / 60);
+	const m = mins % 60;
+	return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
 // Returns elapsed time since a called_to_reception_at datetime string.
 // { label: "2:14", urgent: true } — urgent when >= 120 seconds elapsed.
 function _call_elapsed(dt_str) {
@@ -1028,6 +1041,21 @@ function get_dashboard_html() {
 	border-color:#93c5fd;
 	background:#eff6ff;
 	color:#1d4ed8;
+}
+.rd-due-soon-row {
+	display:flex;align-items:center;gap:8px;
+	padding:6px 8px;border-radius:8px;
+	background:#fff;border:1px solid rgba(203,213,225,.9);
+	cursor:pointer;transition:all .15s;
+}
+.rd-due-soon-row:hover { border-color:#93c5fd; background:#eff6ff; }
+.rd-due-token-num {
+	font-size:13px;font-weight:800;min-width:56px;
+	color:var(--rd-text);flex-shrink:0;
+}
+.rd-due-load-badge {
+	display:inline-block;padding:1px 6px;border-radius:999px;
+	font-size:9px;font-weight:800;letter-spacing:.04em;margin-left:5px;
 }
 .rd-recep-form {
 	margin-top: 8px;
@@ -4840,21 +4868,35 @@ class LiveSessionPanel {
 	}
 
 	_section_due_soon(entries) {
-		const tokens = entries.map(e =>
-			`<span class="rd-call-to-reception-inline rd-due-token-chip"
+		const rows = entries.map(e => {
+			const loadLabel = e.load_class === 'review_load' ? 'Review' : 'New';
+			const loadColor = e.load_class === 'review_load' ? '#0369a1' : '#15803d';
+			const loadBg    = e.load_class === 'review_load' ? '#dbeafe' : '#dcfce7';
+			const reportLine = e.report_by_time
+				? `<span class="rd-caption" style="margin-left:4px;">· Report by ${frappe.utils.escape_html(
+					frappe.datetime.str_to_user(e.report_by_time, true))}</span>` : '';
+			const bookedAgo = e.creation ? `<span class="rd-caption">${_elapsed_short(e.creation)} ago</span>` : '';
+			return `
+			<div class="rd-due-soon-row rd-call-to-reception-inline"
 				data-entry="${frappe.utils.escape_html(e.name)}"
-				title="${frappe.utils.escape_html(e.patient_name || e.patient)}">
-				${frappe.utils.escape_html(_display_token(e))}
-			</span>`
-		).join('');
+				title="Call ${frappe.utils.escape_html(e.patient_name || e.patient)} to reception">
+				<span class="rd-due-token-num">${frappe.utils.escape_html(_display_token(e))}</span>
+				<span style="flex:1;min-width:0;">
+					<span style="font-size:12px;font-weight:600;">
+						${frappe.utils.escape_html(e.patient_name || e.patient)}
+					</span>
+					<span class="rd-due-load-badge"
+						style="background:${loadBg};color:${loadColor};">${loadLabel}</span>
+					${reportLine}
+				</span>
+				${bookedAgo}
+			</div>`;
+		}).join('');
 
 		return `
 		<div class="rd-pipeline-section">
 			<div class="rd-pipeline-header is-due">Expected</div>
-			<div class="rd-due-soon-block">
-				<div class="rd-due-soon-copy">Next patients likely to be called to reception.</div>
-				<div style="display:flex;gap:6px;flex-wrap:wrap;">${tokens}</div>
-			</div>
+			<div style="display:flex;flex-direction:column;gap:4px;">${rows}</div>
 		</div>`;
 	}
 

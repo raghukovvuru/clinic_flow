@@ -1232,7 +1232,7 @@ def get_live_session_state(queue_session: str) -> dict:
 		"arrived_at", "called_to_reception_at", "no_response_at", "hold_patients_count",
 		"reception_done_at", "weight_recorded",
 		"report_by_time", "predicted_doctor_time",
-		"seen_at",
+		"seen_at", "creation",
 	]
 
 	def _fetch(statuses: list, order: str = "queue_position asc", limit: int = 0) -> list:
