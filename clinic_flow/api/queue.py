@@ -1169,6 +1169,7 @@ def get_session_urgency_summary() -> list[dict]:
 			qs.dept_abbr,
 			qs.status,
 			qs.start_time,
+			qs.current_token,
 			hp.practitioner_name,
 			COALESCE(SUM(qe.status = 'Arrived'), 0)           AS arrived_count,
 			COALESCE(SUM(qe.priority = 'emergency'

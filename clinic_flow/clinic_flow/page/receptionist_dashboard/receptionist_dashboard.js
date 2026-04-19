@@ -1354,6 +1354,10 @@ function get_dashboard_html() {
 .rd-live-chip-badge.emerg { background:#fee2e2; color:#b91c1c; }
 .rd-live-chip-badge.arrived { background:#dbeafe; color:#1d4ed8; }
 .rd-live-chip-badge.active-ct { background:#f1f5f9; color:#475569; }
+.rd-live-chip-token {
+	font-size:10px; font-weight:800; color:var(--primary);
+	letter-spacing:.02em; margin-left:2px;
+}
 .rd-ops-stat-grid {
 	display:grid;
 	grid-template-columns:repeat(2, minmax(0, 1fr));
@@ -1547,14 +1551,10 @@ function get_dashboard_html() {
 						<button id="rd-emergency-btn" class="rd-ops-action-btn emergency">Issue Emergency</button>
 					</div>
 				</div>
-				<div class="rd-ops-summary-grid">
+				<div class="rd-ops-summary-grid" style="grid-template-columns:1fr;">
 					<div class="rd-ops-summary-card">
 						<div class="rd-label">Live Snapshot</div>
 						<div id="rd-live-counts" style="display:flex;flex-direction:column;gap:4px;margin-top:6px;"></div>
-					</div>
-					<div class="rd-ops-summary-card">
-						<div class="rd-label">Active Queues</div>
-						<div id="rd-topbar-sessions" class="rd-ops-session-list" style="margin-top:6px;"></div>
 					</div>
 				</div>
 			</div>
@@ -1586,7 +1586,7 @@ function get_dashboard_html() {
 class ReceptionistDashboard {
 	constructor(wrapper) {
 		this.$root     = $(wrapper).find('#rd-root');
-		this.$topbar   = this.$root.find('#rd-topbar-sessions');
+
 		this.$topdate  = this.$root.find('#rd-topbar-date');
 		this.$topdoc   = this.$root.find('#rd-topbar-doctor');
 		this.$topheading = this.$root.find('#rd-topbar-heading');
@@ -1660,26 +1660,6 @@ class ReceptionistDashboard {
 						? `${sessions.length} active queue${sessions.length === 1 ? '' : 's'}`
 						: 'No active queues'
 				);
-				this.$topbar.html((sessions || []).map(s => `
-					<div class="rd-ops-session-chip ${s.session_status === 'Active' ? 'active' : 'paused'}">
-						<div style="min-width:0;">
-							<div class="rd-ops-session-code">
-								${frappe.utils.escape_html(s.dept_abbr || s.practitioner_name)}
-							</div>
-							<div class="rd-ops-session-meta">
-								${frappe.utils.escape_html(s.practitioner_name || '')}
-							</div>
-						</div>
-						<div style="text-align:right;flex-shrink:0;">
-							<div class="rd-ops-lozenge ${s.session_status === 'Active' ? 'live' : 'paused'}">
-								${s.session_status === 'Active' ? 'Live' : 'Paused'}
-							</div>
-							<div class="rd-ops-session-token">
-								${frappe.utils.escape_html(s.current_token || '—')}
-							</div>
-						</div>
-					</div>
-				`).join('') || `<div class="rd-caption">No active queues right now.</div>`);
 
 				// Refresh ETAs for all active sessions every 60 s so report times
 				// stay current even when no booking/completion events have fired.
@@ -4436,18 +4416,21 @@ class LiveSessionPanel {
 			const dotClass = s.status === 'Active' ? 'active' : s.status === 'Paused' ? 'paused' : 'scheduled';
 			const statusClass = s.status === 'Active' ? 'is-active-status' : s.status === 'Paused' ? 'is-paused-status' : '';
 			const label = frappe.utils.escape_html(s.practitioner_name || s.session_name || s.name);
+			// Emergency first (highest urgency), then arrived (physically present), then total active
 			const emergBadge = s.emergency_count > 0
-				? `<span class="rd-live-chip-badge emerg">${s.emergency_count}</span>` : '';
+				? `<span class="rd-live-chip-badge emerg" title="${s.emergency_count} emergency">${s.emergency_count}</span>` : '';
 			const arrivedBadge = s.arrived_count > 0
-				? `<span class="rd-live-chip-badge arrived">${s.arrived_count}</span>` : '';
+				? `<span class="rd-live-chip-badge arrived" title="${s.arrived_count} arrived">${s.arrived_count}</span>` : '';
 			const activeBadge = s.active_count > 0
-				? `<span class="rd-live-chip-badge active-ct">${s.active_count}</span>` : '';
+				? `<span class="rd-live-chip-badge active-ct" title="${s.active_count} active">${s.active_count}</span>` : '';
+			const tokenDisplay = isActive && s.current_token
+				? `<span class="rd-live-chip-token">→ ${frappe.utils.escape_html(s.current_token)}</span>` : '';
 			return `<button class="rd-live-session-chip ${isActive ? 'is-active' : statusClass}"
 				data-session="${frappe.utils.escape_html(s.name)}"
 				title="${frappe.utils.escape_html(s.session_name || s.name)}">
 				<span class="rd-live-chip-dot ${dotClass}"></span>
 				${label}
-				${emergBadge}${arrivedBadge}${activeBadge}
+				${emergBadge}${arrivedBadge}${activeBadge}${tokenDisplay}
 			</button>`;
 		}).join('');
 		this.$chips_bar.html(chips);
