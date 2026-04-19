@@ -26,6 +26,7 @@
   "special_override_at",
   "status",
   "queue_position",
+  "arrived_at",
   "called_at",
   "seen_at",
   "done_at",
@@ -198,13 +199,20 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Booked\nWaiting\nCalled\nNo Response\nReady Near Doctor\nWith Doctor\nCompleted\nPushed to End\nDone\nSkipped\nNo Show"
+   "options": "Booked\nWaiting\nArrived\nCalled\nNo Response\nReady Near Doctor\nWith Doctor\nCompleted\nPushed to End\nDone\nSkipped\nNo Show"
   },
   {
    "fieldname": "queue_position",
    "fieldtype": "Int",
    "label": "Queue Position",
    "search_index": 1
+  },
+  {
+   "fieldname": "arrived_at",
+   "fieldtype": "Datetime",
+   "label": "Arrived At",
+   "read_only": 1,
+   "description": "Timestamp when patient self-checked-in at the arrival counter (QR scan or phone lookup)."
   },
   {
    "fieldname": "called_at",
@@ -343,7 +351,7 @@
   }
  ],
  "links": [],
- "modified": "2026-04-14 00:00:00.000000",
+ "modified": "2026-04-18 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Clinic Flow",
  "name": "Queue Entry",

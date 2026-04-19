@@ -403,7 +403,7 @@ def end_session(queue_session: str, no_show_waiting: int = 1) -> dict:
 	if s.status not in ("Active", "Paused"):
 		frappe.throw(_(f"Session is already {s.status}."), frappe.ValidationError)
 
-	pending_statuses = ["Booked", "Waiting", "No Response", "Pushed to End"]
+	pending_statuses = ["Booked", "Waiting", "Arrived", "No Response", "Pushed to End"]
 	affected_pending = frappe.db.count(
 		"Queue Entry",
 		{"queue_session": queue_session, "status": ["in", pending_statuses]},
@@ -411,7 +411,7 @@ def end_session(queue_session: str, no_show_waiting: int = 1) -> dict:
 	if no_show_waiting:
 		frappe.db.sql(
 			"UPDATE `tabQueue Entry` SET status='No Show' "
-			"WHERE queue_session=%s AND status IN ('Booked', 'Waiting', 'No Response', 'Pushed to End')",
+			"WHERE queue_session=%s AND status IN ('Booked', 'Waiting', 'Arrived', 'No Response', 'Pushed to End')",
 			(queue_session,)
 		)
 
@@ -448,7 +448,7 @@ def cancel_session(queue_session: str, cancel_pending: int = 1) -> dict:
 	if s.status not in ("Scheduled", "Active", "Paused"):
 		frappe.throw(_(f"Session is {s.status}, cannot cancel."), frappe.ValidationError)
 
-	pending_statuses = ["Booked", "Waiting", "No Response", "Pushed to End"]
+	pending_statuses = ["Booked", "Waiting", "Arrived", "No Response", "Pushed to End"]
 	in_motion_statuses = ["Called", "Ready Near Doctor", "With Doctor"]
 	affected_pending = frappe.db.count(
 		"Queue Entry",
@@ -462,7 +462,7 @@ def cancel_session(queue_session: str, cancel_pending: int = 1) -> dict:
 	if cancel_pending:
 		frappe.db.sql(
 			"UPDATE `tabQueue Entry` SET status='No Show' "
-			"WHERE queue_session=%s AND status IN ('Booked', 'Waiting', 'No Response', 'Pushed to End')",
+			"WHERE queue_session=%s AND status IN ('Booked', 'Waiting', 'Arrived', 'No Response', 'Pushed to End')",
 			(queue_session,)
 		)
 
@@ -580,7 +580,7 @@ def _inherit_waiting_entries(practitioner: str, new_session: str) -> None:
 
 	orphaned = frappe.get_all(
 		"Queue Entry",
-		filters={"queue_session": ["in", completed_sessions], "status": "Waiting"},
+		filters={"queue_session": ["in", completed_sessions], "status": ["in", ["Waiting", "Arrived"]]},
 		fields=["name"],
 	)
 	if not orphaned:
@@ -852,9 +852,9 @@ def call_to_reception(queue_entry: str) -> dict:
 	if not entry:
 		frappe.throw(_("Queue Entry {0} not found.").format(queue_entry))
 
-	if entry.status not in ("Waiting", "Booked", "Pushed to End"):
+	if entry.status not in ("Waiting", "Booked", "Arrived", "Pushed to End"):
 		frappe.throw(
-			_("Cannot call to reception: patient status is '{0}' (expected Waiting, Booked, or Pushed to End).").format(
+			_("Cannot call to reception: patient status is '{0}' (expected Waiting, Booked, Arrived, or Pushed to End).").format(
 				entry.status
 			),
 			frappe.ValidationError,
@@ -1188,7 +1188,7 @@ def get_live_session_state(queue_session: str) -> dict:
 	_ENTRY_FIELDS = [
 		"name", "token_number", "token", "patient", "patient_name",
 		"load_class", "queue_type", "status", "queue_position",
-		"called_to_reception_at", "no_response_at", "hold_patients_count",
+		"arrived_at", "called_to_reception_at", "no_response_at", "hold_patients_count",
 		"reception_done_at", "weight_recorded",
 		"report_by_time", "predicted_doctor_time",
 		"seen_at",
@@ -1207,6 +1207,7 @@ def get_live_session_state(queue_session: str) -> dict:
 	with_doctor   = _fetch(["With Doctor"],        "seen_at desc", limit=1)
 	ready         = _fetch(["Ready Near Doctor"],  "queue_position asc")
 	called        = _fetch(["Called"],             "called_to_reception_at asc")
+	arrived       = _fetch(["Arrived"],            "arrived_at asc")
 	due_soon      = _fetch(["Booked", "Waiting"],  "queue_position asc", limit=5)
 	no_response   = _fetch(["No Response"],        "no_response_at asc")
 	pushed_to_end = _fetch(["Pushed to End"],      "queue_position asc")
@@ -1232,6 +1233,7 @@ def get_live_session_state(queue_session: str) -> dict:
 		"with_doctor":     with_doctor,
 		"ready":           ready,
 		"called":          called,
+		"arrived":         arrived,
 		"due_soon":        due_soon,
 		"no_response":     no_response,
 		"pushed_to_end":   pushed_to_end,
@@ -1241,6 +1243,7 @@ def get_live_session_state(queue_session: str) -> dict:
 			"total_booked":    total_booked,
 			"completed_today": completed_today,
 			"remaining":       max(0, total_booked - completed_today),
+			"arrived_count":   len(arrived),
 			"emergency_pending": len(emergency_pending),
 		},
 	}
