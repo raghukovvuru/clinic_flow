@@ -1,0 +1,114 @@
+[
+ {
+  "app": null,
+  "charts": [],
+  "content": "[{\"id\": \"cf_hdr\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h2\\\">Clinic Flow</span>\", \"col\": 12}}, {\"id\": \"cf_shortcuts\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Doctor Workspace\", \"col\": 4}}, {\"id\": \"cf_shortcuts_v2\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Doctor Workspace V2\", \"col\": 4}}, {\"id\": \"152948ea09\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Receptionist Dashboard\", \"col\": 4}}, {\"id\": \"05daedb6a3\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Arrival Counter\", \"col\": 4}}]",
+  "custom_blocks": [],
+  "docstatus": 0,
+  "doctype": "Workspace",
+  "external_link": null,
+  "for_user": "",
+  "hide_custom": 0,
+  "icon": "stroke-calendar",
+  "indicator_color": null,
+  "is_hidden": 0,
+  "label": "Clinic Flow",
+  "link_to": null,
+  "link_type": null,
+  "links": [],
+  "modified": "2026-04-19 17:20:08.109786",
+  "module": "Clinic Flow",
+  "name": "Clinic Flow",
+  "number_cards": [],
+  "parent_page": "",
+  "public": 1,
+  "quick_lists": [],
+  "restrict_to_domain": null,
+  "roles": [
+   {
+    "role": "Physician"
+   },
+   {
+    "role": "Queue Manager"
+   },
+   {
+    "role": "Queue Viewer"
+   }
+  ],
+  "sequence_id": 1.0,
+  "shortcuts": [
+   {
+    "color": "Blue",
+    "doc_view": "",
+    "format": null,
+    "icon": "stroke-calendar",
+    "kanban_board": null,
+    "label": "Doctor Workspace",
+    "link_to": "doctor-workspace",
+    "report_ref_doctype": null,
+    "restrict_to_domain": "",
+    "stats_filter": "",
+    "type": "Page",
+    "url": null
+   },
+   {
+    "color": "Orange",
+    "doc_view": "",
+    "format": null,
+    "icon": "stroke-file",
+    "kanban_board": null,
+    "label": "Doctor Workspace V2",
+    "link_to": "doctor-workspace-v2",
+    "report_ref_doctype": null,
+    "restrict_to_domain": "",
+    "stats_filter": "",
+    "type": "Page",
+    "url": null
+   },
+   {
+    "color": "Green",
+    "doc_view": "",
+    "format": null,
+    "icon": "stroke-users",
+    "kanban_board": null,
+    "label": "Receptionist Workspace",
+    "link_to": "receptionist-workspace",
+    "report_ref_doctype": null,
+    "restrict_to_domain": "",
+    "stats_filter": "",
+    "type": "Page",
+    "url": null
+   },
+   {
+    "color": "#4f46e5",
+    "doc_view": null,
+    "format": null,
+    "icon": null,
+    "kanban_board": null,
+    "label": "Receptionist Dashboard",
+    "link_to": "receptionist-dashboard",
+    "report_ref_doctype": null,
+    "restrict_to_domain": null,
+    "stats_filter": null,
+    "type": "Page",
+    "url": null
+   },
+   {
+    "color": "#0369a1",
+    "doc_view": null,
+    "format": null,
+    "icon": null,
+    "kanban_board": null,
+    "label": "Arrival Counter",
+    "link_to": "arrival-counter",
+    "report_ref_doctype": null,
+    "restrict_to_domain": null,
+    "stats_filter": null,
+    "type": "Page",
+    "url": null
+   }
+  ],
+  "title": "Clinic Flow",
+  "type": "Workspace"
+ }
+]
