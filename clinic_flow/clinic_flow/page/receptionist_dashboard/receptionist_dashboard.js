@@ -699,12 +699,32 @@ function get_dashboard_html() {
 
 /* step indicator */
 .rd-step {
-	flex: 1; text-align: center; padding: 6px 4px;
-	font-size: 10px; font-weight: 700; color: var(--rd-muted);
-	border-bottom: 2px solid var(--rd-border); transition: all .2s;
+	display:flex; flex-direction:column; align-items:center; gap:3px;
+	padding:7px 4px 6px; font-size:10px; font-weight:700;
+	color:var(--rd-muted); cursor:default; flex-shrink:0; position:relative;
 }
-.rd-step.active { color: var(--rd-primary); border-bottom-color: var(--rd-primary); }
-.rd-step.done   { color: #16a34a;       border-bottom-color: #16a34a; }
+.rd-step::before {
+	content: attr(data-num);
+	display:flex; align-items:center; justify-content:center;
+	width:20px; height:20px; border-radius:50%; font-size:10px; font-weight:800;
+	border:2px solid var(--rd-border);
+	background:var(--card-bg); color:var(--rd-muted);
+	transition:all .2s; flex-shrink:0;
+}
+.rd-step.active { color:var(--rd-primary); }
+.rd-step.active::before {
+	border-color:var(--rd-primary); background:var(--rd-primary); color:#fff;
+}
+.rd-step.done { color:#16a34a; }
+.rd-step.done::before {
+	content:"✓"; border-color:#16a34a; background:#16a34a; color:#fff;
+}
+.rd-step-connector {
+	flex:1; height:2px; background:var(--rd-border); min-width:8px; margin-bottom:13px;
+	transition:background .2s;
+}
+/* connector turns green when the step to its left is done */
+.rd-step.done + .rd-step-connector { background:#16a34a; }
 
 /* inputs */
 .rd-input {
@@ -1511,12 +1531,17 @@ function get_dashboard_html() {
 
 			<!-- Step indicator -->
 			<div id="rd-steps"
-				style="display:flex;border-bottom:1px solid var(--border-color);flex-shrink:0;">
-				<div class="rd-step active" data-step="search">Search</div>
-				<div class="rd-step" data-step="guardian">Guardian</div>
-				<div class="rd-step" data-step="child">Child</div>
-				<div class="rd-step" data-step="session">Session</div>
-				<div class="rd-step" data-step="confirm">Confirm</div>
+				style="display:flex;align-items:center;border-bottom:1px solid var(--border-color);
+					flex-shrink:0;padding:0 10px;gap:0;">
+				<div class="rd-step active" data-step="search" data-num="1">Search</div>
+				<div class="rd-step-connector"></div>
+				<div class="rd-step" data-step="guardian" data-num="2">Guardian</div>
+				<div class="rd-step-connector"></div>
+				<div class="rd-step" data-step="child" data-num="3">Child</div>
+				<div class="rd-step-connector"></div>
+				<div class="rd-step" data-step="session" data-num="4">Session</div>
+				<div class="rd-step-connector"></div>
+				<div class="rd-step" data-step="confirm" data-num="5">Confirm</div>
 			</div>
 
 			<!-- Left body — admission flow renders here -->
