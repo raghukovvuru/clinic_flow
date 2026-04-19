@@ -4905,8 +4905,12 @@ class LiveSessionPanel {
 		const cards = entries.map(e => {
 			const hold = e.hold_patients_count || 0;
 			const pct = Math.min(100, Math.round(hold / config_threshold * 100));
-			const nr_time = e.no_response_at
-				? frappe.datetime.str_to_user(e.no_response_at, true) : '';
+			const elapsed = e.no_response_at ? _elapsed_short(e.no_response_at) : '';
+			const elapsedStyle = (() => {
+				if (!e.no_response_at) return '';
+				const mins = Math.floor((Date.now() - new Date(e.no_response_at.replace(' ', 'T')).getTime()) / 60000);
+				return mins >= 10 ? 'color:#b91c1c;font-weight:700;' : 'color:#ea580c;';
+			})();
 
 			return `
 			<div class="rd-patient-card no-resp">
@@ -4918,7 +4922,7 @@ class LiveSessionPanel {
 						<div style="font-size:12px;font-weight:600;">
 							${frappe.utils.escape_html(e.patient_name || e.patient)}
 						</div>
-						${nr_time ? `<div class="rd-caption">Since ${frappe.utils.escape_html(nr_time)}</div>` : ''}
+						${elapsed ? `<div class="rd-caption" style="${elapsedStyle}">No response for <strong>${frappe.utils.escape_html(elapsed)}</strong></div>` : ''}
 					</div>
 					<div style="display:flex;gap:4px;">
 						<button class="rd-action-btn rd-action-btn-green rd-resume-btn"
