@@ -869,6 +869,10 @@ function get_dashboard_html() {
 	color:#7c3aed;
 	border-bottom-color:rgba(168, 85, 247, 0.35);
 }
+.rd-pipeline-header.is-arrived {
+	color:#0369a1;
+	border-bottom-color:rgba(14, 165, 233, 0.45);
+}
 .rd-pipeline-header.is-due {
 	color:#64726c;
 	border-bottom-color:rgba(185, 201, 192, 0.9);
@@ -4457,14 +4461,14 @@ class LiveSessionPanel {
 					<div class="rd-ops-stat-note">Completed consultations</div>
 				</div>
 				<div class="rd-ops-stat-tile">
+					<div class="rd-ops-stat-label">Here Now</div>
+					<div class="rd-ops-stat-value" style="${counts.arrived_count > 0 ? 'color:#0369a1;' : ''}">${counts.arrived_count || 0}</div>
+					<div class="rd-ops-stat-note">Self-checked in</div>
+				</div>
+				<div class="rd-ops-stat-tile">
 					<div class="rd-ops-stat-label">Remaining</div>
 					<div class="rd-ops-stat-value">${counts.remaining}</div>
 					<div class="rd-ops-stat-note">Still active in queue</div>
-				</div>
-				<div class="rd-ops-stat-tile">
-					<div class="rd-ops-stat-label">In Session</div>
-					<div class="rd-ops-stat-value">${counts.total_booked}</div>
-					<div class="rd-ops-stat-note">Booked for selected queue</div>
 				</div>
 				<div class="rd-ops-stat-tile emergency">
 					<div class="rd-ops-stat-label">Emergency Pending</div>
@@ -4497,7 +4501,12 @@ class LiveSessionPanel {
 			sections.push(this._section_called(data.called));
 		}
 
-		// DUE SOON
+		// HERE NOW (Arrived — physically present, awaiting reception call)
+		if (data.arrived && data.arrived.length) {
+			sections.push(this._section_arrived(data.arrived));
+		}
+
+		// EXPECTED (previously "Due Soon" — not yet arrived)
 		if (data.due_soon.length) {
 			sections.push(this._section_due_soon(data.due_soon));
 		}
@@ -4766,6 +4775,30 @@ class LiveSessionPanel {
 		</div>`;
 	}
 
+	_section_arrived(entries) {
+		const cards = entries.map(e => {
+			const token_html = frappe.utils.escape_html(_display_token(e));
+			const name_html  = frappe.utils.escape_html(e.patient_name || e.patient || '');
+			const load_html  = e.load_class === 'review_load' ? 'Review'
+				: e.load_class === 'non_review_load' ? 'New' : '';
+			return `
+			<div class="rd-patient-card rd-arrived-card" style="display:flex;align-items:center;gap:10px;padding:9px 12px;">
+				<span class="rd-token-badge" style="min-width:52px;text-align:center;">${token_html}</span>
+				<span style="flex:1;font-size:13px;font-weight:600;color:var(--rd-text);">${name_html}</span>
+				<span style="font-size:11px;color:var(--rd-muted);">${load_html}</span>
+				<button class="rd-action-btn rd-call-to-reception-inline"
+					data-entry="${frappe.utils.escape_html(e.name)}"
+					title="Call to reception">Call</button>
+			</div>`;
+		}).join('');
+
+		return `
+		<div class="rd-pipeline-section">
+			<div class="rd-pipeline-header is-arrived">Here Now — ${entries.length} arrived</div>
+			${cards}
+		</div>`;
+	}
+
 	_section_due_soon(entries) {
 		const tokens = entries.map(e =>
 			`<span class="rd-call-to-reception-inline rd-due-token-chip"
@@ -4777,7 +4810,7 @@ class LiveSessionPanel {
 
 		return `
 		<div class="rd-pipeline-section">
-			<div class="rd-pipeline-header is-due">Due Soon</div>
+			<div class="rd-pipeline-header is-due">Expected</div>
 			<div class="rd-due-soon-block">
 				<div class="rd-due-soon-copy">Next patients likely to be called to reception.</div>
 				<div style="display:flex;gap:6px;flex-wrap:wrap;">${tokens}</div>
