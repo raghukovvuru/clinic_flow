@@ -3319,49 +3319,68 @@ class ReceptionistDashboard {
 	// ── Print slip ────────────────────────────────────────────────────────────
 	_print_slip() {
 		const b = this.state.booking;
-		const c = this.state.child;
-		const g = this.state.guardian;
-		const s = this.state.sessions[this.state.session_idx];
+		const qe_name = b.queue_entry || '';
 
-		const report_time = _eta_fmt(b.report_by_time);
-		const pred_time   = _eta_fmt(b.predicted_doctor_time);
-		const age_str     = this.state.age_at_visit || '';
-		const weight_str  = this.state.weight_at_booking ? `${this.state.weight_at_booking} kg` : '';
-		const complaint   = this.state.complaint || '';
+		const _render = (qr_svg) => {
+			const c = this.state.child;
+			const g = this.state.guardian;
+			const s = this.state.sessions[this.state.session_idx];
 
-		const win = window.open('', '_blank',
-			'width=420,height=580,toolbar=0,menubar=0,scrollbars=0');
-		win.document.write(`<!DOCTYPE html><html><head>
-			<meta charset="utf-8"><title>Token Slip</title>
-			<style>
-				body { font-family: sans-serif; padding: 24px; }
-				.t { font-size: 64px; font-weight: 900; text-align: center; }
-				.label { font-size: 10px; font-weight: 700; text-transform: uppercase;
-					letter-spacing: 1px; color: #666; }
-				.val { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
-				.cap { font-size: 12px; color: #666; margin-bottom: 4px; }
-				hr { margin: 16px 0; }
-			</style></head><body>
-			<div class="t">${frappe.utils.escape_html(_display_token(b))}</div>
-			<hr>
-			<div class="label">Patient</div>
-			<div class="val">${frappe.utils.escape_html(c.patient_name || c.patient)}${age_str ? ' · ' + frappe.utils.escape_html(age_str) : ''}</div>
-			<div class="cap">${frappe.utils.escape_html(g.guardian_name)} · ${frappe.utils.escape_html(g.mobile)}</div>
-			${complaint ? `<div class="cap" style="margin-top:4px;">Complaint: <strong>${frappe.utils.escape_html(complaint)}</strong></div>` : ''}
-			${weight_str ? `<div class="cap">Weight: <strong>${frappe.utils.escape_html(weight_str)}</strong></div>` : ''}
-			<hr>
-			<div class="label">Session</div>
-			<div class="cap">${frappe.utils.escape_html(s.session_name)}</div>
-			<hr>
-			<div class="label">Report By</div>
-			<div class="val">${frappe.utils.escape_html(report_time)}</div>
-			<div class="label">Estimated Doctor Time</div>
-			<div class="cap">${frappe.utils.escape_html(pred_time)}</div>
-			<hr>
-			<div class="cap">${frappe.utils.escape_html(b.load_class === 'review_load' ? 'Review Patient' : 'New Patient')}</div>
-		</body></html>`);
-		win.document.close();
-		win.print();
+			const report_time = _eta_fmt(b.report_by_time);
+			const pred_time   = _eta_fmt(b.predicted_doctor_time);
+			const age_str     = this.state.age_at_visit || '';
+			const weight_str  = this.state.weight_at_booking ? `${this.state.weight_at_booking} kg` : '';
+			const complaint   = this.state.complaint || '';
+
+			const win = window.open('', '_blank',
+				'width=420,height=620,toolbar=0,menubar=0,scrollbars=0');
+			win.document.write(`<!DOCTYPE html><html><head>
+				<meta charset="utf-8"><title>Token Slip</title>
+				<style>
+					body { font-family: sans-serif; padding: 24px; }
+					.t { font-size: 64px; font-weight: 900; text-align: center; }
+					.label { font-size: 10px; font-weight: 700; text-transform: uppercase;
+						letter-spacing: 1px; color: #666; }
+					.val { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+					.cap { font-size: 12px; color: #666; margin-bottom: 4px; }
+					hr { margin: 16px 0; }
+					.qr-block { text-align: center; margin: 16px 0 8px; }
+					.qr-block svg { width: 130px; height: 130px; }
+					.qr-hint { font-size: 10px; color: #999; margin-top: 4px; }
+				</style></head><body>
+				<div class="t">${frappe.utils.escape_html(_display_token(b))}</div>
+				<hr>
+				<div class="label">Patient</div>
+				<div class="val">${frappe.utils.escape_html(c.patient_name || c.patient)}${age_str ? ' · ' + frappe.utils.escape_html(age_str) : ''}</div>
+				<div class="cap">${frappe.utils.escape_html(g.guardian_name)} · ${frappe.utils.escape_html(g.mobile)}</div>
+				${complaint ? `<div class="cap" style="margin-top:4px;">Complaint: <strong>${frappe.utils.escape_html(complaint)}</strong></div>` : ''}
+				${weight_str ? `<div class="cap">Weight: <strong>${frappe.utils.escape_html(weight_str)}</strong></div>` : ''}
+				<hr>
+				<div class="label">Session</div>
+				<div class="cap">${frappe.utils.escape_html(s.session_name)}</div>
+				<hr>
+				<div class="label">Report By</div>
+				<div class="val">${frappe.utils.escape_html(report_time)}</div>
+				<div class="label">Estimated Doctor Time</div>
+				<div class="cap">${frappe.utils.escape_html(pred_time)}</div>
+				<hr>
+				<div class="cap">${frappe.utils.escape_html(b.load_class === 'review_load' ? 'Review Patient' : 'New Patient')}</div>
+				${qr_svg ? `<div class="qr-block">${qr_svg}<div class="qr-hint">Scan at arrival kiosk · ${frappe.utils.escape_html(qe_name)}</div></div>` : ''}
+			</body></html>`);
+			win.document.close();
+			win.print();
+		};
+
+		if (qe_name) {
+			frappe.call({
+				method: 'clinic_flow.api.arrival.get_token_qr',
+				args: { queue_entry: qe_name },
+				callback: (r) => _render(r.message || ''),
+				error: () => _render(''),
+			});
+		} else {
+			_render('');
+		}
 	}
 
 	// ── Reset helpers ─────────────────────────────────────────────────────────

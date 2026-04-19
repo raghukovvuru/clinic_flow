@@ -201,6 +201,16 @@ def mark_arrived(queue_entry: str, queue_session: str = "") -> dict:
 
 
 @frappe.whitelist()
+def get_token_qr(queue_entry: str) -> str:
+	"""
+	Returns the QR code SVG for a Queue Entry, for inline embedding in print slips.
+	The QR encodes the docname so the arrival counter scanner can identify the patient.
+	"""
+	from clinic_flow.utils import get_token_qr_svg
+	return get_token_qr_svg(queue_entry)
+
+
+@frappe.whitelist()
 def get_arrival_session_context(dept_abbr: str = "") -> dict:
 	"""Summary payload for the arrival counter page header."""
 	sessions = resolve_arrival_sessions(dept_abbr)
