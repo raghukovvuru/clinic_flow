@@ -1,0 +1,15 @@
+{
+ "creation": "2026-04-18 00:00:00.000000",
+ "doctype": "Page",
+ "module": "Clinic Flow",
+ "name": "arrival-counter",
+ "page_name": "arrival-counter",
+ "standard": "Yes",
+ "system_page": 0,
+ "title": "Arrival Counter",
+ "roles": [
+  {"role": "Healthcare Administrator"},
+  {"role": "Queue Manager"},
+  {"role": "System Manager"}
+ ]
+}
