@@ -1390,9 +1390,10 @@ function get_dashboard_html() {
 .rd-live-chip-dot {
 	width:7px; height:7px; border-radius:50%; flex-shrink:0;
 }
-.rd-live-chip-dot.active  { background:#16a34a; }
-.rd-live-chip-dot.paused  { background:#d97706; }
+.rd-live-chip-dot.active    { background:#16a34a; }
+.rd-live-chip-dot.paused    { background:#d97706; }
 .rd-live-chip-dot.scheduled { background:#94a3b8; }
+.rd-live-chip-dot.ambiguous { background:#d97706; }
 .rd-live-chip-badge {
 	display:inline-flex;align-items:center;justify-content:center;
 	min-width:16px;height:16px;padding:0 4px;
@@ -1406,22 +1407,29 @@ function get_dashboard_html() {
 	font-size:10px; font-weight:800; color:var(--primary);
 	letter-spacing:.02em; margin-left:2px;
 }
+.rd-cross-session-alert {
+	display:flex; align-items:center; gap:6px;
+	padding:6px 10px; margin-bottom:8px;
+	border-radius:8px; font-size:11px; font-weight:600;
+	background:#dbeafe; color:#1e40af;
+	border:1px solid #93c5fd;
+}
 .rd-ops-stat-grid {
 	display:grid;
-	grid-template-columns:repeat(2, minmax(0, 1fr));
-	gap:8px;
+	grid-template-columns:repeat(4, minmax(0, 1fr));
+	gap:6px;
 	margin-top:8px;
 }
 .rd-ops-stat-tile {
 	border:1px solid rgba(217, 225, 220, 0.95);
-	border-radius:10px;
+	border-radius:8px;
 	background:rgba(255,255,255,.98);
-	padding:9px 10px;
-	min-height:68px;
+	padding:7px 8px;
+	min-height:52px;
 	display:flex;
 	flex-direction:column;
 	justify-content:space-between;
-	box-shadow:0 6px 16px rgba(15, 23, 42, 0.05);
+	box-shadow:0 4px 10px rgba(15, 23, 42, 0.04);
 }
 .rd-ops-stat-tile.emergency {
 	border-color:#fecaca;
@@ -4466,7 +4474,10 @@ class LiveSessionPanel {
 		}
 		const chips = sessions.map(s => {
 			const isActive = s.name === this.current_session;
-			const dotClass = s.status === 'Active' ? 'active' : s.status === 'Paused' ? 'paused' : 'scheduled';
+			const dotClass = s.status === 'Active' ? 'active'
+				: s.status === 'Paused' ? 'paused'
+				: s.active_count > 0 ? 'ambiguous'
+				: 'scheduled';
 			const statusClass = s.status === 'Active' ? 'is-active-status' : s.status === 'Paused' ? 'is-paused-status' : '';
 			const label = frappe.utils.escape_html(s.practitioner_name || s.session_name || s.name);
 			// Emergency first (highest urgency), then arrived (physically present), then total active
@@ -4543,33 +4554,65 @@ class LiveSessionPanel {
 		this._session_practitioner = (data.session && data.session.practitioner) || null;
 		this._render_counts(data.counts);
 		this._render_pipeline(data);
+		this._render_cross_alert(data.counts);
 	}
 
 	_render_counts(counts) {
+		// Cross-session total: sum arrived_count across all chips in cache
+		const crossTotal = this._sessions_cache.reduce((s, r) => s + (r.arrived_count || 0), 0);
+		const hereNow    = crossTotal;  // show all sessions, not just selected
+		const hereNowStyle = hereNow > 0 ? 'color:#0369a1;' : '';
+
 		this.$counts.html(`
 			<div class="rd-ops-stat-grid">
 				<div class="rd-ops-stat-tile">
 					<div class="rd-ops-stat-label">Done Today</div>
 					<div class="rd-ops-stat-value">${counts.completed_today}</div>
-					<div class="rd-ops-stat-note">Completed consultations</div>
+					<div class="rd-ops-stat-note">Completed</div>
 				</div>
 				<div class="rd-ops-stat-tile">
 					<div class="rd-ops-stat-label">Here Now</div>
-					<div class="rd-ops-stat-value" style="${counts.arrived_count > 0 ? 'color:#0369a1;' : ''}">${counts.arrived_count || 0}</div>
-					<div class="rd-ops-stat-note">Self-checked in</div>
+					<div class="rd-ops-stat-value" style="${hereNowStyle}">${hereNow}</div>
+					<div class="rd-ops-stat-note">All sessions</div>
 				</div>
 				<div class="rd-ops-stat-tile">
 					<div class="rd-ops-stat-label">Remaining</div>
 					<div class="rd-ops-stat-value">${counts.remaining}</div>
-					<div class="rd-ops-stat-note">Still active in queue</div>
+					<div class="rd-ops-stat-note">Active in queue</div>
 				</div>
 				<div class="rd-ops-stat-tile emergency">
-					<div class="rd-ops-stat-label">Emergency Pending</div>
+					<div class="rd-ops-stat-label">Emergency</div>
 					<div class="rd-ops-stat-value">${counts.emergency_pending || 0}</div>
-					<div class="rd-ops-stat-note">Requires reconciliation</div>
+					<div class="rd-ops-stat-note">Pending</div>
 				</div>
 			</div>
 		`);
+	}
+
+	_render_cross_alert(counts) {
+		this.$panel.find('.rd-cross-session-alert').remove();
+		const otherSessions = this._sessions_cache.filter(
+			s => s.arrived_count > 0 && s.name !== this.current_session
+		);
+		if (!otherSessions.length) return;
+		const links = otherSessions.map(s =>
+			`<span class="rd-cross-alert-link" data-session="${frappe.utils.escape_html(s.name)}"
+				style="font-weight:700;text-decoration:underline;cursor:pointer;">
+				${frappe.utils.escape_html(s.practitioner_name || s.session_name)}
+				(${s.arrived_count})
+			</span>`
+		).join(', ');
+		const alert = $(`
+			<div class="rd-cross-session-alert">
+				<span style="font-size:14px;">●</span>
+				${links} — patient arrived, not yet called
+			</div>
+		`);
+		alert.find('.rd-cross-alert-link').on('click', (e) => {
+			const qs = $(e.currentTarget).data('session');
+			if (qs) this.load(qs);
+		});
+		this.$panel.prepend(alert);
 	}
 
 	_render_pipeline(data) {
@@ -4737,9 +4780,12 @@ class LiveSessionPanel {
 							? '<span class="rd-badge rd-badge-green" style="font-size:9px;margin-left:4px;">Review</span>'
 							: '<span class="rd-badge rd-badge-blue" style="font-size:9px;margin-left:4px;">New</span>'}
 					</div>
-						${e.reception_done_at
-							? `<div class="rd-rail-card-meta">Ready since ${frappe.utils.escape_html(frappe.datetime.str_to_user(e.reception_done_at, true))}</div>`
-							: ''}
+						${e.reception_done_at ? (() => {
+							const readyMins = Math.floor((Date.now() - new Date(e.reception_done_at.replace(' ', 'T')).getTime()) / 60000);
+							const readyStyle = readyMins >= 15 ? 'color:#b91c1c;font-weight:700;'
+								: readyMins >= 7 ? 'color:#ea580c;' : '';
+							return `<div class="rd-rail-card-meta" style="${readyStyle}">ready for ${_elapsed_short(e.reception_done_at)}</div>`;
+						})() : ''}
 						${e.weight_recorded ? `<div class="rd-rail-card-meta">${e.weight_recorded} kg</div>` : ''}
 					</div>
 					<div class="rd-rail-card-side" style="color:#7c3aed;">
@@ -4870,15 +4916,28 @@ class LiveSessionPanel {
 
 	_section_arrived(entries) {
 		const cards = entries.map(e => {
-			const token_html = frappe.utils.escape_html(_display_token(e));
-			const name_html  = frappe.utils.escape_html(e.patient_name || e.patient || '');
-			const load_html  = e.load_class === 'review_load' ? 'Review'
+			const token_html  = frappe.utils.escape_html(_display_token(e));
+			const name_html   = frappe.utils.escape_html(e.patient_name || e.patient || '');
+			const loadLabel   = e.load_class === 'review_load' ? 'Review'
 				: e.load_class === 'non_review_load' ? 'New' : '';
+			const loadColor   = e.load_class === 'review_load' ? '#0369a1' : '#15803d';
+			const loadBg      = e.load_class === 'review_load' ? '#dbeafe'  : '#dcfce7';
+			const elapsed     = e.arrived_at ? _elapsed_short(e.arrived_at) : '';
+			const waitMins    = e.arrived_at
+				? Math.floor((Date.now() - new Date(e.arrived_at.replace(' ', 'T')).getTime()) / 60000) : 0;
+			const waitStyle   = waitMins >= 20 ? 'color:#b91c1c;font-weight:700;'
+				: waitMins >= 10 ? 'color:#ea580c;' : 'color:var(--rd-muted);';
 			return `
 			<div class="rd-patient-card rd-arrived-card" style="display:flex;align-items:center;gap:10px;padding:9px 12px;">
 				<span class="rd-token-badge" style="min-width:52px;text-align:center;">${token_html}</span>
-				<span style="flex:1;font-size:13px;font-weight:600;color:var(--rd-text);">${name_html}</span>
-				<span style="font-size:11px;color:var(--rd-muted);">${load_html}</span>
+				<div style="flex:1;min-width:0;">
+					<div style="font-size:13px;font-weight:600;color:var(--rd-text);">${name_html}
+						${loadLabel ? `<span style="display:inline-block;padding:1px 6px;border-radius:999px;
+							font-size:9px;font-weight:800;margin-left:5px;
+							background:${loadBg};color:${loadColor};">${loadLabel}</span>` : ''}
+					</div>
+					${elapsed ? `<div class="rd-caption" style="${waitStyle}">arrived ${elapsed} ago</div>` : ''}
+				</div>
 				<button class="rd-action-btn rd-call-to-reception-inline"
 					data-entry="${frappe.utils.escape_html(e.name)}"
 					title="Call to reception">Call</button>
@@ -4897,12 +4956,37 @@ class LiveSessionPanel {
 			const loadLabel = e.load_class === 'review_load' ? 'Review' : 'New';
 			const loadColor = e.load_class === 'review_load' ? '#0369a1' : '#15803d';
 			const loadBg    = e.load_class === 'review_load' ? '#dbeafe' : '#dcfce7';
-			const reportLine = e.report_by_time
+
+			// Overdue logic
+			const now = Date.now();
+			const reportMs = e.report_by_time
+				? new Date(e.report_by_time.replace(' ', 'T')).getTime() : null;
+			const isOverdue   = reportMs !== null && reportMs < now;
+			const overdueMin  = isOverdue ? Math.floor((now - reportMs) / 60000) : 0;
+			const minutesUntil = (!isOverdue && reportMs) ? Math.floor((reportMs - now) / 60000) : null;
+
+			const rowExtra = isOverdue
+				? `border-color:${overdueMin >= 15 ? '#fca5a5' : '#fcd34d'};
+				   background:${overdueMin >= 15 ? '#fff1f2' : '#fffbeb'};`
+				: '';
+
+			// Time hint: overdue → "Overdue Xm"; upcoming → "in Xm"; else queue position
+			let timeHint = '';
+			if (isOverdue) {
+				const overdueColor = overdueMin >= 15 ? '#b91c1c' : '#b45309';
+				timeHint = `<span class="rd-caption" style="color:${overdueColor};font-weight:700;">
+					Overdue ${overdueMin}m</span>`;
+			} else if (minutesUntil !== null) {
+				timeHint = `<span class="rd-caption" style="color:var(--rd-muted);">in ${minutesUntil}m</span>`;
+			}
+
+			const reportLine = e.report_by_time && !isOverdue
 				? `<span class="rd-caption" style="margin-left:4px;">· Report by ${frappe.utils.escape_html(
 					frappe.datetime.str_to_user(e.report_by_time, true))}</span>` : '';
-			const bookedAgo = e.creation ? `<span class="rd-caption">${_elapsed_short(e.creation)} ago</span>` : '';
+
 			return `
 			<div class="rd-due-soon-row rd-call-to-reception-inline"
+				style="${rowExtra}"
 				data-entry="${frappe.utils.escape_html(e.name)}"
 				title="Call ${frappe.utils.escape_html(e.patient_name || e.patient)} to reception">
 				<span class="rd-due-token-num">${frappe.utils.escape_html(_display_token(e))}</span>
@@ -4914,7 +4998,7 @@ class LiveSessionPanel {
 						style="background:${loadBg};color:${loadColor};">${loadLabel}</span>
 					${reportLine}
 				</span>
-				${bookedAgo}
+				${timeHint}
 			</div>`;
 		}).join('');
 
