@@ -223,10 +223,6 @@ frappe.pages["arrival-counter"].on_page_load = function (wrapper) {
 		$hint.text("");
 	}
 
-	function _show_hint(msg) {
-		$hint.text(msg);
-	}
-
 	// ── mark_arrived RPC ─────────────────────────────────────────────────────
 
 	function _mark_arrived(entry) {
