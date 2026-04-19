@@ -1314,6 +1314,46 @@ function get_dashboard_html() {
 	margin-top:7px;
 	text-align:right;
 }
+.rd-live-session-chip {
+	display:inline-flex;
+	align-items:center;
+	gap:5px;
+	padding:4px 9px;
+	border-radius:999px;
+	border:1.5px solid var(--rd-border);
+	background:var(--card-bg);
+	font-size:11px;
+	font-weight:700;
+	cursor:pointer;
+	white-space:nowrap;
+	transition:border-color .15s, background .15s;
+}
+.rd-live-session-chip:hover {
+	border-color:#94a3b8;
+	background:#f8fafc;
+}
+.rd-live-session-chip.is-active {
+	border-color:var(--primary);
+	background:rgba(15,92,77,.08);
+	color:var(--primary);
+}
+.rd-live-session-chip.is-active-status { border-color:#86efac; background:#ecfdf3; }
+.rd-live-session-chip.is-paused-status { border-color:#fcd34d; background:#fffbeb; }
+.rd-live-chip-dot {
+	width:7px; height:7px; border-radius:50%; flex-shrink:0;
+}
+.rd-live-chip-dot.active  { background:#16a34a; }
+.rd-live-chip-dot.paused  { background:#d97706; }
+.rd-live-chip-dot.scheduled { background:#94a3b8; }
+.rd-live-chip-badge {
+	display:inline-flex;align-items:center;justify-content:center;
+	min-width:16px;height:16px;padding:0 4px;
+	border-radius:999px;font-size:9px;font-weight:800;
+	line-height:1;
+}
+.rd-live-chip-badge.emerg { background:#fee2e2; color:#b91c1c; }
+.rd-live-chip-badge.arrived { background:#dbeafe; color:#1d4ed8; }
+.rd-live-chip-badge.active-ct { background:#f1f5f9; color:#475569; }
 .rd-ops-stat-grid {
 	display:grid;
 	grid-template-columns:repeat(2, minmax(0, 1fr));
@@ -1518,16 +1558,14 @@ function get_dashboard_html() {
 					</div>
 				</div>
 			</div>
-			<!-- Header: session selector + refresh -->
+			<!-- Header: urgency session chip bar + refresh -->
 			<div style="padding:8px 10px;border-bottom:1px solid var(--border-color);
-				flex-shrink:0;display:flex;align-items:center;gap:6px;">
-				<span class="rd-label" style="flex-shrink:0;">Live Session</span>
-				<select id="rd-live-session-sel"
-					style="flex:1;padding:5px 8px;
-						border:1.5px solid var(--border-color);border-radius:6px;
-						font-size:12px;background:var(--input-bg);outline:none;">
-					<option value="">Select session…</option>
-				</select>
+				flex-shrink:0;display:flex;align-items:center;gap:6px;min-height:44px;">
+				<div id="rd-live-session-chips"
+					style="flex:1;overflow-x:auto;display:flex;gap:5px;align-items:center;
+						scrollbar-width:none;">
+					<span class="rd-caption" style="white-space:nowrap;">Loading sessions…</span>
+				</div>
 				<button id="rd-live-refresh" title="Refresh"
 					style="border:none;background:transparent;cursor:pointer;
 						color:var(--text-muted);font-size:18px;line-height:1;
@@ -1781,7 +1819,6 @@ class ReceptionistDashboard {
 				this.load_top_bar();
 				const queueSession = refreshSession || args.queue_session;
 				if (queueSession) {
-					this.live_panel.$session_sel.val(queueSession);
 					this.live_panel.load(queueSession);
 				}
 			}
@@ -4357,7 +4394,7 @@ class LiveSessionPanel {
 	constructor(dashboard, $container) {
 		this.dashboard        = dashboard;
 		this.$container       = $container;
-		this.$session_sel     = $container.find('#rd-live-session-sel');
+		this.$chips_bar       = $container.find('#rd-live-session-chips');
 		this.$counts          = $container.find('#rd-live-counts');
 		this.$panel           = $container.find('#rd-live-panel');
 		this.$refresh_btn     = $container.find('#rd-live-refresh');
@@ -4365,66 +4402,64 @@ class LiveSessionPanel {
 		this._expanding            = null; // queue_entry being expanded for reception form
 		this._fee_data             = {};   // cache: entry name → {covered, charge, validity_till}
 		this._session_practitioner = null;
+		this._sessions_cache       = [];   // last result from get_session_urgency_summary
 
-		this._load_session_list();
+		this._load_session_chips();
 		this._bind_events();
 		this._subscribe_realtime();
-		this._auto_detect_active();
 	}
 
 	// ── Setup ─────────────────────────────────────────────────────────────────
-	_load_session_list() {
+	_load_session_chips() {
 		frappe.call({
-			method: 'frappe.client.get_list',
-			args: {
-				doctype: 'Queue Session',
-				filters: [
-					['session_date', '=', frappe.datetime.get_today()],
-					['status', 'in', ['Scheduled', 'Active', 'Paused']],
-				],
-				fields: ['name', 'session_name', 'dept_abbr'],
-				order_by: 'start_time asc',
-				limit: 10,
-			},
+			method: 'clinic_flow.api.queue.get_session_urgency_summary',
 			callback: (r) => {
-				if (!r.message) return;
-				const opts = r.message.map(s =>
-					`<option value="${frappe.utils.escape_html(s.name)}">
-						${frappe.utils.escape_html(s.session_name || s.name)}
-						${s.dept_abbr ? '(' + frappe.utils.escape_html(s.dept_abbr) + ')' : ''}
-					</option>`
-				).join('');
-				this.$session_sel.html('<option value="">Select session…</option>' + opts);
-				if (!this.current_session && r.message.length === 1) {
-					this.$session_sel.val(r.message[0].name);
-					this.load(r.message[0].name);
+				const sessions = r.message || [];
+				this._sessions_cache = sessions;
+				this._render_chips(sessions);
+				// Auto-select: active session, or first if only one
+				if (!this.current_session) {
+					const auto = sessions.find(s => s.status === 'Active') || (sessions.length === 1 ? sessions[0] : null);
+					if (auto) this.load(auto.name);
 				}
 			},
 		});
 	}
 
-	_auto_detect_active() {
-		frappe.call({
-			method: 'clinic_flow.api.queue.get_queue_state_for_display',
-			args: { dept: 'all' },
-			callback: (r) => {
-				if (!r.message || !r.message.sessions || !r.message.sessions.length) return;
-				const active = r.message.sessions.find(s => s.session_status === 'Active');
-				if (active && !this.current_session) {
-					this.$session_sel.val(active.session);
-					this.load(active.session);
-				}
-			},
+	_render_chips(sessions) {
+		if (!sessions.length) {
+			this.$chips_bar.html('<span class="rd-caption">No sessions today</span>');
+			return;
+		}
+		const chips = sessions.map(s => {
+			const isActive = s.name === this.current_session;
+			const dotClass = s.status === 'Active' ? 'active' : s.status === 'Paused' ? 'paused' : 'scheduled';
+			const statusClass = s.status === 'Active' ? 'is-active-status' : s.status === 'Paused' ? 'is-paused-status' : '';
+			const label = frappe.utils.escape_html(s.practitioner_name || s.session_name || s.name);
+			const emergBadge = s.emergency_count > 0
+				? `<span class="rd-live-chip-badge emerg">${s.emergency_count}</span>` : '';
+			const arrivedBadge = s.arrived_count > 0
+				? `<span class="rd-live-chip-badge arrived">${s.arrived_count}</span>` : '';
+			const activeBadge = s.active_count > 0
+				? `<span class="rd-live-chip-badge active-ct">${s.active_count}</span>` : '';
+			return `<button class="rd-live-session-chip ${isActive ? 'is-active' : statusClass}"
+				data-session="${frappe.utils.escape_html(s.name)}"
+				title="${frappe.utils.escape_html(s.session_name || s.name)}">
+				<span class="rd-live-chip-dot ${dotClass}"></span>
+				${label}
+				${emergBadge}${arrivedBadge}${activeBadge}
+			</button>`;
+		}).join('');
+		this.$chips_bar.html(chips);
+		this.$chips_bar.find('.rd-live-session-chip').on('click', (e) => {
+			const qs = $(e.currentTarget).data('session');
+			if (qs) this.load(qs);
 		});
 	}
 
 	_bind_events() {
-		this.$session_sel.on('change', () => {
-			const qs = this.$session_sel.val();
-			if (qs) this.load(qs);
-			else { this.$panel.html(''); this.$counts.html(''); this.current_session = null; }
-		});
 		this.$refresh_btn.on('click', () => {
+			this._load_session_chips();
 			if (this.current_session) this.load(this.current_session);
 		});
 	}
@@ -4434,12 +4469,13 @@ class LiveSessionPanel {
 			if (data && data.queue_session === this.current_session) {
 				this.load(this.current_session);
 			}
+			// Refresh chip counts on any queue update
+			this._load_session_chips();
 		});
 		frappe.realtime.on('session_status', (data) => {
 			if (!data) return;
-			this._load_session_list();
+			this._load_session_chips();
 			if (data.status === 'Active' && !this.current_session && data.queue_session) {
-				this.$session_sel.val(data.queue_session);
 				this.load(data.queue_session);
 			}
 		});
@@ -4448,6 +4484,8 @@ class LiveSessionPanel {
 	// ── Load and render ───────────────────────────────────────────────────────
 	load(queue_session) {
 		this.current_session = queue_session;
+		// Re-render chips to reflect newly-active selection
+		this._render_chips(this._sessions_cache);
 		frappe.call({
 			method: 'clinic_flow.api.queue.get_live_session_state',
 			args: { queue_session },

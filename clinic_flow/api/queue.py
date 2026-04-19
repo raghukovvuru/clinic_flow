@@ -1155,6 +1155,46 @@ def mark_completed(queue_entry: str) -> dict:
 
 
 @frappe.whitelist()
+def get_session_urgency_summary() -> list[dict]:
+	"""
+	Returns today's sessions (Scheduled/Active/Paused) with per-session urgency counts
+	for the receptionist's live-session chip bar.
+	"""
+	from frappe.utils import today as _today
+	rows = frappe.db.sql(
+		"""
+		SELECT
+			qs.name,
+			qs.session_name,
+			qs.dept_abbr,
+			qs.status,
+			qs.start_time,
+			hp.practitioner_name,
+			COALESCE(SUM(qe.status = 'Arrived'), 0)           AS arrived_count,
+			COALESCE(SUM(qe.priority = 'emergency'
+				AND qe.status IN ('Booked','Waiting','Arrived','Called',
+				                  'No Response','Ready Near Doctor','With Doctor',
+				                  'Pushed to End')), 0)        AS emergency_count,
+			COALESCE(SUM(qe.status IN ('Booked','Waiting','Arrived','Called',
+			             'No Response','Ready Near Doctor','With Doctor',
+			             'Pushed to End')), 0)                 AS active_count
+		FROM `tabQueue Session` qs
+		LEFT JOIN `tabQueue Entry` qe ON qe.queue_session = qs.name
+		LEFT JOIN `tabHealthcare Practitioner` hp ON hp.name = qs.practitioner
+		WHERE qs.session_date = %(today)s
+		  AND qs.status IN ('Scheduled', 'Active', 'Paused')
+		GROUP BY qs.name
+		ORDER BY
+			CASE qs.status WHEN 'Active' THEN 0 WHEN 'Paused' THEN 1 ELSE 2 END,
+			qs.start_time ASC
+		""",
+		{"today": _today()},
+		as_dict=True,
+	)
+	return [dict(r) for r in rows]
+
+
+@frappe.whitelist()
 def get_live_session_state(queue_session: str) -> dict:
 	"""
 	Return the full pipeline state for the receptionist's right (live session) panel.
