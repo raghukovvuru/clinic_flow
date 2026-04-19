@@ -1,0 +1,25 @@
+[
+ {
+  "align_labels_right": 0,
+  "creation": "2026-04-18 00:00:00.000000",
+  "custom_format": 1,
+  "default_print_language": "en",
+  "disabled": 0,
+  "doc_type": "Queue Entry",
+  "doctype": "Print Format",
+  "font": "Default",
+  "font_size": 0,
+  "html": "{% set qr_svg = get_token_qr_svg(doc.name) %}\n<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<style>\n  @page { size: 80mm 120mm; margin: 0; }\n  * { box-sizing: border-box; margin: 0; padding: 0; }\n  body {\n    font-family: 'Segoe UI', Arial, sans-serif;\n    background: #fff;\n    color: #1e293b;\n    width: 80mm;\n    padding: 6mm 6mm 4mm;\n  }\n  .slip-header {\n    text-align: center;\n    border-bottom: 1px solid #e2e8f0;\n    padding-bottom: 4mm;\n    margin-bottom: 4mm;\n  }\n  .clinic-name {\n    font-size: 11pt;\n    font-weight: 700;\n    letter-spacing: 0.02em;\n  }\n  .session-date {\n    font-size: 7pt;\n    color: #64748b;\n    margin-top: 1mm;\n  }\n  .token-block {\n    text-align: center;\n    margin: 4mm 0;\n  }\n  .token-label {\n    font-size: 7pt;\n    text-transform: uppercase;\n    letter-spacing: 0.1em;\n    color: #64748b;\n  }\n  .token-value {\n    font-size: 32pt;\n    font-weight: 800;\n    line-height: 1;\n    letter-spacing: -0.02em;\n    color: #0f172a;\n  }\n  .patient-block {\n    border-top: 1px solid #e2e8f0;\n    padding-top: 3mm;\n    margin-top: 3mm;\n  }\n  .patient-name {\n    font-size: 10pt;\n    font-weight: 600;\n    white-space: nowrap;\n    overflow: hidden;\n    text-overflow: ellipsis;\n  }\n  .meta-row {\n    font-size: 7pt;\n    color: #475569;\n    margin-top: 1.5mm;\n  }\n  .qr-block {\n    text-align: center;\n    margin: 4mm 0 2mm;\n  }\n  .qr-block svg {\n    width: 30mm;\n    height: 30mm;\n  }\n  .qr-hint {\n    font-size: 6.5pt;\n    color: #94a3b8;\n    margin-top: 1.5mm;\n  }\n  .footer-note {\n    font-size: 6pt;\n    color: #94a3b8;\n    text-align: center;\n    border-top: 1px dashed #e2e8f0;\n    padding-top: 2mm;\n    margin-top: 2mm;\n  }\n</style>\n</head>\n<body>\n<div class=\"slip-header\">\n  <div class=\"clinic-name\">Marley Healthcare</div>\n  <div class=\"session-date\">{{ frappe.format_date(doc.creation, 'EEE, dd MMM yyyy') }}</div>\n</div>\n\n<div class=\"token-block\">\n  <div class=\"token-label\">Your Token</div>\n  <div class=\"token-value\">{{ doc.token or doc.name }}</div>\n</div>\n\n<div class=\"patient-block\">\n  <div class=\"patient-name\">{{ doc.patient_name }}</div>\n  <div class=\"meta-row\">\n    {% if doc.load_class == 'review_load' %}Review{% elif doc.load_class == 'non_review_load' %}New Patient{% endif %}\n    {% if doc.channel %} &middot; {{ doc.channel | capitalize }}{% endif %}\n    {% if doc.report_by_time %} &middot; Report by {{ frappe.format_datetime(doc.report_by_time, 'hh:mm a') }}{% endif %}\n  </div>\n</div>\n\n{% if qr_svg %}\n<div class=\"qr-block\">\n  {{ qr_svg }}\n  <div class=\"qr-hint\">Scan at the arrival kiosk when you reach the clinic</div>\n</div>\n{% endif %}\n\n<div class=\"footer-note\">Keep this slip with you &bull; {{ doc.name }}</div>\n</body>\n</html>",
+  "idx": 0,
+  "line_breaks": 0,
+  "modified": "2026-04-18 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Clinic Flow",
+  "name": "Token Slip",
+  "owner": "Administrator",
+  "print_format_builder": 0,
+  "print_format_type": "Jinja",
+  "show_section_headings": 0,
+  "standard": "No"
+ }
+]

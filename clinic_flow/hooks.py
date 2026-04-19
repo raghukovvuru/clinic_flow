@@ -26,6 +26,13 @@ scheduler_events = {
 	}
 }
 
+# ── Jinja template methods (available in print formats) ──────────────────────
+jinja = {
+	"methods": [
+		"clinic_flow.utils.get_token_qr_svg",
+	],
+}
+
 # ── Static assets injected into desk ────────────────────────────────────────
 app_include_css = []
 app_include_js = []
@@ -50,6 +57,10 @@ fixtures = [
 	{
 		"dt": "Workspace",
 		"filters": [["name", "=", "Clinic Flow"]]
+	},
+	{
+		"dt": "Print Format",
+		"filters": [["doc_type", "=", "Queue Entry"], ["module", "=", "Clinic Flow"]]
 	},
 ]
 
