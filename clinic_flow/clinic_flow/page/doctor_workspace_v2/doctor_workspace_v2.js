@@ -124,13 +124,13 @@ function get_workspace_v2_html() {
 								<div class="dw2-side-label">Vitals Snapshot</div>
 								<div id="dw2-vitals" class="dw2-side-body">Latest vitals will appear here</div>
 							</div>
-							<div class="dw2-side-card" id="dw2-open-orders-card" style="display:none;">
-								<div class="dw2-side-label">Pending Orders</div>
-								<div id="dw2-open-orders" class="dw2-side-body"></div>
-							</div>
 							<div class="dw2-side-card">
 								<div class="dw2-side-label">Ready Queue</div>
 								<div id="dw2-ready-queue" class="dw2-side-body">No ready patients</div>
+							</div>
+							<div class="dw2-side-card" id="dw2-open-orders-card" style="display:none;">
+								<div class="dw2-side-label">Pending Orders</div>
+								<div id="dw2-open-orders" class="dw2-side-body"></div>
 							</div>
 						</div>
 					</div>
@@ -978,15 +978,16 @@ class DoctorWorkspaceV2 {
 		const openOrders = summary.open_orders || [];
 		const $openOrdersCard = this.$root.find('#dw2-open-orders-card');
 		if (openOrders.length) {
-			const ordersHtml = openOrders.map((o) => `
+			const ordersHtml = openOrders.slice(0, 6).map((o) => `
 				<div style="padding:5px 0;border-bottom:1px solid rgba(120,113,108,0.1);">
-					<div style="font-weight:700;color:#111827;">${frappe.utils.escape_html(o.template_name || o.name || '')}</div>
-					<div style="font-size:12px;color:#6b7280;">${frappe.utils.escape_html(o.status || '')}${o.ordered_date ? ' · ' + frappe.utils.escape_html(String(o.ordered_date)) : ''}</div>
+					<div style="font-weight:700;color:#111827;">${frappe.utils.escape_html(o.template_dn || o.name || '')}</div>
+					<div style="font-size:12px;color:#6b7280;">${frappe.utils.escape_html(o.status || '')}${o.order_date ? ' · ' + frappe.utils.escape_html(String(o.order_date)) : ''}</div>
 				</div>
 			`).join('');
 			this.$root.find('#dw2-open-orders').html(ordersHtml);
 			$openOrdersCard.show();
 		} else {
+			this.$root.find('#dw2-open-orders').html('<span style="color:#aaa;font-size:12px;">No open orders</span>');
 			$openOrdersCard.hide();
 		}
 	}
