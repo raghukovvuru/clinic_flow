@@ -1,31 +1,35 @@
 # ONBOARDING.md — Clinic Flow
-Quick-start guide for new developers.
 
----
+Practical setup and verification guide for developers working in `apps/clinic_flow`.
 
-## What Is This?
+## What This App Is
 
-`clinic_flow` is a Frappe v16 app that adds queue management to Marley Healthcare. It runs alongside the `healthcare` app on the same Frappe site and never modifies Marley's source code.
+`clinic_flow` is a Frappe v16 app layered on top of Marley Healthcare. It does not replace upstream clinical records; it adds queue operations, receptionist flows, doctor queue handling, and waiting-room display.
 
-**Three things it does:**
-1. Receptionists book appointments and check patients in → patients get a queue token
-2. Doctors call patients in priority order from their workspace → a Patient Encounter is created
-3. A TV in the waiting room shows the current and upcoming tokens in real time
+Current reality:
 
----
+- the app is mixed-mode
+- legacy appointment/check-in queue paths still exist
+- newer dashboard/session/load/ETA/emergency paths also exist
+
+## Read This First
+
+Before changing code, read these in order:
+
+1. [CLAUDE.md](/home/raghu/frappe-bench/apps/clinic_flow/CLAUDE.md:1)
+2. [AGENTS.md](/home/raghu/frappe-bench/apps/clinic_flow/AGENTS.md:1)
+3. [ARCHITECTURE.md](/home/raghu/frappe-bench/apps/clinic_flow/ARCHITECTURE.md:1)
+4. [CONTEXT_INDEX.md](/home/raghu/frappe-bench/apps/clinic_flow/CONTEXT_INDEX.md:1)
+5. [docs/git-workflow-guide.md](/home/raghu/frappe-bench/apps/clinic_flow/docs/git-workflow-guide.md:1)
 
 ## Prerequisites
 
 - Frappe bench already set up with `healthcare` installed
-- Python 3.11+ (the app uses `X | Y` union type syntax)
-- `bench start` running on the dev machine
-- Site: `http://site1.localhost:8000`
+- Python 3.11+
+- site available at `site1.localhost`
+- `bench start` or equivalent services running
 
----
-
-## First-Time Setup
-
-### 1. Install the app
+## Install / Update
 
 ```bash
 cd ~/frappe-bench
@@ -34,261 +38,167 @@ bench --site site1.localhost install-app clinic_flow
 bench --site site1.localhost migrate
 ```
 
-### 2. Verify installation
+Verify installed apps:
 
 ```bash
 bench --site site1.localhost list-apps
-# Expected: frappe, healthcare, clinic_flow
 ```
 
-### 3. One-time data setup (do this in the Frappe desk)
+Expected relevant apps:
 
-These must be configured before anything works end-to-end:
+- `frappe`
+- `erpnext`
+- `healthcare`
+- `clinic_flow`
 
-| Where | What to set | Example |
-|---|---|---|
-| Medical Department | `custom_dept_abbr` | CARD, PED, GEN |
-| Appointment Type | `custom_queue_code` | PRE, WLK, FLW, EMR |
-| Healthcare Practitioner | `user_id` | Link to the doctor's Frappe user |
-| Practitioner Schedule | Time slots with `maximum_appointments` | Mon–Fri 08:00–12:00, capacity 20 |
+## Current Runtime Surfaces
 
-Check the Slot Partition Config (already has defaults):
-```
-Slot Partition Config → PRE_BOOKED 60%, WALK_IN 30%, FOLLOW_UP 10%
-```
+Primary pages:
 
-### 4. Assign roles
+- `/doctor-workspace-v2`
+- `/doctor-workspace`
+- `/receptionist-dashboard`
+- `/receptionist-workspace`
+- `/arrival-counter`
+- `/queue-dashboard`
 
-| Role | Assign to |
-|---|---|
-| `Physician` or `Healthcare Practitioner` | Doctors |
-| `Queue Manager` | Receptionists |
-| `Queue Viewer` | TV display accounts |
+Important note:
 
----
+- `doctor-workspace-v2` is the active doctor UI direction
+- `/doctor-workspace` is a legacy fallback/reference path
+- do not assume the legacy receptionist page is the only live path
 
-## Running the App
+## One-Time Data Expectations
 
-```bash
-cd ~/frappe-bench
-bench start          # starts all services (web, worker, scheduler, redis)
-```
+These upstream linkages/configs must exist:
 
-| URL | Who uses it |
-|---|---|
-| `http://site1.localhost:8000/doctor-workspace` | Doctors (auto-redirect on login) |
-| `http://site1.localhost:8000/receptionist-workspace` | Receptionists |
-| `http://site1.localhost:8000/queue-dashboard` | Waiting room TV (public) |
-| `http://site1.localhost:8000/queue-dashboard?dept=CARD` | Single-dept TV |
+- `Healthcare Practitioner.user_id`
+- `Medical Department.custom_dept_abbr`
+- `Appointment Type.custom_queue_code`
+- practitioner schedules and schedule time slots
 
----
+These app-owned/patched structures should exist after migrate:
 
-## The 5-Minute End-to-End Test
-
-Run this to verify everything is wired up correctly.
-
-**Step 1 — Doctor starts a session**
-1. Login as a doctor → auto-redirected to Doctor Workspace
-2. Click "Start Consultation Session" → select today's schedule → confirm
-3. The queue panel on the left should show the session name
-
-**Step 2 — Receptionist checks in a patient**
-1. Login as receptionist → open `/receptionist-workspace`
-2. Select the same practitioner + queue type "Standard" (PRE_BOOKED)
-3. Session slot cards appear → click "Book" on the first one
-4. Search for a patient by mobile number
-5. Payment step → enter any amount → click "Check In"
-6. Token appears on the done screen (e.g. `GEN-PRE-001`)
-
-**Step 3 — Doctor calls the patient**
-1. Back in the Doctor Workspace → click "Call Next"
-2. Patient banner appears with the token
-3. Edit symptoms → click "Submit Encounter"
-4. Queue entry disappears from the list
-
-**Step 4 — TV dashboard updates**
-1. Open `http://site1.localhost:8000/queue-dashboard` in a new tab
-2. After clicking "Call Next" in step 3, the TV should update within 1 second
-
-If all four steps work, the system is healthy.
-
----
+- required Healthcare custom fields managed by patches
+- `Service Point` doctype
+- `Patient Guardian` doctype
+- `Emergency Intake` doctype
 
 ## Codebase Tour
 
-```
-apps/clinic_flow/clinic_flow/
-│
-├── hooks.py                  ← start here; all hook registrations
-│
-├── api/                      ← all @frappe.whitelist() endpoints
-│   ├── appointments.py       ← booking, search, payment, check-in
-│   ├── queue.py              ← session lifecycle, call-next
-│   ├── workspace.py          ← encounter save/submit, workspace payload
-│   ├── patient_data.py       ← patient summary (internal, not whitelisted)
-│   └── boot.py               ← login redirect hook
-│
-├── queue/                    ← pure queue logic
-│   ├── engine.py             ← token building, round-robin, realtime broadcast
-│   ├── appointment_mixin.py  ← extends Patient Appointment
-│   └── scheduler.py          ← slot release cron job
-│
-├── clinic_flow/
-│   ├── doctype/
-│   │   ├── queue_session/    ← Queue Session DocType
-│   │   ├── queue_entry/      ← Queue Entry DocType
-│   │   └── slot_partition_config/ ← global config (Single)
-│   │
-│   └── page/
-│       ├── doctor_workspace/        ← doctor UI (JS + JSON)
-│       └── receptionist_workspace/  ← receptionist UI (JS + JSON)
-│
-└── www/
-    ├── queue-dashboard.html  ← TV dashboard (standalone, no Frappe JS)
-    └── queue-dashboard.py    ← sets no_cache/no_header
-```
+Core backend:
 
-**Tip:** Read `queue/appointment_mixin.py` first. It's the heart of the system — it's what turns a Patient Appointment check-in into a queue token.
+- `clinic_flow/hooks.py`
+- `clinic_flow/api/admission.py`
+- `clinic_flow/api/appointments.py`
+- `clinic_flow/api/queue.py`
+- `clinic_flow/api/emergency.py`
+- `clinic_flow/api/eta.py`
+- `clinic_flow/api/workspace.py`
+- `clinic_flow/queue/appointment_mixin.py`
+- `clinic_flow/queue/engine.py`
+- `clinic_flow/queue/service_point.py`
 
----
+Schema:
 
-## Common Development Tasks
+- `clinic_flow/clinic_flow/doctype/queue_session/`
+- `clinic_flow/clinic_flow/doctype/queue_entry/`
+- `clinic_flow/clinic_flow/doctype/service_point/`
+- `clinic_flow/clinic_flow/doctype/patient_guardian/`
+- `clinic_flow/clinic_flow/doctype/emergency_intake/`
 
-### Add a new API endpoint
+UI:
 
-1. Add function to the appropriate `api/` module
-2. Decorate with `@frappe.whitelist()`
-3. Include **complete** type annotations (v16 requirement):
-   ```python
-   @frappe.whitelist()
-   def my_new_fn(patient: str, amount: float = 0.0) -> dict:
-       ...
-   ```
-4. Call from JS: `frappe.call({ method: 'clinic_flow.api.appointments.my_new_fn', args: {...} })`
+- `clinic_flow/clinic_flow/page/doctor_workspace/`
+- `clinic_flow/clinic_flow/page/doctor_workspace_v2/`
+- `clinic_flow/clinic_flow/page/receptionist_workspace/`
+- `clinic_flow/clinic_flow/page/receptionist_dashboard/`
+- `clinic_flow/clinic_flow/page/arrival_counter/`
+- `clinic_flow/www/queue-dashboard.html`
 
-### Add a custom field to an existing DocType
+## Key Concepts
 
-1. In Frappe desk: Customise Form → add field → set **Module** to `Clinic Flow`
-2. Export fixtures:
-   ```bash
-   bench --site site1.localhost export-fixtures --app clinic_flow
-   ```
-3. Commit the updated file in `clinic_flow/fixtures/`
+### Legacy appointment path still matters
 
-### Add a patch (data migration)
+`Patient Appointment.status = "Checked In"` can still be a queue-entry creation trigger via `QueueMixin.on_update()`.
 
-1. Create `clinic_flow/patches/YYYYMMDD_describe_change.py`
-2. Write an `execute()` function:
-   ```python
-   import frappe
+Do not replace that path casually.
 
-   def execute():
-       # idempotent migration SQL here
-       frappe.db.sql("UPDATE ... SET ...")
-   ```
-3. Register in `patches.txt` under `[post_model_sync]`:
-   ```
-   clinic_flow.patches.YYYYMMDD_describe_change
-   ```
-4. `bench --site site1.localhost migrate`
+### Newer admission path is also live
 
-### Trigger the slot-release job manually
+The receptionist dashboard uses session recommendation and newer queue/session semantics through `api/admission.py`.
+
+### Queue identity is no longer just `dept_abbr`
+
+Prefer the active queue identity model:
+
+- `Queue Session.service_point`
+- `Queue Session.dept_abbr` as cache/fallback
+- display token composed from queue code + token number
+
+### Healthcare custom fields are patch-managed
+
+Do not assume they are safely owned through fixtures alone.
+
+See:
+
+- [ensure_required_healthcare_custom_fields.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/patches/v16_0/ensure_required_healthcare_custom_fields.py:1)
+
+## Fast Verification Flows
+
+### Legacy appointment compatibility check
+
+Verify:
+
+1. create or use a `Patient Appointment`
+2. run the normal payment/check-in flow
+3. confirm a `Queue Entry` is created
+4. confirm `custom_queue_token` is written back
+
+### Newer receptionist dashboard check
+
+Verify:
+
+1. open `/receptionist-dashboard`
+2. search/select patient
+3. confirm visit/load classification appears
+4. confirm suggested sessions load
+5. confirm token/session recommendation works
+
+### Doctor dequeue check
+
+Verify:
+
+1. start or reuse a session
+2. call next patient
+3. confirm `current_token`, encounter linkage, and queue-entry status move correctly
+
+### Queue identity check
+
+Verify:
+
+1. session resolves queue code via `Service Point` when present
+2. older sessions still fall back through `dept_abbr`
+
+## Useful Commands
 
 ```bash
+bench --site site1.localhost migrate
+bench --site site1.localhost console
 bench --site site1.localhost execute clinic_flow.queue.scheduler.release_prebooked_slots
 ```
 
-### Open a bench console to inspect live data
+Inspect queue state quickly:
 
-```bash
-bench --site site1.localhost console
-```
 ```python
-# Check slot config
-frappe.get_single("Slot Partition Config").as_dict()
-
-# See today's sessions
-frappe.get_all("Queue Session", filters={"session_date": frappe.utils.today()}, fields=["*"])
-
-# Check a specific token
-frappe.get_all("Queue Entry", filters={"token": "CARD-WLK-003"}, fields=["*"])
+frappe.get_all("Queue Session", filters={"session_date": frappe.utils.today()}, fields=["name", "status", "dept_abbr", "service_point"])
+frappe.get_all("Queue Entry", fields=["name", "token", "token_number", "status", "queue_position"], limit=20)
 ```
 
----
+## What Not To Assume
 
-## Key Concepts to Understand Before Writing Code
-
-### The check-in trigger
-`Patient Appointment.status = "Checked In"` → `doc.save()` → `QueueMixin.on_update()` → `Queue Entry` created. This chain must be triggered via `doc.save()`, not `frappe.db.set_value`.
-
-### Queue position is day-wide
-All position and sequence numbers span every session for a practitioner on a given date. If you see a position query that filters by a single session, it's probably wrong.
-
-### Walk-in slots are today-only
-`get_availability()` uses `scan_days = 1` for `WALK_IN`. Attempting to book a walk-in for a future date will return no slots.
-
-### FOLLOW_UP quota is stored in `emergency_total`/`emergency_used`
-This is a naming mismatch in the Queue Session schema. The fields were originally designed for Emergency but now hold Follow-up quota. EMERGENCY appointments have no quota — they always bypass the queue.
-
-### Extending Patient Appointment
-Use `extend_doctype_class` in `hooks.py` — not `doc_events`. See `queue/appointment_mixin.py` for the pattern. Always call `super()` first.
-
----
-
-## Debugging Tips
-
-### Check if `on_update` fired
-```bash
-bench --site site1.localhost console
-```
-```python
-# Did a Queue Entry get created?
-frappe.get_all("Queue Entry", filters={"appointment": "PA-XXXXX"}, fields=["*"])
-
-# Is the token written back?
-frappe.db.get_value("Patient Appointment", "PA-XXXXX", "custom_queue_token")
-```
-
-### Check the scheduler ran
-```bash
-bench --site site1.localhost show-pending-jobs
-# Or look at frappe logs:
-tail -f ~/frappe-bench/logs/worker.error.log
-```
-
-### Check Error Log in desk
-Setup → Error Log → filter by `clinic_flow:` prefix.
-
-### Realtime not updating the TV?
-1. Confirm `bench start` includes the Socket.io server (you should see `socketio` in the output)
-2. Open browser console on `/queue-dashboard` — look for WebSocket connection errors
-3. The dashboard falls back to polling every 6 s — check network tab for `/api/method/clinic_flow.api.queue.get_queue_state_for_display` requests
-
-### Session not found on doctor workspace
-The workspace stores the session in `localStorage`. If the session expired or was deleted:
-```javascript
-// Open browser console on /doctor-workspace
-localStorage.removeItem('clinic_flow_session')
-// Then reload
-```
-
----
-
-## What You Must NOT Do
-
-- **Do not edit files in `apps/healthcare/`** — use `extend_doctype_class` instead
-- **Do not omit type annotations** on `@frappe.whitelist()` functions — they will be rejected
-- **Do not use `frappe.get_all` with `ORDER BY FIELD()`** — use `frappe.db.sql`
-- **Do not use `frappe.db.set_value` to set `status = "Checked In"`** on appointments — the Queue Entry will not be created
-- **Do not use `document.getElementById`** in desk page JS — use `$(this.wrapper).find('#id')`
-
----
-
-## Reference
-
-| Document | Purpose |
-|---|---|
-| `AGENTS.md` | Concise rules for AI coding agents |
-| `ARCHITECTURE.md` | System design, data model, core workflows |
-| `clinic_flow_spec.md` (bench root) | Original queue management specification |
-| `CLAUDE.md` (bench root) | Development rules for Claude Code |
+- old handoff/spec/plan docs are current
+- `queue_type` is gone
+- `Service Point` is optional design-only work
+- `receptionist-workspace` is the only receptionist flow
+- fixture export alone captures all Healthcare-bound field ownership
