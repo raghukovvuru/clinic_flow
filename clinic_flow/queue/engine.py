@@ -46,9 +46,11 @@ def get_next_sequence(queue_session: str, queue_type: str) -> int:
 def get_next_token(queue_session: str) -> dict | None:
 	"""
 	Priority order:
-	  1. EMERGENCY — always next, bypasses round-robin
+	  1. EMERGENCY already ready near doctor — always next, bypasses round-robin
 	  2. Round-robin among PRE_BOOKED (weight 3), FOLLOW_UP (weight 1), WALK_IN (weight 1)
-	     with skip-if-empty promotion.
+	     across patients who are ready near doctor
+	  3. Legacy fallback: if no ready-near-doctor entries exist yet, use Waiting
+	     so the older workspace flow keeps working during transition.
 
 	Round-robin state is stored as JSON in QueueSession.rr_state:
 	{"type": "PRE_BOOKED", "remaining": 2}
@@ -62,18 +64,24 @@ def get_next_token(queue_session: str) -> dict | None:
 		"WALK_IN": config.weight_walkin or 1,
 	}
 
+	ready_statuses = ["Ready Near Doctor"]
+	legacy_statuses = ["Waiting"]
+
+	def _get_candidate(queue_type: str, statuses: list[str]) -> list[dict]:
+		return frappe.get_all(
+			"Queue Entry",
+			filters={
+				"queue_session": queue_session,
+				"queue_type": queue_type,
+				"status": ["in", statuses],
+			},
+			fields=["name", "token", "patient", "queue_type", "queue_position"],
+			order_by="queue_position asc",
+			limit=1,
+		)
+
 	# Step 1: Emergency bypass
-	emergency = frappe.get_all(
-		"Queue Entry",
-		filters={
-			"queue_session": queue_session,
-			"queue_type": "EMERGENCY",
-			"status": "Waiting",
-		},
-		fields=["name", "token", "patient", "queue_type", "queue_position"],
-		order_by="queue_position asc",
-		limit=1,
-	)
+	emergency = _get_candidate("EMERGENCY", ready_statuses)
 	if emergency:
 		return emergency[0]
 
@@ -87,35 +95,37 @@ def get_next_token(queue_session: str) -> dict | None:
 	current_type = rr_state.get("type", "PRE_BOOKED")
 	remaining = rr_state.get("remaining", WEIGHTS.get(current_type, 1))
 
-	# Step 3: Try to dequeue from current type, with skip-if-empty promotion
-	TYPE_ORDER = ["PRE_BOOKED", "FOLLOW_UP", "WALK_IN"]
-	start_idx = TYPE_ORDER.index(current_type) if current_type in TYPE_ORDER else 0
+	def _dequeue_by_rr(statuses: list[str]) -> dict | None:
+		TYPE_ORDER = ["PRE_BOOKED", "FOLLOW_UP", "WALK_IN"]
+		start_idx = TYPE_ORDER.index(current_type) if current_type in TYPE_ORDER else 0
 
-	for offset in range(len(TYPE_ORDER)):
-		try_type = TYPE_ORDER[(start_idx + offset) % len(TYPE_ORDER)]
-		candidate = frappe.get_all(
-			"Queue Entry",
-			filters={
-				"queue_session": queue_session,
-				"queue_type": try_type,
-				"status": "Waiting",
-			},
-			fields=["name", "token", "patient", "queue_type", "queue_position"],
-			order_by="queue_position asc",
-			limit=1,
-		)
-		if candidate:
-			# Found one — update rr_state
-			new_remaining = (remaining - 1) if try_type == current_type else WEIGHTS.get(try_type, 1) - 1
-			if new_remaining <= 0:
-				# Advance to next type in rotation
-				next_type = TYPE_ORDER[(TYPE_ORDER.index(try_type) + 1) % len(TYPE_ORDER)]
-				new_state = {"type": next_type, "remaining": WEIGHTS.get(next_type, 1)}
-			else:
-				new_state = {"type": try_type, "remaining": new_remaining}
+		for offset in range(len(TYPE_ORDER)):
+			try_type = TYPE_ORDER[(start_idx + offset) % len(TYPE_ORDER)]
+			candidate = _get_candidate(try_type, statuses)
+			if candidate:
+				# Found one — update rr_state
+				new_remaining = (remaining - 1) if try_type == current_type else WEIGHTS.get(try_type, 1) - 1
+				if new_remaining <= 0:
+					next_type = TYPE_ORDER[(TYPE_ORDER.index(try_type) + 1) % len(TYPE_ORDER)]
+					new_state = {"type": next_type, "remaining": WEIGHTS.get(next_type, 1)}
+				else:
+					new_state = {"type": try_type, "remaining": new_remaining}
 
-			frappe.db.set_value("Queue Session", queue_session, "rr_state", json.dumps(new_state))
-			return candidate[0]
+				frappe.db.set_value("Queue Session", queue_session, "rr_state", json.dumps(new_state))
+				return candidate[0]
+		return None
+
+	candidate = _dequeue_by_rr(ready_statuses)
+	if candidate:
+		return candidate
+
+	emergency = _get_candidate("EMERGENCY", legacy_statuses)
+	if emergency:
+		return emergency[0]
+
+	candidate = _dequeue_by_rr(legacy_statuses)
+	if candidate:
+		return candidate
 
 	return None  # Queue is empty
 
@@ -123,21 +133,37 @@ def get_next_token(queue_session: str) -> dict | None:
 # ── Realtime broadcast ───────────────────────────────────────────────────────
 
 def _broadcast_queue_update(queue_session: str) -> None:
-	"""Publish realtime event to all dashboard subscribers."""
+	"""Publish realtime event to dashboard subscribers and the practitioner's browser."""
 	session_doc = frappe.get_doc("Queue Session", queue_session)
-	waiting = frappe.get_all(
+	next_tokens = frappe.get_all(
 		"Queue Entry",
-		filters={"queue_session": queue_session, "status": "Waiting"},
-		fields=["token", "patient_name", "queue_type", "queue_position"],
+		filters={"queue_session": queue_session, "status": ["in", ["Ready Near Doctor", "Waiting"]]},
+		fields=["token", "patient_name", "queue_type", "queue_position", "status"],
 		order_by="queue_position asc",
 		limit=6,
 	)
+	status_order = {"Ready Near Doctor": 0, "Waiting": 1}
+	next_tokens = sorted(
+		next_tokens,
+		key=lambda row: (status_order.get(row.get("status"), 9), row.get("queue_position") or 0),
+	)
 	payload = {
 		"current_token": session_doc.current_token,
-		"next_tokens": waiting[:5],
+		"next_tokens": next_tokens[:5],
 		"practitioner": session_doc.practitioner,
 		"dept_abbr": session_doc.dept_abbr,
 	}
+	# Send directly to the practitioner's browser (doctor workspace)
+	practitioner_user = frappe.db.get_value(
+		"Healthcare Practitioner", session_doc.practitioner, "user_id"
+	)
+	if practitioner_user:
+		frappe.publish_realtime(
+			event="queue_update",
+			message=payload,
+			user=practitioner_user,
+		)
+	# Also broadcast to room-based subscribers (TV display board)
 	frappe.publish_realtime(
 		event="queue_update",
 		message=payload,

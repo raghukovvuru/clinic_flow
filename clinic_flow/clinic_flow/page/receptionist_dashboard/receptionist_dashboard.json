@@ -1,0 +1,15 @@
+{
+ "creation": "2026-04-13 00:00:00.000000",
+ "doctype": "Page",
+ "module": "Clinic Flow",
+ "name": "receptionist-dashboard",
+ "page_name": "receptionist-dashboard",
+ "standard": "Yes",
+ "system_page": 0,
+ "title": "Receptionist Dashboard",
+ "roles": [
+  {"role": "Healthcare Administrator"},
+  {"role": "Queue Manager"},
+  {"role": "System Manager"}
+ ]
+}

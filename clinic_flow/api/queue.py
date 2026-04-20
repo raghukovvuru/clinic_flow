@@ -1,3 +1,4 @@
+import math
 import frappe
 from frappe import _
 from frappe.utils import now_datetime, today
@@ -73,30 +74,43 @@ def start_session(
 			frappe.PermissionError,
 		)
 
-	# ── Re-use today's active/scheduled session if one exists ──────────────
+	# ── Dept abbr + full name ─────────────────────────────────────────────
+	dept_abbr = ""
+	dept_name = prac.department or ""
+	if prac.department:
+		row = frappe.db.get_value(
+			"Medical Department", prac.department,
+			["custom_dept_abbr", "department"], as_dict=True,
+		) or {}
+		dept_abbr = row.get("custom_dept_abbr") or ""
+		dept_name = row.get("department") or prac.department
+
+	# ── Re-use today's active/paused/scheduled session if one exists ─────────
 	existing = frappe.get_all(
 		"Queue Session",
 		filters={
 			"practitioner": prac.name,
 			"session_date": today(),
-			"status": ["in", ["Scheduled", "Active"]],
+			"status": ["in", ["Scheduled", "Active", "Paused"]],
 		},
 		fields=["name", "status", "session_name", "dept_abbr"],
+		order_by="modified desc",
 		limit=1,
 	)
 	if existing:
 		s = existing[0]
 		if s.status == "Scheduled":
 			frappe.db.set_value("Queue Session", s.name, "status", "Active")
+			s.status = "Active"
+		# Re-resolve dept_name from the existing session's dept_abbr (may differ from prac's current dept)
+		existing_dept_name = dept_name
+		if s.dept_abbr and s.dept_abbr != dept_abbr:
+			existing_dept_name = frappe.db.get_value(
+				"Medical Department", {"custom_dept_abbr": s.dept_abbr}, "department"
+			) or s.dept_abbr
 		return {"session": s.name, "session_name": s.session_name,
-				"dept_abbr": s.dept_abbr, "created": False}
-
-	# ── Dept abbr ─────────────────────────────────────────────────────────
-	dept_abbr = ""
-	if prac.department:
-		dept_abbr = frappe.db.get_value(
-			"Medical Department", prac.department, "custom_dept_abbr"
-		) or ""
+				"dept_abbr": s.dept_abbr, "dept_name": existing_dept_name,
+				"status": s.status, "created": False}
 
 	date_str = formatdate(today(), "EEE dd MMM yyyy")  # e.g. "Sun 05 Apr 2026"
 
@@ -116,15 +130,13 @@ def start_session(
 		to_time   = str(slot.to_time)
 		session_cap = int(slot.maximum_appointments or 20)
 
-		# Strip practitioner name from schedule name for a cleaner label
-		label = schedule.replace(prac.practitioner_name or "", "").strip(" -·")
-		session_name = f"{label} · {date_str}"
+		session_name = f"{schedule} · {date_str}"
 	else:
 		# Unscheduled — caller provides times and optional capacity
 		session_cap = int(capacity) if capacity else 20
-		first_name = (prac.practitioner_name or "Doctor").split()[0]
-		session_name = f"Unscheduled · {first_name} · {date_str}"
+		session_name = f"{prac.practitioner_name} · Unscheduled Session · {date_str}"
 
+	config = frappe.get_single("Slot Partition Config")
 	session_doc = frappe.get_doc({
 		"doctype":          "Queue Session",
 		"session_name":     session_name,
@@ -135,21 +147,22 @@ def start_session(
 		"dept_abbr":        dept_abbr,
 		"session_capacity": session_cap,
 		"status":           "Active",
+		"prebooked_total":  math.ceil(session_cap * (config.prebooked_pct or 60) / 100),
+		"walkin_total":     math.ceil(session_cap * (config.walkin_pct    or 30) / 100),
+		"followup_total":   math.ceil(session_cap * (config.followup_pct  or 10) / 100),
 	})
 	session_doc.insert(ignore_permissions=True)
 
-	# Inherit any Waiting entries that were checked in while the doctor was between
-	# sessions (i.e. while a prior session was Completed).  Re-parent them to this
-	# new session so the round-robin picks them up immediately.
 	_inherit_waiting_entries(prac.name, session_doc.name)
 
 	return {"session": session_doc.name, "session_name": session_name,
-			"dept_abbr": dept_abbr, "created": True}
+			"dept_abbr": dept_abbr, "dept_name": dept_name,
+			"status": "Active", "created": True}
 
 
 @frappe.whitelist()
 def get_session(queue_session: str) -> dict | None:
-	"""Verify a session is Active today AND belongs to the current user's practitioner."""
+	"""Verify a session is Active or Paused today AND belongs to the current user's practitioner."""
 	if not frappe.db.exists("Queue Session", queue_session):
 		return None
 	s = frappe.db.get_value(
@@ -157,14 +170,20 @@ def get_session(queue_session: str) -> dict | None:
 		["name", "session_name", "status", "session_date", "dept_abbr", "practitioner"],
 		as_dict=True,
 	)
-	if not (s and s.status == "Active" and str(s.session_date) == today()):
+	if not (s and s.status in ("Active", "Paused") and str(s.session_date) == today()):
 		return None
-	# Verify ownership — reject sessions that belong to a different practitioner
 	own_practitioner = frappe.db.get_value(
 		"Healthcare Practitioner", {"user_id": frappe.session.user}, "name"
 	)
 	if own_practitioner and s.practitioner != own_practitioner:
 		return None
+	# Enrich with full department name
+	dept_name = ""
+	if s.dept_abbr:
+		dept_name = frappe.db.get_value(
+			"Medical Department", {"custom_dept_abbr": s.dept_abbr}, "department"
+		) or s.dept_abbr
+	s["dept_name"] = dept_name
 	return s
 
 
@@ -182,7 +201,7 @@ def get_slot_availability(practitioner: str, appointment_date: str) -> dict:
 		"Queue Session",
 		{"practitioner": practitioner, "session_date": appointment_date,
 		 "status": ["in", ["Scheduled", "Active"]]},
-		["prebooked_total", "walkin_total", "emergency_total", "session_capacity"],
+		["prebooked_total", "walkin_total", "followup_total", "session_capacity"],
 		as_dict=True,
 	)
 
@@ -191,7 +210,7 @@ def get_slot_availability(practitioner: str, appointment_date: str) -> dict:
 		limits = {
 			"PRE_BOOKED": session_row.prebooked_total,
 			"WALK_IN":    session_row.walkin_total or 0,
-			"FOLLOW_UP":  session_row.emergency_total or 0,
+			"FOLLOW_UP":  session_row.followup_total or 0,
 			"EMERGENCY":  9999,
 		}
 	else:
@@ -233,7 +252,7 @@ def call_next(queue_session: str) -> dict:
 	"""
 	Doctor clicks "Call Next".
 	1. Find next eligible token via priority engine.
-	2. Mark it Called.
+	2. Move it into consultation.
 	3. Update Queue Session current_token + total_called.
 	4. Create or reopen Patient Encounter draft.
 	5. Return compact workspace payload.
@@ -252,26 +271,27 @@ def call_next(queue_session: str) -> dict:
 
 	now = now_datetime()
 
-	frappe.db.set_value("Queue Entry", entry.name, {
-		"status": "Called",
-		"called_at": now,
-	})
-
 	session_doc = frappe.get_doc("Queue Session", queue_session)
 	frappe.db.set_value("Queue Session", queue_session, {
 		"current_token": entry.token,
 		"total_called": (session_doc.total_called or 0) + 1,
 	})
 
-	_broadcast_queue_update(queue_session)
-
 	encounter_name = _get_or_create_encounter(entry, queue_session)
 
 	frappe.db.set_value("Queue Entry", entry.name, {
 		"status": "With Doctor",
-		"seen_at": now_datetime(),
+		"called_at": now,
+		"seen_at": now,
 		"patient_encounter": encounter_name,
 	})
+
+	_broadcast_queue_update(queue_session)
+
+	# Recalculate downstream ETAs if the actual pace has drifted significantly
+	from clinic_flow.api.eta import check_pace_deviation, recalculate_downstream_etas
+	if check_pace_deviation(queue_session):
+		recalculate_downstream_etas(queue_session)
 
 	from clinic_flow.api.workspace import get_workspace_payload
 	return get_workspace_payload(entry.patient, encounter_name, entry.name)
@@ -415,8 +435,7 @@ def _increment_session_slot_for(queue_session: str, queue_type: str) -> None:
 	field_map = {
 		"PRE_BOOKED": "prebooked_used",
 		"WALK_IN":    "walkin_used",
-		"EMERGENCY":  "emergency_used",
-		"FOLLOW_UP":  "walkin_used",
+		"FOLLOW_UP":  "followup_used",
 	}
 	field = field_map.get(queue_type)
 	if field:
@@ -467,21 +486,26 @@ def skip_patient(queue_entry: str, reason: str = "") -> dict:
 
 @frappe.whitelist()
 def get_queue_state(queue_session: str) -> dict:
-	"""Left panel data: current token + next 10 waiting."""
+	"""Doctor workspace queue strip: current token + next 10 ready patients."""
 	frappe.has_permission("Queue Entry", "read", throw=True)
 
 	session = frappe.get_doc("Queue Session", queue_session)
 	waiting = frappe.get_all(
 		"Queue Entry",
-		filters={"queue_session": queue_session, "status": "Waiting"},
-		fields=["name", "token", "patient_name", "queue_type", "queue_position"],
+		filters={"queue_session": queue_session, "status": ["in", ["Ready Near Doctor", "Waiting"]]},
+		fields=["name", "token", "patient_name", "queue_type", "queue_position", "status"],
 		order_by="queue_position asc",
 		limit=10,
 	)
+	status_order = {"Ready Near Doctor": 0, "Waiting": 1}
+	waiting = sorted(
+		waiting,
+		key=lambda row: (status_order.get(row.get("status"), 9), row.get("queue_position") or 0),
+	)
 	current = frappe.get_all(
 		"Queue Entry",
-		filters={"queue_session": queue_session, "status": ["in", ["Called", "With Doctor"]]},
-		fields=["name", "token", "patient_name", "queue_type"],
+		filters={"queue_session": queue_session, "status": ["in", ["With Doctor", "Called"]]},
+		fields=["name", "token", "patient_name", "queue_type", "patient", "patient_encounter"],
 		limit=1,
 	)
 	return {
@@ -499,7 +523,7 @@ def get_queue_state(queue_session: str) -> dict:
 
 @frappe.whitelist()
 def get_active_session_for_user() -> dict | None:
-	"""Returns today's Active Queue Session for the logged-in practitioner."""
+	"""Returns today's Active or Paused Queue Session for the logged-in practitioner."""
 	practitioner = frappe.db.get_value(
 		"Healthcare Practitioner",
 		{"user_id": frappe.session.user},
@@ -510,11 +534,22 @@ def get_active_session_for_user() -> dict | None:
 
 	sessions = frappe.get_all(
 		"Queue Session",
-		filters={"practitioner": practitioner, "session_date": today(), "status": "Active"},
+		filters={"practitioner": practitioner, "session_date": today(),
+				 "status": ["in", ["Active", "Paused"]]},
 		fields=["name", "session_name", "dept_abbr", "status"],
+		order_by="modified desc",
 		limit=1,
 	)
-	return sessions[0] if sessions else None
+	if not sessions:
+		return None
+	s = sessions[0]
+	dept_name = ""
+	if s.dept_abbr:
+		dept_name = frappe.db.get_value(
+			"Medical Department", {"custom_dept_abbr": s.dept_abbr}, "department"
+		) or s.dept_abbr
+	s["dept_name"] = dept_name
+	return s
 
 
 @frappe.whitelist(allow_guest=True)
@@ -620,8 +655,428 @@ def get_queue_state_for_display(dept: str = "all") -> dict:
 	}
 
 
+# ---------------------------------------------------------------------------
+# v2 reception state transitions
+# ---------------------------------------------------------------------------
+
+@frappe.whitelist()
+def call_to_reception(queue_entry: str) -> dict:
+	"""
+	Receptionist calls a patient to the desk.
+	Valid from: Waiting, Booked, Pushed to End.
+	Sets status → Called, records called_to_reception_at.
+	"""
+	frappe.only_for(["Queue Manager", "System Manager"])
+
+	entry = frappe.db.get_value(
+		"Queue Entry", queue_entry,
+		["name", "status", "queue_session", "token", "patient_name"],
+		as_dict=True,
+	)
+	if not entry:
+		frappe.throw(_("Queue Entry {0} not found.").format(queue_entry))
+
+	if entry.status not in ("Waiting", "Booked", "Pushed to End"):
+		frappe.throw(
+			_("Cannot call to reception: patient status is '{0}' (expected Waiting, Booked, or Pushed to End).").format(
+				entry.status
+			),
+			frappe.ValidationError,
+		)
+
+	frappe.db.set_value("Queue Entry", queue_entry, {
+		"status": "Called",
+		"called_to_reception_at": now_datetime(),
+	})
+
+	from clinic_flow.api.eta import recalculate_downstream_etas
+	recalculate_downstream_etas(entry.queue_session)
+
+	_broadcast_queue_update(entry.queue_session)
+
+	return {"status": "Called", "token": entry.token, "patient_name": entry.patient_name}
+
+
+@frappe.whitelist()
+def mark_no_response(queue_entry: str) -> dict:
+	"""
+	Patient did not respond to the reception call.
+	Valid from: Called.
+	Sets status → No Response, records no_response_at.
+	"""
+	frappe.only_for(["Queue Manager", "System Manager"])
+
+	entry = frappe.db.get_value(
+		"Queue Entry", queue_entry,
+		["name", "status", "queue_session", "token"],
+		as_dict=True,
+	)
+	if not entry:
+		frappe.throw(_("Queue Entry {0} not found.").format(queue_entry))
+
+	if entry.status != "Called":
+		frappe.throw(
+			_("Cannot mark No Response: patient status is '{0}' (expected Called).").format(
+				entry.status
+			),
+			frappe.ValidationError,
+		)
+
+	frappe.db.set_value("Queue Entry", queue_entry, {
+		"status": "No Response",
+		"no_response_at": now_datetime(),
+	})
+	_broadcast_queue_update(entry.queue_session)
+
+	# No Response patient no longer blocks the queue — refresh ETAs
+	from clinic_flow.api.eta import recalculate_downstream_etas
+	recalculate_downstream_etas(entry.queue_session)
+
+	return {"status": "No Response", "token": entry.token}
+
+
+@frappe.whitelist()
+def complete_reception(
+	queue_entry: str,
+	weight_kg: float | None = None,
+	payment_mode: str = "",
+	paid_amount: float | None = None,
+) -> dict:
+	"""
+	Patient has completed reception check-in (payment collected, weight measured).
+	Valid from: Called or No Response (patient returned before grace expired).
+	Sets status → Ready Near Doctor, records reception_done_at.
+
+	Also syncs the linked Patient Appointment to "Checked In" with payment data so
+	Marley Healthcare's fee validity management and invoicing hooks fire correctly.
+
+	Also increments hold_patients_count on all No Response entries in the same session,
+	so the auto-push-to-end rule can fire.
+	"""
+	frappe.only_for(["Queue Manager", "System Manager"])
+
+	entry = frappe.db.get_value(
+		"Queue Entry", queue_entry,
+		["name", "status", "queue_session", "token", "appointment"],
+		as_dict=True,
+	)
+	if not entry:
+		frappe.throw(_("Queue Entry {0} not found.").format(queue_entry))
+
+	if entry.status not in ("Called", "No Response"):
+		frappe.throw(
+			_("Cannot complete reception: patient status is '{0}' (expected Called or No Response).").format(
+				entry.status
+			),
+			frappe.ValidationError,
+		)
+
+	update = {
+		"status": "Ready Near Doctor",
+		"reception_done_at": now_datetime(),
+	}
+	if weight_kg is not None:
+		update["weight_recorded"] = float(weight_kg)
+		update["weight_recorded_at"] = now_datetime()
+
+	frappe.db.set_value("Queue Entry", queue_entry, update)
+
+	# ── Sync linked Patient Appointment → "Checked In" ───────────────────────
+	# This triggers Healthcare's on_update() which runs update_fee_validity()
+	# and manage_fee_validity() — correctly consuming the patient's fee validity.
+	if entry.appointment:
+		_checkin_patient_appointment(
+			appointment=entry.appointment,
+			payment_mode=payment_mode,
+			paid_amount=paid_amount,
+		)
+
+	# Increment hold counter on all No Response entries in this session
+	config = frappe.get_single("Slot Partition Config")
+	hold_threshold: int = config.no_response_hold_count or 3
+
+	no_response_entries = frappe.get_all(
+		"Queue Entry",
+		filters={
+			"queue_session": entry.queue_session,
+			"status": "No Response",
+			"name": ["!=", queue_entry],
+		},
+		fields=["name", "hold_patients_count"],
+	)
+
+	for nr in no_response_entries:
+		new_count = (nr.hold_patients_count or 0) + 1
+		if new_count >= hold_threshold:
+			# Auto-push to end
+			frappe.db.set_value("Queue Entry", nr.name, {
+				"hold_patients_count": new_count,
+				"status": "Pushed to End",
+			})
+			_push_to_queue_end(nr.name, entry.queue_session)
+		else:
+			frappe.db.set_value("Queue Entry", nr.name, "hold_patients_count", new_count)
+
+	_broadcast_queue_update(entry.queue_session)
+
+	# Recalculate ETAs — one fewer pending patient changes everyone's estimate
+	from clinic_flow.api.eta import recalculate_downstream_etas
+	recalculate_downstream_etas(entry.queue_session)
+
+	return {"status": "Ready Near Doctor", "token": entry.token}
+
+
+@frappe.whitelist()
+def push_to_end(queue_entry: str, reason: str = "") -> dict:
+	"""
+	Manually push a No Response patient to the end of the queue.
+	Sets status → Pushed to End and reassigns queue_position to last.
+	"""
+	frappe.only_for(["Queue Manager", "System Manager"])
+
+	entry = frappe.db.get_value(
+		"Queue Entry", queue_entry,
+		["name", "status", "queue_session", "token"],
+		as_dict=True,
+	)
+	if not entry:
+		frappe.throw(_("Queue Entry {0} not found.").format(queue_entry))
+
+	if entry.status not in ("No Response", "Called"):
+		frappe.throw(
+			_("Cannot push to end: patient status is '{0}'.").format(entry.status),
+			frappe.ValidationError,
+		)
+
+	update = {"status": "Pushed to End"}
+	if reason:
+		existing_notes = frappe.db.get_value("Queue Entry", queue_entry, "notes") or ""
+		update["notes"] = (existing_notes + "\n" + reason).strip()
+
+	frappe.db.set_value("Queue Entry", queue_entry, update)
+	_push_to_queue_end(queue_entry, entry.queue_session)
+
+	_broadcast_queue_update(entry.queue_session)
+
+	# Recalculate ETAs — pushed patient no longer blocks others
+	from clinic_flow.api.eta import recalculate_downstream_etas
+	recalculate_downstream_etas(entry.queue_session)
+
+	return {"status": "Pushed to End", "token": entry.token}
+
+
+def _push_to_queue_end(queue_entry: str, queue_session: str) -> None:
+	"""Assign the next available queue_position (max + 1) to the given entry."""
+	result = frappe.db.sql(
+		"SELECT MAX(queue_position) FROM `tabQueue Entry` "
+		"WHERE queue_session = %s AND status != 'No Show'",
+		(queue_session,),
+	)
+	last_pos: int = (result[0][0] or 0) if result else 0
+	frappe.db.set_value("Queue Entry", queue_entry, "queue_position", last_pos + 1)
+
+
+@frappe.whitelist()
+def resume_held_token(queue_entry: str) -> dict:
+	"""
+	Patient in No Response has returned before grace expired.
+	Moves No Response → Called so receptionist can process them at reception.
+	"""
+	frappe.only_for(["Queue Manager", "System Manager"])
+
+	entry = frappe.db.get_value(
+		"Queue Entry", queue_entry,
+		["name", "status", "queue_session", "token", "patient_name"],
+		as_dict=True,
+	)
+	if not entry:
+		frappe.throw(_("Queue Entry {0} not found.").format(queue_entry))
+
+	if entry.status != "No Response":
+		frappe.throw(
+			_("Cannot resume: patient status is '{0}' (expected No Response).").format(
+				entry.status
+			),
+			frappe.ValidationError,
+		)
+
+	frappe.db.set_value("Queue Entry", queue_entry, {
+		"status": "Called",
+		"called_to_reception_at": now_datetime(),
+	})
+
+	_broadcast_queue_update(entry.queue_session)
+	return {"status": "Called", "token": entry.token, "patient_name": entry.patient_name}
+
+
+@frappe.whitelist()
+def move_to_with_doctor(queue_entry: str) -> dict:
+	"""
+	Patient moves from the ready queue into the consultation room.
+	Valid from: Ready Near Doctor.
+	Records seen_at (consultation start time).
+	"""
+	frappe.only_for(["Queue Manager", "System Manager"])
+
+	entry = frappe.db.get_value(
+		"Queue Entry", queue_entry,
+		["name", "status", "queue_session", "token", "patient_name"],
+		as_dict=True,
+	)
+	if not entry:
+		frappe.throw(_("Queue Entry {0} not found.").format(queue_entry))
+
+	if entry.status != "Ready Near Doctor":
+		frappe.throw(
+			_("Cannot move to With Doctor: patient status is '{0}' (expected Ready Near Doctor).").format(
+				entry.status
+			),
+			frappe.ValidationError,
+		)
+
+	frappe.db.set_value("Queue Entry", queue_entry, {
+		"status": "With Doctor",
+		"seen_at": now_datetime(),
+	})
+
+	_broadcast_queue_update(entry.queue_session)
+	return {"status": "With Doctor", "token": entry.token, "patient_name": entry.patient_name}
+
+
+@frappe.whitelist()
+def mark_completed(queue_entry: str) -> dict:
+	"""
+	Consultation has ended.
+	Valid from: With Doctor.
+	Triggers downstream ETA recalculation.
+	"""
+	frappe.only_for(["Queue Manager", "System Manager"])
+
+	entry = frappe.db.get_value(
+		"Queue Entry", queue_entry,
+		["name", "status", "queue_session", "token", "patient_name", "seen_at"],
+		as_dict=True,
+	)
+	if not entry:
+		frappe.throw(_("Queue Entry {0} not found.").format(queue_entry))
+
+	if entry.status != "With Doctor":
+		frappe.throw(
+			_("Cannot mark Completed: patient status is '{0}' (expected With Doctor).").format(
+				entry.status
+			),
+			frappe.ValidationError,
+		)
+
+	frappe.db.set_value("Queue Entry", queue_entry, "status", "Completed")
+
+	_broadcast_queue_update(entry.queue_session)
+
+	from clinic_flow.api.eta import recalculate_downstream_etas
+	recalculate_downstream_etas(entry.queue_session)
+
+	return {"status": "Completed", "token": entry.token, "patient_name": entry.patient_name}
+
+
+@frappe.whitelist()
+def get_live_session_state(queue_session: str) -> dict:
+	"""
+	Return the full pipeline state for the receptionist's right (live session) panel.
+
+	Groups Queue Entries by status bucket:
+	  with_doctor  — currently in consultation (max 1)
+	  ready        — Ready Near Doctor, ordered by queue_position asc
+	  called       — Called to reception, ordered by called_to_reception_at asc
+	  due_soon     — next 5 Booked entries, ordered by queue_position asc
+	  no_response  — No Response, ordered by no_response_at asc
+
+	Also returns session metadata and summary counts.
+	"""
+	if not queue_session:
+		frappe.throw(_("Queue Session is required."))
+
+	session = frappe.db.get_value(
+		"Queue Session",
+		queue_session,
+		[
+			"name", "session_name", "session_date", "start_time", "end_time",
+			"status", "dept_abbr", "practitioner",
+			"planned_capacity", "review_load_count", "non_review_load_count",
+			"phone_booked_count", "walkin_count",
+		],
+		as_dict=True,
+	)
+	if not session:
+		frappe.throw(_("Queue Session {0} not found.").format(queue_session))
+
+	_ENTRY_FIELDS = [
+		"name", "token_number", "token", "patient", "patient_name",
+		"load_class", "queue_type", "status", "queue_position",
+		"called_to_reception_at", "no_response_at", "hold_patients_count",
+		"reception_done_at", "weight_recorded",
+		"report_by_time", "predicted_doctor_time",
+		"seen_at",
+	]
+
+	def _fetch(statuses: list, order: str = "queue_position asc", limit: int = 0) -> list:
+		kwargs = dict(
+			filters={"queue_session": queue_session, "status": ["in", statuses]},
+			fields=_ENTRY_FIELDS,
+			order_by=order,
+		)
+		if limit:
+			kwargs["limit"] = limit
+		return frappe.get_all("Queue Entry", **kwargs)
+
+	with_doctor   = _fetch(["With Doctor"],        "seen_at desc", limit=1)
+	ready         = _fetch(["Ready Near Doctor"],  "queue_position asc")
+	called        = _fetch(["Called"],             "called_to_reception_at asc")
+	due_soon      = _fetch(["Booked", "Waiting"],  "queue_position asc", limit=5)
+	no_response   = _fetch(["No Response"],        "no_response_at asc")
+	pushed_to_end = _fetch(["Pushed to End"],      "queue_position asc")
+
+	total_booked    = frappe.db.count(
+		"Queue Entry",
+		{"queue_session": queue_session,
+		 "status": ["not in", ["No Show", "Skipped"]]}
+	)
+	completed_today = frappe.db.count(
+		"Queue Entry",
+		{"queue_session": queue_session,
+		 "status": ["in", ["Completed", "Done"]]}
+	)
+
+	return {
+		"session":         session,
+		"with_doctor":     with_doctor,
+		"ready":           ready,
+		"called":          called,
+		"due_soon":        due_soon,
+		"no_response":     no_response,
+		"pushed_to_end":   pushed_to_end,
+		"counts": {
+			"total_booked":    total_booked,
+			"completed_today": completed_today,
+			"remaining":       max(0, total_booked - completed_today),
+		},
+	}
+
+
+# ---------------------------------------------------------------------------
+# patient encounter helper
+# ---------------------------------------------------------------------------
+
 def _get_or_create_encounter(entry: dict, queue_session: str) -> str:
 	"""Find an existing Draft encounter or create one. Returns encounter name."""
+	# get_next_token() returns a minimal dict; re-fetch fields needed for encounter creation
+	full_entry = frappe.db.get_value(
+		"Queue Entry",
+		entry.name,
+		["appointment", "queue_type", "complaint"],
+		as_dict=True,
+	) or {}
+	entry = frappe._dict({**entry, **full_entry})
+
 	session_doc = frappe.get_doc("Queue Session", queue_session)
 	existing = frappe.get_all(
 		"Patient Encounter",
@@ -679,5 +1134,48 @@ def _get_or_create_encounter(entry: dict, queue_session: str) -> str:
 		enc_data["appointment"] = entry.appointment
 
 	enc = frappe.get_doc(enc_data)
+
+	# Pre-populate complaint from booking so doctor sees it immediately
+	if entry.get("complaint"):
+		enc.custom_chief_complaint = entry.complaint
+
 	enc.insert(ignore_permissions=True)
 	return enc.name
+
+
+# ---------------------------------------------------------------------------
+# Healthcare appointment sync helper
+# ---------------------------------------------------------------------------
+
+def _checkin_patient_appointment(
+	appointment: str,
+	payment_mode: str,
+	paid_amount: float | None,
+) -> None:
+	"""
+	Set the linked Patient Appointment to 'Checked In' with payment data.
+
+	Healthcare's on_update() fires on save() and calls update_fee_validity() →
+	manage_fee_validity(), which:
+	  - for review patients: increments fee_validity.visited
+	  - for new patients:    creates a new Fee Validity record
+	  - for cancelled appts: decrements visited (handled by Healthcare itself)
+	"""
+	try:
+		appt = frappe.get_doc("Patient Appointment", appointment)
+		if appt.status in ("Checked In", "Checked Out", "Closed", "Cancelled"):
+			return  # Already processed — do not double-trigger
+
+		appt.status = "Checked In"
+		if payment_mode:
+			appt.mode_of_payment = payment_mode
+		if paid_amount is not None and float(paid_amount) > 0:
+			appt.paid_amount = float(paid_amount)
+			appt.invoiced    = 1
+		appt.save(ignore_permissions=True)
+		# Healthcare on_update() → update_fee_validity() fires here
+	except Exception:
+		frappe.log_error(
+			frappe.get_traceback(),
+			f"clinic_flow: failed to check in Patient Appointment {appointment}",
+		)

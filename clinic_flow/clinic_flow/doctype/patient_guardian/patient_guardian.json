@@ -1,0 +1,97 @@
+{
+ "actions": [],
+ "autoname": "PG-.YYYY.-.#####",
+ "creation": "2026-04-13 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "guardian_name",
+  "mobile",
+  "relationship",
+  "notes",
+  "children_section",
+  "children"
+ ],
+ "fields": [
+  {
+   "fieldname": "guardian_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Guardian Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "mobile",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Mobile Number",
+   "reqd": 1,
+   "search_index": 1,
+   "unique": 1,
+   "description": "Primary lookup key. Must be unique across all guardians."
+  },
+  {
+   "fieldname": "relationship",
+   "fieldtype": "Select",
+   "label": "Relationship to Patient",
+   "options": "Father\nMother\nGuardian\nOther"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "children_section",
+   "fieldtype": "Section Break",
+   "label": "Children"
+  },
+  {
+   "fieldname": "children",
+   "fieldtype": "Table",
+   "label": "Children",
+   "options": "Guardian Child"
+  }
+ ],
+ "links": [],
+ "modified": "2026-04-13 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Clinic Flow",
+ "name": "Patient Guardian",
+ "naming_rule": "Expression (make_autoname)",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Queue Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Queue Viewer"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

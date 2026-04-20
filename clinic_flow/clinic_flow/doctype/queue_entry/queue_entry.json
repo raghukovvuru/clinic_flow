@@ -6,6 +6,7 @@
  "engine": "InnoDB",
  "field_order": [
   "token",
+  "token_number",
   "queue_session",
   "patient",
   "patient_name",
@@ -14,6 +15,7 @@
   "department",
   "dept_abbr",
   "queue_type",
+  "load_class",
   "status",
   "queue_position",
   "called_at",
@@ -25,7 +27,19 @@
   "issue_metadata_section",
   "issued_by",
   "issued_by_role",
-  "notes"
+  "notes",
+  "complaint",
+  "age_at_visit",
+  "eta_section",
+  "report_by_time",
+  "predicted_doctor_time",
+  "reception_stage_section",
+  "called_to_reception_at",
+  "no_response_at",
+  "hold_patients_count",
+  "reception_done_at",
+  "weight_recorded",
+  "weight_recorded_at"
  ],
  "fields": [
   {
@@ -35,6 +49,15 @@
    "label": "Token",
    "read_only": 1,
    "search_index": 1
+  },
+  {
+   "fieldname": "token_number",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Token Number",
+   "read_only": 1,
+   "search_index": 1,
+   "description": "Plain sequential integer (1, 2, 3...). Assigned at booking. Never changes."
   },
   {
    "fieldname": "queue_session",
@@ -87,11 +110,20 @@
   {
    "fieldname": "queue_type",
    "fieldtype": "Select",
-   "in_list_view": 1,
+   "in_list_view": 0,
    "in_standard_filter": 1,
    "label": "Queue Type",
    "options": "PRE_BOOKED\nWALK_IN\nEMERGENCY\nFOLLOW_UP",
-   "reqd": 1
+   "description": "Legacy field — used by v1 booking flow. New bookings use load_class."
+  },
+  {
+   "fieldname": "load_class",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Load Class",
+   "options": "\nreview_load\nnon_review_load",
+   "description": "v2 field — review_load (shorter consult) or non_review_load (longer consult)."
   },
   {
    "default": "Waiting",
@@ -100,7 +132,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Waiting\nCalled\nWith Doctor\nDone\nSkipped\nNo Show"
+   "options": "Booked\nWaiting\nCalled\nNo Response\nReady Near Doctor\nWith Doctor\nCompleted\nPushed to End\nDone\nSkipped\nNo Show"
   },
   {
    "fieldname": "queue_position",
@@ -166,10 +198,86 @@
    "fieldname": "notes",
    "fieldtype": "Small Text",
    "label": "Notes"
+  },
+  {
+   "fieldname": "complaint",
+   "fieldtype": "Link",
+   "label": "Chief Complaint",
+   "options": "Complaint",
+   "description": "Primary complaint selected at booking. Auto-populated into Patient Encounter symptoms."
+  },
+  {
+   "fieldname": "age_at_visit",
+   "fieldtype": "Data",
+   "label": "Age at Visit",
+   "description": "e.g. '3y 2m'. Auto-calculated from DOB; editable if DOB unknown."
+  },
+  {
+   "fieldname": "eta_section",
+   "fieldtype": "Section Break",
+   "label": "ETA (v2)"
+  },
+  {
+   "fieldname": "report_by_time",
+   "fieldtype": "Datetime",
+   "label": "Report By Time",
+   "read_only": 1,
+   "description": "Patient-facing: tell them to be at clinic by this time."
+  },
+  {
+   "fieldname": "predicted_doctor_time",
+   "fieldtype": "Datetime",
+   "label": "Predicted Doctor Time",
+   "read_only": 1,
+   "description": "Internal estimate of when doctor will call this patient."
+  },
+  {
+   "fieldname": "reception_stage_section",
+   "fieldtype": "Section Break",
+   "label": "Reception Stage (v2)"
+  },
+  {
+   "fieldname": "called_to_reception_at",
+   "fieldtype": "Datetime",
+   "label": "Called to Reception At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "no_response_at",
+   "fieldtype": "Datetime",
+   "label": "No Response At",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "hold_patients_count",
+   "fieldtype": "Int",
+   "label": "Hold Patients Count",
+   "read_only": 1,
+   "description": "How many patients completed check-in while this entry was in No Response state."
+  },
+  {
+   "fieldname": "reception_done_at",
+   "fieldtype": "Datetime",
+   "label": "Reception Done At",
+   "read_only": 1,
+   "description": "When patient moved to Ready Near Doctor (payment + weight recorded)."
+  },
+  {
+   "fieldname": "weight_recorded",
+   "fieldtype": "Float",
+   "label": "Weight Recorded (kg)",
+   "description": "Child weight recorded at reception."
+  },
+  {
+   "fieldname": "weight_recorded_at",
+   "fieldtype": "Datetime",
+   "label": "Weight Recorded At",
+   "read_only": 1
   }
  ],
  "links": [],
- "modified": "2026-04-03 00:00:00.000000",
+ "modified": "2026-04-14 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Clinic Flow",
  "name": "Queue Entry",
