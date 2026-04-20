@@ -43,10 +43,7 @@ def _get_encounter_data(encounter: str) -> dict:
 			for r in (enc.drug_prescription or [])
 		],
 		"lab_test_prescription": [
-			{
-				"observation_template": r.observation_template or "",
-				"lab_test_comment": r.lab_test_comment or "",
-			}
+			{"observation_template": r.observation_template or ""}
 			for r in (enc.lab_test_prescription or [])
 		],
 		# procedure_prescription is read-only in this workspace — returned for display only,
@@ -80,7 +77,7 @@ def save_encounter_draft(encounter: str, data: str) -> dict:
 	# drug_name and lab_test_name are read-only fetch fields; never set them directly.
 	CHILD_ALLOWED: dict[str, list[str]] = {
 		"drug_prescription": ["medication", "drug_code", "dosage", "period", "dosage_form", "comment"],
-		"lab_test_prescription": ["observation_template", "lab_test_comment"],
+		"lab_test_prescription": ["observation_template"],
 	}
 
 	for ws_key, enc_field in FIELD_MAP.items():

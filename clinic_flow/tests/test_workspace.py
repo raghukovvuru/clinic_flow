@@ -168,3 +168,24 @@ class TestWorkspaceFieldMapping(IntegrationTestCase):
         self.assertIsInstance(result, list)
         for row in result:
             self.assertIn("item", row)
+
+    def test_save_encounter_draft_rejects_drug_name_in_payload(self):
+        """CHILD_ALLOWED whitelist must strip drug_name from drug_prescription rows."""
+        patient = self._make_patient()
+        practitioner = self._make_practitioner()
+        enc_name = self._make_encounter(patient, practitioner)
+        data = {
+            "drug_prescription": [
+                {
+                    "drug_name": "SHOULD_BE_STRIPPED",
+                    "period": self._make_duration(),
+                    "dosage_form": self._make_dosage_form(),
+                }
+            ]
+        }
+        workspace.save_encounter_draft(encounter=enc_name, data=frappe.as_json(data))
+        enc = frappe.get_doc("Patient Encounter", enc_name)
+        if enc.drug_prescription:
+            # drug_name is a read-only fetch field — it should not have been set
+            # by our save path (it would only be set if drug_code triggers a fetch)
+            self.assertNotEqual(enc.drug_prescription[0].drug_name, "SHOULD_BE_STRIPPED")
