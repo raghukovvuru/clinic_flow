@@ -2,6 +2,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import nowdate
 
+import clinic_flow.api.workspace as workspace
 from clinic_flow.api.workspace import _get_encounter_data, save_encounter_draft
 
 
@@ -160,3 +161,8 @@ class TestWorkspaceFieldMapping(IntegrationTestCase):
         for row in data.get("lab_test_prescription", []):
             self.assertIn("observation_template", row)
             self.assertNotIn("lab_test_name", row)
+
+    def test_get_drug_items_returns_list(self):
+        """get_drug_items returns a list (possibly empty) without raising."""
+        result = workspace.get_drug_items(medication="NonExistentMedication")
+        self.assertIsInstance(result, list)

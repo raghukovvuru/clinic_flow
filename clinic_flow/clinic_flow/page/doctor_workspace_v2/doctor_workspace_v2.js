@@ -1372,7 +1372,7 @@ class DoctorWorkspaceV2 {
 		if (!this.state.drug_rows[idx] || !medication) return;
 		try {
 			const r = await frappe.call({
-				method: 'healthcare.healthcare.doctype.patient_encounter.patient_encounter.get_medications',
+				method: 'clinic_flow.api.workspace.get_drug_items',
 				args: { medication },
 			});
 			const items = (r.message || []).map((row) => row.item).filter(Boolean);

@@ -142,6 +142,16 @@ def submit_encounter(encounter: str) -> dict:
 	return {"status": "submitted", "name": enc.name}
 
 
+@frappe.whitelist()
+def get_drug_items(medication: str) -> list[dict]:
+    """Return items linked to a Medication record."""
+    return frappe.get_all(
+        "Medication Linked Item",
+        filters={"parent": medication},
+        fields=["item"],
+    )
+
+
 def _decrement_session_counter(queue_session: str, queue_type: str) -> None:
 	"""Track used slot counts on the session."""
 	field_map = {
