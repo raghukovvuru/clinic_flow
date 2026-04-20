@@ -122,3 +122,41 @@ class TestWorkspaceFieldMapping(IntegrationTestCase):
         self.assertIn("drug_prescription", data)
         self.assertIn("lab_test_prescription", data)
         self.assertEqual(data["patient"], patient)
+
+    def test_save_encounter_draft_stores_observation_template(self):
+        """Lab rows must save observation_template, not lab_test_name."""
+        patient = self._make_patient()
+        practitioner = self._make_practitioner()
+        encounter = self._make_encounter(patient, practitioner)
+
+        template = frappe.db.get_value("Observation Template", {}, "name")
+        if not template:
+            self.skipTest("No Observation Template on this site — cannot run")
+
+        import json
+        save_encounter_draft(
+            encounter=encounter,
+            data=json.dumps({
+                "symptoms": "",
+                "patient_note": "",
+                "diagnosis": [],
+                "drug_prescription": [],
+                "lab_test_prescription": [{"observation_template": template}],
+            }),
+        )
+
+        enc = frappe.get_doc("Patient Encounter", encounter)
+        self.assertEqual(len(enc.lab_test_prescription), 1)
+        self.assertEqual(enc.lab_test_prescription[0].observation_template, template)
+
+    def test_get_encounter_data_returns_observation_template(self):
+        """_get_encounter_data must return observation_template, not lab_test_name."""
+        patient = self._make_patient()
+        practitioner = self._make_practitioner()
+        encounter = self._make_encounter(patient, practitioner)
+
+        data = _get_encounter_data(encounter)
+
+        for row in data.get("lab_test_prescription", []):
+            self.assertIn("observation_template", row)
+            self.assertNotIn("lab_test_name", row)
