@@ -26,14 +26,29 @@ def _get_encounter_data(encounter: str) -> dict:
 		"patient": enc.patient,
 		"practitioner": enc.practitioner,
 		"encounter_date": enc.encounter_date,
-		# Clinical fields the doctor edits:
 		# symptoms → custom_chief_complaint (Long Text custom field)
 		# patient_note → encounter_comment (native text field)
 		"symptoms": enc.get("custom_chief_complaint") or "",
 		"diagnosis": enc.get("diagnosis"),
 		"patient_note": enc.get("encounter_comment") or "",
-		"drug_prescription": [r.as_dict() for r in (enc.drug_prescription or [])],
-		"lab_test_prescription": [r.as_dict() for r in (enc.lab_test_prescription or [])],
+		"drug_prescription": [
+			{
+				"medication": r.medication or "",
+				"drug_code": r.drug_code or "",
+				"dosage": r.dosage or "",
+				"period": r.period or "",
+				"dosage_form": r.dosage_form or "",
+				"comment": r.comment or "",
+			}
+			for r in (enc.drug_prescription or [])
+		],
+		"lab_test_prescription": [
+			{
+				"observation_template": r.observation_template or "",
+				"lab_test_comment": r.lab_test_comment or "",
+			}
+			for r in (enc.lab_test_prescription or [])
+		],
 		"procedure_prescription": [r.as_dict() for r in (enc.procedure_prescription or [])],
 	}
 
@@ -54,29 +69,38 @@ def save_encounter_draft(encounter: str, data: str) -> dict:
 	if enc.docstatus != 0:
 		frappe.throw(_("Cannot edit a submitted encounter."), frappe.ValidationError)
 
-	# Map workspace keys → actual Patient Encounter field names
 	FIELD_MAP = {
 		"symptoms":     "custom_chief_complaint",
 		"patient_note": "encounter_comment",
 	}
-	ALLOWED_CHILD_TABLES = {
-		"drug_prescription": "Drug Prescription",
-		"lab_test_prescription": "Lab Prescription",
-		"procedure_prescription": "Procedure Prescription",
+
+	# Only these fields are writable on each child row — matches Healthcare v16 schema.
+	# drug_name and lab_test_name are read-only fetch fields; never set them directly.
+	CHILD_ALLOWED: dict[str, list[str]] = {
+		"drug_prescription": ["medication", "drug_code", "dosage", "period", "dosage_form", "comment"],
+		"lab_test_prescription": ["observation_template", "lab_test_comment"],
 	}
 
 	for ws_key, enc_field in FIELD_MAP.items():
 		if ws_key in data:
 			enc.set(enc_field, data[ws_key])
 
-	for table_field in ALLOWED_CHILD_TABLES:
-		if table_field in data:
-			enc.set(table_field, data[table_field])
+	for table_field, allowed_fields in CHILD_ALLOWED.items():
+		if table_field not in data:
+			continue
+		rows = [
+			{k: v for k, v in row.items() if k in allowed_fields}
+			for row in (data[table_field] or [])
+		]
+		enc.set(table_field, rows)
 
-	# Diagnosis is a child table in newer Frappe Healthcare
 	if "diagnosis" in data:
 		enc.set("diagnosis", data["diagnosis"])
 
+	# Draft saves are intentionally lenient — full validation runs at submit time.
+	# This allows partial rows (e.g. drug rows without drug_code yet) to be saved
+	# without triggering Healthcare's mandatory-field validators.
+	enc.flags.ignore_validate = True
 	enc.save(ignore_permissions=False)
 	return {"status": "saved", "name": enc.name}
 
