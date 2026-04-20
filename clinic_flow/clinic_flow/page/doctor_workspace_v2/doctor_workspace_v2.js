@@ -1058,9 +1058,10 @@ class DoctorWorkspaceV2 {
 		if (!confirmed) return;
 		const $btn = this.$root.find('#dw2-btn-complete').prop('disabled', true).text('Completing...');
 		try {
+			const encName = this.state.current_encounter.name;
 			await frappe.call({
 				method: 'clinic_flow.api.workspace.submit_encounter',
-				args: { encounter: this.state.current_encounter.name },
+				args: { encounter: encName },
 			});
 			frappe.show_alert({ message: 'Visit completed', indicator: 'green' });
 			this.state.current_entry = null;
@@ -1069,6 +1070,10 @@ class DoctorWorkspaceV2 {
 			this.$empty.show();
 			this._set_action_state();
 			this._load_queue();
+			window.open(
+				`/printview?doctype=Patient%20Encounter&name=${encodeURIComponent(encName)}&trigger_print=1`,
+				'_blank'
+			);
 		} catch (e) {
 			frappe.show_alert({ message: 'Complete visit failed', indicator: 'red' });
 		} finally {
