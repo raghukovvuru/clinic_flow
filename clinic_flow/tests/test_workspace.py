@@ -103,6 +103,8 @@ class TestWorkspaceFieldMapping(IntegrationTestCase):
         self.assertEqual(len(enc.drug_prescription), 1)
         self.assertEqual(enc.drug_prescription[0].period, period)
         self.assertEqual(enc.drug_prescription[0].dosage_form, dosage_form)
+        self.assertEqual(enc.get("custom_chief_complaint"), "fever")
+        self.assertEqual(enc.get("encounter_comment"), "rest advised")
 
     def test_get_encounter_data_does_not_include_drug_name(self):
         """_get_encounter_data must not include drug_name in drug rows (it is read-only/fetched)."""
@@ -114,3 +116,9 @@ class TestWorkspaceFieldMapping(IntegrationTestCase):
 
         for row in data.get("drug_prescription", []):
             self.assertNotIn("drug_name", row, "drug_name is read-only; do not expose it to the workspace")
+        self.assertIn("name", data)
+        self.assertIn("patient", data)
+        self.assertIn("symptoms", data)
+        self.assertIn("drug_prescription", data)
+        self.assertIn("lab_test_prescription", data)
+        self.assertEqual(data["patient"], patient)

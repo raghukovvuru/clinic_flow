@@ -49,6 +49,8 @@ def _get_encounter_data(encounter: str) -> dict:
 			}
 			for r in (enc.lab_test_prescription or [])
 		],
+		# procedure_prescription is read-only in this workspace — returned for display only,
+		# never written back via save_encounter_draft (not present in CHILD_ALLOWED).
 		"procedure_prescription": [r.as_dict() for r in (enc.procedure_prescription or [])],
 	}
 
