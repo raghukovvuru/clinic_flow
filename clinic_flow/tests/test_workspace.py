@@ -166,3 +166,5 @@ class TestWorkspaceFieldMapping(IntegrationTestCase):
         """get_drug_items returns a list (possibly empty) without raising."""
         result = workspace.get_drug_items(medication="NonExistentMedication")
         self.assertIsInstance(result, list)
+        for row in result:
+            self.assertIn("item", row)
