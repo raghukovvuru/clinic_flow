@@ -1,153 +1,252 @@
 # AGENTS.md — Clinic Flow
-Rules for AI coding agents (Codex, Claude Code, etc.) working on this codebase.
+Rules for AI coding agents working in this repository.
 
 ---
 
 ## Identity
 
-- App: `clinic_flow` | Framework: Frappe v16 | Base app: `healthcare` (Marley)
+- App: `clinic_flow`
+- Framework: Frappe v16
+- Base app: `healthcare` (Marley Healthcare)
 - Site: `http://site1.localhost:8000`
-- Branch: `version-16`
-- Python: 3.11+ (union types `X | Y` in annotations required)
+- Python: 3.11+
+
+Do not assume an older branch narrative such as `version-16` or a pure legacy queue model. Read the current code and the active docs before making changes.
+
+---
+
+## Active Product Direction
+
+Treat these as the active direction on the current codebase:
+
+- `receptionist_dashboard` is the primary receptionist UI direction
+- `doctor_workspace_v2` is the primary doctor UI direction
+- `arrival_counter` is an active operational flow
+- `Service Point` is the preferred queue identity model
+- `token_number` + display-token composition is the preferred token model
+- `channel` / `load_class` / `priority` are the preferred operational concepts for new queue logic
+
+Treat these as compatibility paths, not the default place for new product work:
+
+- `receptionist_workspace`
+- `doctor_workspace`
+- legacy queue semantics centered on only `custom_queue_type`
+- direct dependence on `Medical Department.custom_dept_abbr` as the sole queue identity
+
+Legacy code is still load-bearing in parts of the app. Do not delete or bypass it casually.
 
 ---
 
 ## Absolute Rules
 
 ### Never modify the base app
-- Zero edits to any file inside `apps/healthcare/`
-- Use `extend_doctype_class` (not `doc_events`) to add behaviour to existing DocTypes
-- Add new fields via `Custom Field` fixtures tagged `module = "Clinic Flow"`
+
+- Zero edits inside `apps/healthcare/`
+- Extend Healthcare behavior from `clinic_flow`
+- Use `extend_doctype_class` for `Patient Appointment` behavior
+
+### Treat the core doc set as locked
+
+The active core doc set is:
+
+- `CLAUDE.md`
+- `AGENTS.md`
+- `ARCHITECTURE.md`
+- `CONTEXT_INDEX.md`
+
+These files are stable project infrastructure.
+
+Do not rename, move, delete, or rewrite them as part of ordinary feature work, branch work, worktree setup, or cleanup work.
+
+Only change them when the task is explicitly about documentation architecture, documentation maintenance, or documentation accuracy.
 
 ### Always use type annotations on whitelisted functions
+
+`require_type_annotated_api_methods = 1` is enabled in `hooks.py`.
+
 ```python
-# CORRECT
 @frappe.whitelist()
 def my_fn(patient: str, amount: float) -> dict:
-
-# WRONG — will be rejected at registration time
-@frappe.whitelist()
-def my_fn(patient, amount):
-```
-`require_type_annotated_api_methods = 1` is set in `hooks.py`.
-
-### Never use `frappe.get_all` with `ORDER BY FIELD()`
-Frappe v16 sanitises `order_by` and rejects `FIELD()`. Use `frappe.db.sql` for custom sort priority.
-```python
-# CORRECT
-rows = frappe.db.sql("""
-    SELECT name, status FROM `tabQueue Session`
-    WHERE practitioner = %s
-    ORDER BY FIELD(status, 'Active', 'Paused', 'Completed')
-""", (practitioner,), as_dict=True)
-
-# WRONG — raises exception
-rows = frappe.get_all("Queue Session", order_by="FIELD(status,'Active','Paused')")
+    ...
 ```
 
-### Never switch `record_payment_and_checkin` to `frappe.db.set_value`
-`doc.save()` is intentional — it triggers `QueueMixin.on_update()` which creates the Queue Entry and issues the token. Using `frappe.db.set_value` silently breaks the entire check-in flow.
+### Never replace `record_payment_and_checkin()` with `frappe.db.set_value`
 
-### Never use `document.getElementById` in desk page JS
-Frappe desk pages require jQuery scoped to the wrapper:
+`doc.save()` is intentional. It triggers `QueueMixin.on_update()`, which creates the queue entry and writes back the token.
+
+### Never use `frappe.get_all(..., order_by="FIELD(...)")`
+
+Frappe v16 sanitizes `order_by`. Use raw SQL when priority ordering needs `FIELD(...)`.
+
+### Never use `document.getElementById()` in desk page JS
+
+Use wrapper-scoped jQuery:
+
 ```javascript
-// CORRECT
-$(this.wrapper).find('#my-element')
-
-// WRONG — may find elements from other pages or fail entirely
-document.getElementById('my-element')
+$(this.wrapper).find("#my-element");
 ```
+
+### Do not assume fixtures alone own upstream Healthcare customizations
+
+Some required Healthcare-facing custom fields are patch-managed on this codebase. Read `hooks.py`, `patches.txt`, and `docs/healthcare-compatibility-audit.md` before changing fixture or migration behavior.
 
 ---
 
-## Key Patterns
+## Architecture Guardrails
 
-### Extending a DocType (Frappe v16 way)
-```python
-# hooks.py
-extend_doctype_class = {
-    "Patient Appointment": ["clinic_flow.queue.appointment_mixin.QueueMixin"]
-}
+### Appointment path is still load-bearing
 
-# appointment_mixin.py
-class QueueMixin(Document):
-    def on_update(self) -> None:
-        super().on_update()          # always call super first
-        try:
-            self._clinic_flow_do_thing()
-        except frappe.ValidationError:
-            raise                    # re-raise user-facing errors
-        except Exception:
-            frappe.log_error(frappe.get_traceback(), "clinic_flow: error label")
-```
+The legacy appointment path still matters:
 
-### Queue Entry creation is triggered by Patient Appointment status change
-The flow is: `status = "Checked In"` → `doc.save()` → `QueueMixin.on_update()` → insert `Queue Entry` → write back `custom_queue_token`.
+- `Patient Appointment.custom_queue_type`
+- `Patient Appointment.custom_queue_token`
+- `Appointment Type.custom_queue_code`
+- `Medical Department.custom_dept_abbr`
 
-### Token format
-`DEPT-CODE-NNN` e.g. `CARD-WLK-007`
-- `DEPT` = `Medical Department.custom_dept_abbr`
-- `CODE` = from `Appointment Type.custom_queue_code` (PRE / WLK / FLW / EMR)
-- `NNN` = zero-padded sequence, counted across ALL sessions for same practitioner+date+queue_type
+Do not remove or rewrite this path unless you have verified every caller.
 
-### Session priority ordering (3 places in codebase)
-Always: Active → Paused → Completed. Use raw SQL `FIELD()`.
+### Service Point is the preferred queue identity
 
-### FOLLOW_UP shares walk-in counter
-`FOLLOW_UP` increments `walkin_used` (not a separate field). `emergency_total`/`emergency_used` on Queue Session are actually the FOLLOW_UP quota fields (misnamed — do not rename without a data migration).
+For new queue-code reads, prefer the `Service Point` resolution helpers over ad hoc department logic:
 
----
+- `clinic_flow.queue.service_point.resolve_service_point`
+- `clinic_flow.queue.service_point.resolve_queue_code`
+- `clinic_flow.queue.service_point.resolve_department_name`
 
-## What to Check Before Making Changes
+### Canonical priority is separate from legacy queue type
 
-| Change type | Check |
-|---|---|
-| Adding a queue type | Update `field_map` dicts in `appointment_mixin.py`, `engine.py`, `queue.py`; update `WEIGHTS`/`TYPE_ORDER` in `engine.get_next_token`; update `TC` object in `queue-dashboard.html` |
-| Adding a field to Queue Session | Also update `_increment_session_slot` field maps if it's a counter |
-| Changing `rr_state` JSON keys | Migrate all Active sessions in a patch first |
-| Changing queue_position logic | Must span ALL sessions for practitioner+date, never just the current session |
-| Adding a whitelisted function | Must have complete Python type annotations |
-| Adding a Custom Field | Tag it `module = "Clinic Flow"` so it exports via fixtures |
+For newer admission and dequeue behavior:
+
+- `channel`: `phone` / `walkin`
+- `load_class`: `review_load` / `non_review_load`
+- `priority`: `normal` / `special` / `emergency`
+
+Legacy `queue_type` still exists for compatibility and reporting, but should not be treated as the only product model.
+
+### Display token is a presentation concern
+
+- `token_number` is the internal numeric identity
+- visible token labels are composed from queue code + token number
+- do not overload queue ordering logic with display formatting concerns
+
+### Legacy compatibility fields remain intentionally
+
+Examples:
+
+- `Queue Session.dept_abbr` remains as a cache/fallback during Service Point migration
+- special-buffer fields exist as compatibility artifacts even where the operational model has moved on
+
+Do not rename or remove these without checking current patches, data migration risk, and UI callers.
 
 ---
 
-## File Map (where things live)
+## Current High-Risk Areas
 
-```
-hooks.py                           — all hook registrations (touch this rarely)
-api/appointments.py                — booking, patient search, payment, check-in
-api/queue.py                       — session lifecycle, call-next, state queries
-api/workspace.py                   — doctor workspace payload, encounter save/submit
-api/patient_data.py                — patient summary (not whitelisted; internal only)
-api/boot.py                        — boot_session hook
-queue/engine.py                    — token builder, sequence, round-robin
-queue/appointment_mixin.py         — QueueMixin: slot limits + check-in
-queue/scheduler.py                 — cron: slot release job
-clinic_flow/doctype/queue_session/ — Queue Session DocType + controller
-clinic_flow/doctype/queue_entry/   — Queue Entry DocType + controller
-clinic_flow/doctype/slot_partition_config/ — Singleton config
-clinic_flow/page/doctor_workspace/ — Doctor page JS (~900 lines)
-clinic_flow/page/receptionist_workspace/ — Receptionist page JS (~1600 lines)
-www/queue-dashboard.html           — TV dashboard (standalone vanilla JS)
-www/queue-dashboard.py             — sets no_cache/no_header/no_sidebar
-patches/                           — empty; add patches here as needed
-patches.txt                        — register patches here
-```
+Confirm before changing these:
+
+- `QueueMixin.on_update()` and any code that creates queue entries on check-in
+- `record_payment_and_checkin()`
+- `rr_state` structure or round-robin sequencing behavior
+- queue-position calculation rules
+- `Service Point` resolution order
+- token-number assignment semantics
+- `priority` / `special` / `emergency` dequeue behavior
+- migration patches in `clinic_flow/patches/v16_0/`
+- custom-field ownership strategy for upstream Healthcare doctypes
 
 ---
 
-## Safe Operations
+## What To Read First
 
-- Reading `Slot Partition Config` via `frappe.get_single("Slot Partition Config")`
-- Adding new `@frappe.whitelist()` functions to existing `api/` modules
-- Adding new panel modes to receptionist workspace JS
-- Adding new collapsible sections to doctor workspace JS
-- Writing patches that only use `frappe.db.sql` for data migrations
+For general work:
 
-## Risky Operations — Confirm Before Proceeding
+1. `CLAUDE.md`
+2. `AGENTS.md`
+3. `ARCHITECTURE.md`
+4. `docs/healthcare-compatibility-audit.md`
 
-- Any change to `rr_state` JSON format
-- Renaming `emergency_total` / `emergency_used` (they hold FOLLOW_UP data)
-- Changing `queue_position` calculation logic
-- Any edit to `QueueMixin.on_update()` or `record_payment_and_checkin()`
-- Adding fields that change the slot accounting behaviour
+For queue identity or token behavior:
+
+1. `docs/service-point-policy.md`
+2. `docs/token-display-policy.md`
+3. `clinic_flow/queue/service_point.py`
+4. `clinic_flow/queue/engine.py`
+
+For receptionist and admission work:
+
+1. `docs/receptionist-backend-policy.md`
+2. `clinic_flow/api/admission.py`
+3. `clinic_flow/api/emergency.py`
+4. `clinic_flow/api/arrival.py`
+5. `clinic_flow/clinic_flow/page/receptionist_dashboard/`
+
+For doctor work:
+
+1. `clinic_flow/api/queue.py`
+2. `clinic_flow/api/workspace.py`
+3. `clinic_flow/clinic_flow/page/doctor_workspace_v2/`
+
+---
+
+## File Map
+
+Core runtime:
+
+- `clinic_flow/hooks.py`
+- `clinic_flow/api/appointments.py`
+- `clinic_flow/api/queue.py`
+- `clinic_flow/api/workspace.py`
+- `clinic_flow/api/admission.py`
+- `clinic_flow/api/arrival.py`
+- `clinic_flow/api/emergency.py`
+- `clinic_flow/api/eta.py`
+- `clinic_flow/api/family.py`
+- `clinic_flow/queue/appointment_mixin.py`
+- `clinic_flow/queue/engine.py`
+- `clinic_flow/queue/service_point.py`
+- `clinic_flow/queue/scheduler.py`
+
+Desk pages:
+
+- `clinic_flow/clinic_flow/page/receptionist_dashboard/`
+- `clinic_flow/clinic_flow/page/arrival_counter/`
+- `clinic_flow/clinic_flow/page/doctor_workspace_v2/`
+- `clinic_flow/clinic_flow/page/receptionist_workspace/` legacy compatibility
+- `clinic_flow/clinic_flow/page/doctor_workspace/` legacy compatibility
+
+DocTypes:
+
+- `clinic_flow/clinic_flow/doctype/queue_session/`
+- `clinic_flow/clinic_flow/doctype/queue_entry/`
+- `clinic_flow/clinic_flow/doctype/slot_partition_config/`
+- `clinic_flow/clinic_flow/doctype/service_point/`
+- `clinic_flow/clinic_flow/doctype/patient_guardian/`
+- `clinic_flow/clinic_flow/doctype/guardian_child/`
+- `clinic_flow/clinic_flow/doctype/emergency_intake/`
+
+Migrations and fixtures:
+
+- `clinic_flow/patches.txt`
+- `clinic_flow/patches/v16_0/`
+- `clinic_flow/fixtures/`
+
+Support docs:
+
+- `ARCHITECTURE.md`
+- `CONTEXT_INDEX.md`
+- `docs/receptionist-backend-policy.md`
+- `docs/healthcare-compatibility-audit.md`
+- `docs/service-point-policy.md`
+- `docs/token-display-policy.md`
+
+---
+
+## Safe Defaults
+
+- Prefer additive changes over broad rewrites
+- Preserve backward compatibility unless the migration path is explicit
+- Verify whether a page or API is active-direction or legacy-compat before editing
+- Update docs when you change behavior
+- Use patches for data migrations and patch-managed Healthcare setup
+
+If docs and code disagree, trust the code, then fix the docs.

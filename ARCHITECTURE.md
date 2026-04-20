@@ -1,491 +1,299 @@
 # ARCHITECTURE.md — Clinic Flow
 
-System design reference for the `clinic_flow` Frappe v16 app.
+Current system-design reference for the `clinic_flow` Frappe v16 app.
+
+This document describes the codebase as it exists on the active branch, not the earlier transition phase where legacy workspaces were the only product surface.
 
 ---
 
-## 1. System Overview
+## 1. System Shape
 
-Clinic Flow is a queue management overlay on top of Marley Healthcare (`healthcare` app). It adds no replacement screens for clinical workflows — it only adds:
+`clinic_flow` is a queue-management and consultation workflow layer on top of Marley Healthcare.
 
-1. A **session model** (Queue Session) that represents a doctor's working period
-2. A **token model** (Queue Entry) that represents a patient's position in the queue
-3. A **receptionist workspace** for booking and check-in
-4. A **doctor workspace** for calling patients and editing encounters
-5. A **TV dashboard** for waiting room display
+Today the app is not purely legacy and not purely greenfield. It has:
 
-The system is entirely additive. Marley's DocTypes are read and extended; never replaced.
+- active v2 receptionist flows
+- active v2 doctor flows
+- active arrival and emergency operational flows
+- legacy appointment-driven compatibility paths that still matter
 
----
+The current product direction is:
 
-## 2. Integration Boundary
+- `receptionist_dashboard` for receptionist operations
+- `arrival_counter` for front-desk/self-arrival workflows
+- `doctor_workspace_v2` for doctor-facing queue and encounter work
 
-```
-┌────────────────────────────────────────────────────────┐
-│                    clinic_flow                         │
-│                                                        │
-│  Queue Session ──── Queue Entry                        │
-│       │                  │                             │
-│       │         Patient Appointment (extended)         │
-│       │                  │                             │
-└───────┼──────────────────┼─────────────────────────────┘
-        │    healthcare     │
-        │                  │
-   Healthcare          Patient Encounter
-   Practitioner        Vital Signs
-        │              Fee Validity
-   Practitioner        Appointment Type
-   Schedule            Medical Department
-```
+Legacy pages remain in the repo as compatibility and fallback paths:
 
-Clinic Flow reads from Marley's DocTypes using standard Frappe ORM and extends `Patient Appointment` via `extend_doctype_class`. It never modifies Marley's source.
+- `receptionist_workspace`
+- `doctor_workspace`
 
 ---
 
-## 3. Hook Architecture
+## 2. Core Domain Model
 
-All hook registrations are in `hooks.py`:
+### Queue identity
 
-| Hook | Value | Effect |
-|---|---|---|
-| `extend_doctype_class` | `QueueMixin` on `Patient Appointment` | Adds slot enforcement on validate; queue entry creation on check-in |
-| `scheduler_events.cron` | `*/5 * * * *` → `release_prebooked_slots` | Releases unfilled slots to walk-in 60 min before session |
-| `boot_session` | `extend_boot` | Redirects Physician/Queue Manager to `/doctor-workspace` on login |
-| `fixtures` | Custom Field, Property Setter, Role, Workspace | Persists custom schema across migrations |
-| `require_type_annotated_api_methods` | `1` | Enforces type annotations on all `@frappe.whitelist()` functions |
-| `website_route_rules` | `/queue-dashboard` | Public TV dashboard route |
+The preferred queue identity is `Service Point`.
 
----
+`Service Point` gives the app a durable queue code and display identity that is no longer tied only to `Medical Department.custom_dept_abbr`.
 
-## 4. Data Model
+Resolution order for queue code reads:
 
-### DocType Relationships
+1. `Queue Session.service_point -> Service Point.queue_code`
+2. `Queue Session.dept_abbr`
+3. `Medical Department.custom_dept_abbr`
+4. fallback value such as `GEN`
 
-```
-Healthcare Practitioner
-  ├─< Queue Session (one per session-day)
-  │     ├── session_capacity
-  │     ├── prebooked_total / prebooked_used / prebooked_released
-  │     ├── walkin_total / walkin_used
-  │     ├── emergency_total / emergency_used  ← holds FOLLOW_UP quota (see §10)
-  │     ├── rr_state (JSON round-robin cursor)
-  │     ├── current_token
-  │     ├── total_called
-  │     └─< Queue Entry (one per checked-in patient)
-  │           ├── token (DEPT-CODE-NNN)
-  │           ├── queue_type (PRE_BOOKED|WALK_IN|FOLLOW_UP|EMERGENCY)
-  │           ├── queue_position (global across today's sessions)
-  │           ├── status (Waiting→Called→With Doctor→Done|Skipped|No Show)
-  │           ├── called_at / seen_at / done_at / wait_minutes
-  │           ├─→ Patient Appointment
-  │           └─→ Patient Encounter
-  │
-  └─< Patient Appointment (extended via QueueMixin)
-        ├── custom_queue_type  ← the trigger field
-        ├── custom_queue_token ← written back after check-in
-        └── custom_dept_abbr
-```
+`dept_abbr` still exists as a compatibility/cache field and is intentionally not gone yet.
 
-### Slot Partition Config (Single — global)
+### Queue session
 
-```
-prebooked_pct    default 60   % of session_capacity for PRE_BOOKED
-walkin_pct       default 30   % for WALK_IN (grows via slot release)
-followup_pct     default 10   % for FOLLOW_UP
-release_minutes_before  60   mins before session to release unfilled slots
-weight_prebooked  3           round-robin calls before switching type
-weight_walkin     1
-weight_followup   1
-```
+`Queue Session` represents one operational session for a practitioner on a date.
 
-### Token Format
+It still carries legacy slot fields such as:
 
-`{dept_abbr}-{code}-{seq:03d}` — e.g. `CARD-WLK-007`
+- `prebooked_total`
+- `walkin_total`
+- `followup_total`
+- `prebooked_used`
+- `walkin_used`
+- `followup_used`
+- `rr_state`
 
-- `dept_abbr` from `Medical Department.custom_dept_abbr`
-- `code` from `Appointment Type.custom_queue_code` (`PRE`, `WLK`, `FLW`, `EMR`)
-- `seq` = COUNT of all Queue Entries for same practitioner+date+queue_type across ALL sessions
+It also carries newer fields and migration-era compatibility fields such as:
 
-Sequence is day-wide to prevent recycling when sessions restart.
+- `service_point`
+- special-buffer compatibility fields
+- data used by the newer admission and display flows
 
----
+### Queue entry
 
-## 5. Module Responsibilities
+`Queue Entry` is now a mixed-era model.
 
-### `queue/engine.py`
-Pure logic, no side effects except `frappe.db.set_value` on `rr_state`.
+Legacy compatibility still exists:
 
-- `build_token(dept_abbr, queue_type, sequence)` — formats token string
-- `get_next_sequence(queue_session, queue_type)` — day-wide COUNT via raw SQL
-- `get_next_token(queue_session)` — priority dequeue (Emergency bypass + round-robin)
-- `_broadcast_queue_update(queue_session)` — pushes to `queue_{dept_abbr}` and `queue_all` realtime rooms
+- `queue_type`
+- `token`
+- `queue_position`
 
-### `queue/appointment_mixin.py`
-Attached to `Patient Appointment` via `extend_doctype_class`.
+Newer operational fields exist and are active:
 
-- `validate()` → slot limit enforcement (skips Emergency; only on new/changed queue_type)
-- `on_update()` → check-in handler (only when `status == "Checked In"`; idempotent)
-- Module-level `_increment_session_slot()` — increments `_used` counter on Queue Session
+- `token_number`
+- `channel`
+- `load_class`
+- `priority`
+- special-audit fields
+- arrival and timing fields used by the newer flows
 
-### `queue/scheduler.py`
-Cron target (every 5 min).
+The important rule is that new behavior increasingly keys off `channel`, `load_class`, and `priority`, while old behavior still reads `queue_type`.
 
-- Finds Active sessions with `prebooked_released=0` and start_time within release window
-- Adds `unfilled_prebooked + unfilled_followup` to `walkin_total`
-- Commits immediately (background job safety)
+### Appointment compatibility layer
 
-### `api/appointments.py`
-Receptionist-facing API. All functions are `@frappe.whitelist()`.
+`Patient Appointment` remains a load-bearing integration boundary.
 
-| Function | Purpose |
-|---|---|
-| `search_patients` | Raw SQL OR on `patient_name`/`mobile` |
-| `quick_create_patient` | Mobile-unique patient creation |
-| `get_availability` | Next slots; walk-in restricted to today |
-| `book_appointment` | Creates appointment with unique `appointment_time` |
-| `get_consultation_charge` | Returns charge; 0 if Fee Validity covers |
-| `record_payment_and_checkin` | Pays + checks in via `doc.save()` |
-| `cancel_appointment` | Blocks cancel if Checked In/Out |
-| `get_patient_appointments` | Last 7 days forward |
-| `get_todays_appointments` | Board view data |
+Still-active custom fields include:
 
-### `api/queue.py`
-Session lifecycle + doctor workspace queries.
+- `custom_queue_type`
+- `custom_queue_token`
+- `custom_dept_abbr`
 
-| Function | Purpose |
-|---|---|
-| `start_session` | Creates/reuses session; inherits orphaned entries |
-| `call_next` | Dequeue → encounter → return workspace payload |
-| `pause_session` / `resume_session` / `end_session` | Session state machine |
-| `reroute_patients` | Bulk re-parent Waiting entries to another session |
-| `get_queue_state_for_display` | Public (allow_guest); multi-doctor TV payload |
-| `get_slot_availability` | Pre-booking availability check |
-| `_inherit_waiting_entries` | Re-parents between-session entries on new session start |
+The check-in flow still uses:
 
-### `api/workspace.py`
-Doctor workspace clinical actions.
-
-| Function | Purpose |
-|---|---|
-| `get_workspace_payload` | Single round-trip: encounter + patient summary + queue entry |
-| `save_encounter_draft` | Partial field map to Patient Encounter |
-| `submit_encounter` | Submits encounter; marks Queue Entry Done |
-
-### `api/patient_data.py`
-Internal only (not whitelisted). Assembles patient summary from 8 sources.
-All sub-functions are individually exception-safe (returns `{}` or `[]` on failure).
-
-### `api/boot.py`
-`extend_boot(bootinfo)` — appends `home_page = "doctor-workspace"` for Physician/Queue Manager.
+`Patient Appointment.status = "Checked In"` -> `QueueMixin.on_update()` -> create queue entry -> write back token
 
 ---
 
-## 6. Core Workflows
+## 3. Active Runtime Modules
 
-### 6.1 Booking → Check-In → Token
+### Legacy appointment path
 
-```
-receptionist selects practitioner + queue type
-    │
-    ▼
-get_availability()
-    uses Practitioner Schedule → Healthcare Schedule Time Slot
-    walk-in: scan_days=1 (today only)
-    others: scan up to 30 days, return first 7 with available > 0
-    │
-    ▼
-book_appointment()
-    re-checks quota (race guard)
-    appointment_time = from_time + (used × session_duration/capacity) minutes
-    inserts Patient Appointment (status=Open)
-    │
-    ▼
-get_consultation_charge()
-    checks Fee Validity (valid_till >= today, visited < max_visits)
-    returns charge=0 if covered
-    │
-    ▼
-record_payment_and_checkin()
-    sets paid_amount, mode_of_payment, invoiced=1, status="Checked In"
-    doc.save() ─────────────────────────────────────────────────────┐
-                                                                    │
-                                                    QueueMixin.on_update()
-                                                        │
-                                                        ├── raw SQL: find session
-                                                        │   ORDER BY FIELD(status,
-                                                        │   'Active','Paused','Completed')
-                                                        │
-                                                        ├── get_next_sequence()
-                                                        │   COUNT across all today's sessions
-                                                        │
-                                                        ├── build_token() → DEPT-CODE-NNN
-                                                        │
-                                                        ├── insert Queue Entry (Waiting)
-                                                        │
-                                                        ├── _increment_session_slot()
-                                                        │   (skipped if between_sessions)
-                                                        │
-                                                        ├── write custom_queue_token back
-                                                        │
-                                                        └── _broadcast_queue_update()
-                                                            → TV dashboard refreshes
-```
+- `clinic_flow/api/appointments.py`
+- `clinic_flow/queue/appointment_mixin.py`
+- `clinic_flow/queue/scheduler.py`
 
-### 6.2 Call Next → Encounter
+This path still handles:
 
-```
-doctor clicks Call Next
-    │
-    ▼
-get_next_token(queue_session)
-    Step 1: any EMERGENCY Waiting? → return it (bypass round-robin)
-    Step 2: load rr_state JSON from Queue Session
-    Step 3: try current_type; if empty → skip to next in TYPE_ORDER
-            TYPE_ORDER = [PRE_BOOKED, FOLLOW_UP, WALK_IN]
-    update rr_state
-    │
-    ▼
-mark Queue Entry: Called
-update Queue Session: current_token, total_called++
-_broadcast_queue_update() → TV shows new token
-    │
-    ▼
-_get_or_create_encounter()
-    find existing Draft encounter (patient+practitioner+today)
-    or create new one (resolve Appointment Type from custom_queue_code)
-    │
-    ▼
-mark Queue Entry: With Doctor
-return get_workspace_payload() → doctor sees patient data
-```
+- patient search
+- quick patient creation
+- appointment booking
+- consultation charge lookup
+- payment + check-in
+- slot release
 
-### 6.3 Between-Session Check-In
+This is compatibility-critical and must not be casually rewritten.
 
-```
-Session 1 ends (Completed)
-    │
-patient arrives at reception
-    │
-    ▼
-QueueMixin.on_update() finds Completed session
-between_sessions = True
-Queue Entry inserted against Completed session
-_increment_session_slot() SKIPPED
-token issued and written to appointment
-    │
-    ▼
-doctor starts Session 2
-    │
-    ▼
-start_session() calls _inherit_waiting_entries()
-    finds Waiting entries on today's Completed sessions
-    re-parents to Session 2
-    calls _increment_session_slot_for() for each
-    _broadcast_queue_update()
-```
+### Queue/session runtime
 
-### 6.4 Slot Release (every 5 min)
+- `clinic_flow/api/queue.py`
+- `clinic_flow/queue/engine.py`
+- `clinic_flow/queue/service_point.py`
 
-```
-release_prebooked_slots()
-    for each Active session where prebooked_released=0
-        and start_time ≤ now + release_minutes_before:
-            unfilled = (prebooked_total - prebooked_used)
-                     + (emergency_total - emergency_used)  ← FOLLOW_UP quota
-            walkin_total += unfilled
-            prebooked_released = 1
-            frappe.db.commit()
-```
+This layer now combines:
+
+- session lifecycle
+- doctor dequeue and special override behavior
+- queue-state payloads
+- display-token behavior
+- service-point-based queue identity
+
+### Receptionist/admission runtime
+
+- `clinic_flow/api/admission.py`
+- `clinic_flow/api/family.py`
+- `clinic_flow/api/eta.py`
+- `clinic_flow/api/emergency.py`
+- `clinic_flow/api/arrival.py`
+
+This is the newer receptionist stack.
+
+It owns:
+
+- guardian/child lookup and registration support
+- session suggestion and ranking
+- token-board state
+- queue-entry booking in the newer model
+- ETA calculations
+- emergency issuance and reconciliation flows
+- arrival-counter lookups and status transitions
+
+### Doctor runtime
+
+- `clinic_flow/api/workspace.py`
+- `clinic_flow/api/patient_data.py`
+- `clinic_flow/clinic_flow/page/doctor_workspace_v2/`
+
+The doctor runtime is also mixed:
+
+- the encounter APIs in `workspace.py` remain central
+- `doctor_workspace_v2` is the active UI direction
+- legacy `doctor_workspace` still exists, but should be treated as compatibility only
 
 ---
 
-## 7. Round-Robin State Machine
+## 4. User-Facing Surfaces
 
-State stored as JSON in `Queue Session.rr_state`:
+### Active-direction pages
 
-```json
-{"type": "PRE_BOOKED", "remaining": 2}
-```
+- `receptionist-dashboard`
+- `arrival-counter`
+- `doctor-workspace-v2`
+- `/queue-dashboard`
 
-- `type`: which queue type is currently being served
-- `remaining`: how many more tokens of this type before rotating
+### Legacy compatibility pages
 
-Default weights (from Slot Partition Config): PRE_BOOKED=3, FOLLOW_UP=1, WALK_IN=1
+- `receptionist-workspace`
+- `doctor-workspace`
 
-**Rotation example** with defaults:
-```
-PRE_BOOKED, PRE_BOOKED, PRE_BOOKED → FOLLOW_UP → WALK_IN → PRE_BOOKED, PRE_BOOKED, PRE_BOOKED ...
-```
+These legacy pages still matter for references and compatibility, but they are not the place to build the next product direction by default.
 
-**Skip-if-empty**: If the current type has no Waiting entries, the algorithm advances to the next type without resetting the weight counter. This prevents starvation when one lane is empty.
+### Workspace shortcuts
 
-**Emergency bypass**: Checked before round-robin. Any Emergency Waiting entry is always returned first.
+The workspace metadata already includes shortcuts beyond the original legacy pair. That is one of the clearest signs that the branch moved beyond the old transition docs.
 
 ---
 
-## 8. Realtime Architecture
+## 5. Token and Priority Model
 
-Events published via `frappe.publish_realtime`:
+### Display tokens
 
-| Event | Room(s) | Payload | Triggered by |
-|---|---|---|---|
-| `queue_update` | `queue_{dept_abbr}`, `queue_all` | current_token, next_tokens[:5], practitioner, dept_abbr | `_broadcast_queue_update()` |
-| `session_status` | `queue_{dept_abbr}`, `queue_all` | session, status, dept_abbr, practitioner | pause/resume/end session |
-| `recall_patient` | `queue_{dept_abbr}`, `queue_all` | token, patient_name, queue_type | `recall_patient()` |
+The newer direction is:
 
-TV dashboard (`queue-dashboard.html`):
-- Starts polling `get_queue_state_for_display` every 6 s on load
-- After 2 s, attempts to upgrade to `frappe.realtime` (Socket.io)
-- On realtime connect, cancels polling and subscribes to all three events
+- internal identity: `token_number`
+- visible label: queue-code-prefixed display token
 
-Doctor workspace:
-- Subscribes to `queue_update` → refreshes left queue panel
-- Subscribes to `session_status` → shows pause status bar
+This is supported by:
 
----
+- `clinic_flow.queue.engine.build_display_token`
+- migration patches that backfill display-token values
+- receptionist and emergency flows that build visible tokens from queue code + number
 
-## 9. UI Architecture
+### Canonical priority
 
-### Doctor Workspace (`doctor_workspace.js`)
+The newer operational model distinguishes:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ Action bar: Call Next | Recall | Skip | Save Draft | Submit | Pause | End Session │
-├─────────────┬───────────────────────────────┬───────────────────┤
-│  Queue      │  Encounter Editor             │  Patient Summary  │
-│  280px      │  1fr                          │  300px            │
-│             │                               │                   │
-│ session     │ Symptoms (textarea)           │ Token             │
-│ label       │ Diagnosis (ICD-10 tags)       │ Queue Type        │
-│             │ Plan/Notes (textarea)         │ Age/Sex           │
-│ queue       │ ─ collapsible sections ─      │ Chief Complaint   │
-│ items       │ Medication Request            │ Vitals            │
-│ (Waiting    │ Lab Orders                    │ Allergies         │
-│  list)      │ Referral                      │ Active Rx         │
-│             │                               │ Diagnoses         │
-│             │                               │ Fee Validity      │
-│             │                               │ Lab Results       │
-└─────────────┴───────────────────────────────┴───────────────────┘
-```
+- `normal`
+- `special`
+- `emergency`
 
-Session init (3-step fallback):
-1. `localStorage.getItem('clinic_flow_session')` → validate via `get_session`
-2. `get_active_session_for_user()` → server lookup
-3. Show "Start Consultation Session" prompt → `get_today_schedules()` → `start_session()`
+This is separate from legacy `queue_type`.
 
-### Receptionist Workspace (`receptionist_workspace.js`)
+Current behavior is transitional:
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│ Search bar (prominent, centered, full-width)                   │
-├──────────────────────────────────────┬─────────────────────────┤
-│ Session pills (status bar)           │    Emergency button     │
-├──────────────────────────────────────┴─────────────────────────┤
-│ LEFT: Book Appointment               │ RIGHT: Smart Panel      │
-│                                      │                         │
-│ [Select Practitioner ▼]              │  ┌─ Panel modes ───┐   │
-│ [Standard|Follow-up|Walk-in tabs]    │  │ board           │   │
-│                                      │  │ booking (3-step)│   │
-│ Today's Quota (bars)                 │  │ patient_mgmt    │   │
-│ ▓▓▓▓▓░░░ PRE_BOOKED  8/12           │  │ emergency       │   │
-│ ▓▓░░░░░░ WALK_IN     2/6            │  └─────────────────┘   │
-│ ░░░░░░░░ FOLLOW_UP   0/2            │                         │
-│                                      │  #rw-panel-body        │
-│ Availability cards:                  │  (innerHTML replaced    │
-│ ┌─ Mon 07 Apr 08:00–12:00 ──┐       │   on mode change)      │
-│ │ 3 PRE_BOOKED available   [Book] │  │                         │
-│ └──────────────────────────────┘    │                         │
-└──────────────────────────────────────┴─────────────────────────┘
-```
+- some paths still derive legacy queue type from the newer model for compatibility
+- some dequeue and UI behavior already use canonical `priority`
 
-**Booking flow (3 steps, all inline in right panel):**
-1. Patient search/create + slot confirmation
-2. Payment (charge shown; Fee Validity handled; mode selection)
-3. Done screen + print receipt + print token
-
-### TV Dashboard (`queue-dashboard.html`)
-
-```
-┌────────────────────────────────────────────────────────────────┐
-│ ● OPD Queue   [CARDIOLOGY]                           14:32     │ header
-├────────────────────────────────────────────────────────────────┤
-│ ┌─ Dr. Smith ─────────────┐  ┌─ Dr. Jones ─────────────┐     │
-│ │  [avatar]  Active       │  │  [avatar]  Away          │     │
-│ │                         │  │                          │     │
-│ │  Now Serving            │  │  Now Serving             │     │
-│ │  ┌───────────────────┐  │  │  ┌───────────────────┐  │     │
-│ │  │  CARD-PRE-004     │  │  │  │        —          │  │     │
-│ │  └───────────────────┘  │  │  └───────────────────┘  │     │
-│ │  ● Pre-booked           │  │  ⏸ Temporarily Unavail  │     │
-│ │                         │  │                          │     │
-│ │  Up Next                │  │  Up Next                 │     │
-│ │  CARD-WLK-002  Shah A.  │  │  (empty)                 │     │
-│ │  CARD-PRE-005  Ali M.   │  │                          │     │
-│ └─────────────────────────┘  └──────────────────────────┘     │ main
-│              ●  ○  ○   ← carousel dots                        │
-├────────────────────────────────────────────────────────────────┤
-│ Please wait for your token number to be called      14:32:45  │ footer
-└────────────────────────────────────────────────────────────────┘
-```
-
-Shows 2 doctors per carousel page. Auto-rotates every 8 s.
-Sort: Active before Paused → most-recently-called first → fewest waiting.
-Emergency: red card border + audio beep (Web Audio API).
+Special handling is now a doctor-side queue behavior, not just a token-position trick.
 
 ---
 
-## 10. Known Design Constraints
+## 6. Integration Boundary With Healthcare
 
-### `emergency_total` / `emergency_used` hold FOLLOW_UP quota
-When Queue Session was designed, FOLLOW_UP and EMERGENCY were merged into one slot bucket. The fields were named after Emergency but now store Follow-up data. Renaming requires a data migration and updates to all field_map dicts.
+The app still depends materially on upstream Healthcare doctypes.
 
-### FOLLOW_UP shares `walkin_used` counter
-Slot release adds unfilled FOLLOW_UP headroom into `walkin_total`. Therefore FOLLOW_UP check-ins count against `walkin_used` — not a separate counter. This is correct but non-obvious.
+Most important ones:
 
-### `doc.save()` is required in `record_payment_and_checkin`
-Queue Entry creation lives in `QueueMixin.on_update()`. The only way to trigger it is via a full document save cycle. `frappe.db.set_value` skips `on_update`.
+- `Patient Appointment`
+- `Patient Encounter`
+- `Appointment Type`
+- `Medical Department`
+- `Healthcare Practitioner`
+- `Fee Validity`
 
-### `queue_position` must be day-wide
-All queue position calculations use `MAX(queue_position)` across ALL sessions for a practitioner on a date. Single-session position queries would cause position recycling when sessions restart.
+Important constraints:
 
-### Walk-in availability is today-only
-`get_availability` uses `scan_days = 1 if queue_type == "WALK_IN" else 30`. Walk-ins cannot be pre-booked for future dates.
+- never modify Healthcare source files
+- use `extend_doctype_class` on `Patient Appointment`
+- maintain required custom fields and patch-managed setup
 
-### Unique `appointment_time` per booking
-Frappe Healthcare rejects two appointments with the same `appointment_time` for the same practitioner on the same day. Each booking gets: `from_time + (already_booked_count × (session_duration // capacity)) minutes`.
-
----
-
-## 11. Fixture Strategy
-
-Fixtures export to `apps/clinic_flow/clinic_flow/fixtures/` on `bench export-fixtures`:
-
-```python
-fixtures = [
-    {"dt": "Custom Field",    "filters": [["module", "=", "Clinic Flow"]]},
-    {"dt": "Property Setter", "filters": [["module", "=", "Clinic Flow"]]},
-    {"dt": "Role",            "filters": [["name", "in", [
-        "Queue Manager", "Queue Viewer", "Lab Queue Trigger"
-    ]]]},
-    {"dt": "Workspace",       "filters": [["name", "=", "Clinic Flow"]]},
-]
-```
-
-After adding any Custom Field or Role via the Frappe UI, run:
-```bash
-bench --site site1.localhost export-fixtures --app clinic_flow
-```
-Then commit the updated fixture JSON files.
+Read `docs/healthcare-compatibility-audit.md` before changing fixtures or upstream-field assumptions.
 
 ---
 
-## 12. Patch Strategy
+## 7. Migrations and Configuration
 
-`patches.txt` has the scaffold sections but no patches yet.
+This branch is no longer in the "no patches yet" state.
 
-When a data migration is needed:
-1. Write `clinic_flow/patches/YYYYMMDD_description.py`
-2. Add path to `patches.txt` under `[post_model_sync]`
-3. Run with `bench --site site1.localhost migrate`
+Active migration/config responsibilities include:
 
-The patch file must be idempotent (safe to run twice).
+- patch-managed Healthcare field hardening
+- patch-managed service-point creation and backfill
+- display-token backfill
+- fixtures for roles, workspace, print format, and tagged customizations
+
+Important files:
+
+- `clinic_flow/hooks.py`
+- `clinic_flow/patches.txt`
+- `clinic_flow/patches/v16_0/`
+- `clinic_flow/fixtures/`
+
+Do not assume that exporting fixtures alone is enough to reproduce working state.
+
+---
+
+## 8. Architectural Truths To Preserve
+
+These are the current branch truths that docs and code should agree on:
+
+- `receptionist_dashboard` and `doctor_workspace_v2` are the active UI direction
+- legacy pages are compatibility paths, not the default destination for new work
+- `Service Point` is the preferred queue identity
+- `token_number` plus display-token composition is the preferred token model
+- `priority` is distinct from legacy `queue_type`
+- the appointment/check-in path is still load-bearing and cannot be bypassed
+- patch-managed compatibility with Healthcare matters as much as code changes
+
+---
+
+## 9. Supporting Docs
+
+Use these as focused companion docs:
+
+- `docs/receptionist-backend-policy.md`
+- `docs/healthcare-compatibility-audit.md`
+- `docs/service-point-policy.md`
+- `docs/token-display-policy.md`
+- `CONTEXT_INDEX.md`
+
+If any of them drift from the code, update the docs rather than preserving stale narratives.

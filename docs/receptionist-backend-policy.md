@@ -1,295 +1,187 @@
-# Backend Policy Note v1
+# Receptionist Backend Policy
 
-## 1. Canonical Model
-All booking and queue logic should converge on:
+Current backend-policy note for receptionist-direction flows.
+
+This document describes the intended current model on the active codebase, while explicitly acknowledging that legacy compatibility still exists.
+
+---
+
+## 1. Canonical Operational Model
+
+For newer receptionist and admission flows, reason in terms of:
 
 - `channel`: `phone` / `walkin`
-- `patient_type`: `new` / `review`
+- `load_class`: `review_load` / `non_review_load`
 - `priority`: `normal` / `special` / `emergency`
 
-Token model:
-- token is session-scoped
-- displayed token is a simple numeric token
-- doctor / department / session context is shown separately
-- token label should not encode queue type or patient type
+This is the preferred product model for new work.
 
-## 2. Terminology Decisions
-Settled:
-- `review` replaces `follow_up`
-- `special` replaces `VIP`
+Legacy `queue_type` still exists because:
 
-Legacy concepts like:
-- `FOLLOW_UP`
-- `PRE_BOOKED`
-- `WALK_IN`
-- `EMERGENCY`
-should stop being the primary product language.
+- the appointment-driven path still uses it
+- some slot-accounting and compatibility logic still depend on it
+- some old UI and reporting paths still read it
 
-Transitional note:
-- old fields may remain temporarily as compatibility shims where Healthcare integration requires them
-- but the canonical model is `channel + patient_type + priority`
+Rule:
 
-## 3. Recommendation Ownership
+- new backend behavior should prefer canonical fields
+- compatibility shims may still derive legacy `queue_type` where required
+
+---
+
+## 2. Ownership Boundaries
+
 Backend owns:
-- session ordering
-- recommended session
-- recommended token
 
-Frontend only:
-- renders
-- displays recommendation
-- allows override
+- session suggestion and ranking
+- token recommendation and validation
+- queue-entry creation
+- ETA calculations
+- special and emergency operational rules
+- queue identity resolution
 
-Frontend must not independently rank sessions or invent best-token rules.
+Frontend owns:
 
-## 4. Session Recommendation Policy
-Session ranking should eventually consider:
+- presenting backend recommendations
+- allowing operator override where explicitly supported
+- rendering token boards and operational surfaces
+
+Frontend must not invent its own ranking, token-allocation, or queue-priority rules.
+
+---
+
+## 3. Queue Identity
+
+The preferred queue identity is `Service Point`, not ad hoc department logic.
+
+Backend queue-code resolution should go through:
+
+- `resolve_service_point(...)`
+- `resolve_queue_code(...)`
+- `resolve_department_name(...)`
+
+`Medical Department.custom_dept_abbr` remains a fallback and compatibility concern, not the long-term primary queue identity.
+
+---
+
+## 4. Token Policy
+
+Backend ordering should remain conceptually numeric.
+
+Current preferred shape:
+
+- internal identity: `token_number`
+- visible label: queue-code-prefixed display token
+
+Do not mix display concerns into ordering semantics.
+
+Use display-token helpers for patient-facing surfaces, slips, and dashboards.
+
+---
+
+## 5. Session Recommendation Policy
+
+Backend should decide which sessions are recommended.
+
+Recommendation inputs may include:
 
 - `channel`
-- `patient_type`
+- `load_class`
 - `priority`
-- available slots
+- session status
+- available capacity
 - weighted load
-- likely consultation hour
-- session status: `Scheduled` / `Active`
 - time until start
 - time until end
-- late-start risk
-- near-closing risk
+- lateness / near-closing risk
 
-Channel intent:
-- `phone`: optimize for stable, explainable offers
-- `walkin`: optimize for immediate throughput
-- `emergency`: optimize for immediate clinical availability
+Current policy direction:
 
-## 5. Token Recommendation Policy
-Backend returns explicit token recommendation.
+- `phone` favors stable, explainable offers
+- `walkin` favors immediate throughput
+- `emergency` favors immediate clinical availability
 
-`normal`
-- recommend first suitable normal token
-
-`special`
-- do not use hard reserved token buffers as the long-term model
-- special is a priority behavior, not a token-position trick
-
-`emergency`
-- handled through emergency fast path, not normal token recommendation flow
+---
 
 ## 6. Special Policy
-`special` is a simple priority flag, not emergency.
 
-Settled rules:
-- special does not alter booking-time token order
-- special does not alter stored queue order
-- special does not use hard reserved token slots
-- special must not disturb patients already:
-  - `Called to Reception`
-  - `Ready Near Doctor`
-  - `With Doctor`
+`special` is a priority flag, not emergency.
 
-Operational behavior:
-- receptionist can mark a patient as `special`
-- patient receives normal token / normal queue placement
-- special remains a back-office flag only
-- patient-facing displays must not expose special status
+Current design direction:
 
-Reception behavior:
-- no formal queue override
-- no visible jumping ahead
-- receptionist may treat special as an attentiveness flag operationally, but not reorder the queue
+- special does not require a separate patient-facing token language
+- special does not permanently rewrite queue order at booking time
+- special remains mostly a back-office operational signal
+- doctor-side override behavior is allowed
 
-Doctor behavior:
-- doctor gets explicit `Call Next Special`
-- this is a one-time dequeue override
-- it selects the oldest eligible special patient in `Ready Near Doctor`
-- it does not rewrite queue order permanently
-- after that, queue returns to normal `Call Next`
+Desired behavior:
 
-Audit:
-- track:
-  - `marked_special_by`
-  - `marked_special_at`
-  - optional `special_reason`
-  - whether doctor used special override
+- receptionist may mark an entry as special
+- entry keeps normal booking semantics
+- doctor can explicitly call the next eligible special patient when appropriate
+- audit metadata should be captured where fields exist
 
-Visibility:
-- doctor workspace: special badges and special counts
-- receptionist live session view: special visible in back-office lists
-- TV / patient-facing surfaces: no special visibility
+Patient-facing surfaces should not expose special status.
+
+Legacy compatibility note:
+
+- some special-buffer fields still exist on the schema
+- they should be treated as migration-era compatibility, not proof that hard reserved buffers remain the preferred model
+
+---
 
 ## 7. Emergency Policy
-Emergency exists in both:
-- `phone`
-- `walkin`
 
-Core principle:
-- emergency bypasses normal formalities
-- patient goes to doctor immediately
-- details are completed later
+Emergency remains a distinct operational fast path.
 
-### Walk-in emergency
-Receptionist flow:
-- always-visible `Issue Emergency Token` button
-- single click if one active session
-- at most one lightweight session pick if multiple active sessions
-- no mandatory manual data fields before issuance
+Principles:
 
-Minimum data at issuance:
-- zero mandatory receptionist-entered fields
-- system auto-captures:
-  - issuing user
-  - issued timestamp
-  - session / practitioner
-  - `priority = emergency`
-- optional if available:
-  - display label
-  - mobile
-  - one-line complaint
+- emergency bypasses ordinary receptionist formalities when necessary
+- emergency should enter the queue/doctor flow immediately
+- reconciliation and administrative completion may happen later
+- emergency should visibly disrupt normal ETA expectations
 
-Initial object model:
-- create a real emergency queue entry immediately
-- create a stub patient immediately for linkage
-- do not create Patient Appointment at issuance
-- patient encounter is created lazily as current doctor flow already does
+Current system shape includes:
 
-Stub patient requirements:
-- clearly marked as emergency stub / incomplete
-- excluded from normal search/reporting by default
-- later either:
-  - merged into an existing patient
-  - or completed into a real patient
+- emergency issuance logic
+- emergency alert / arrival handling
+- emergency follow-up and reconciliation surfaces
 
-Queue behavior:
-- emergency enters urgent operational path immediately
-- emergency is not treated like a normal booking
-- emergency should preempt ordinary queue flow as clinically necessary
+Emergency should not be forced to look like an ordinary booking just to fit older data models.
 
-### Phone emergency
-Do not create a real queue entry at call time.
+---
 
-Instead:
-- create a lightweight emergency alert
-- advisory only
-- visible on receptionist and doctor dashboards
-- no queue insertion yet
-- no ETA queue distortion yet
-- auto-expire / dismiss if patient never arrives
+## 8. Legacy Compatibility Boundary
 
-On arrival:
-- one-click `Confirm Arrival`
-- converts alert into real walk-in emergency flow
-- prefill any captured information
+These older fields and concepts still matter and must not be removed casually:
 
-## 8. Emergency Deferred Completion
-Emergency must create operational debt that is visible and hard to ignore.
+- `Patient Appointment.custom_queue_type`
+- `Patient Appointment.custom_queue_token`
+- `Appointment Type.custom_queue_code`
+- `Medical Department.custom_dept_abbr`
 
-Receptionist side needs:
-- persistent `Emergency Intakes Pending Reconciliation` surface
-- each item should support:
-  - identify/merge patient
-  - complete guardian/child details if needed
-  - add complaint if missing
-  - create Patient Appointment
-  - payment / waiver handling
-  - mark reconciliation complete
+The receptionist backend currently bridges between:
 
-Recommended emergency progression:
-- issued
-- with doctor
-- consult done
-- awaiting reconciliation
-- completed
+- canonical admission semantics
+- legacy appointment and queue semantics
 
-Governance:
-- aging warnings for unreconciled emergency cases
-- strong reminders before session close / end of day
-- do not hard-block blindly; allow supervisor-style defer/override with reason if needed
+That bridge is intentional. Do not collapse it without a migration plan.
 
-## 9. ETA Policy
-Normal ETA remains guidance, not promise.
+---
 
-For `special`:
-- no major ETA disruption model required by default
+## 9. Practical Development Rules
 
-For `emergency`:
-- emergency is an explicit ETA disruption event
-- back-office ETA recalculates immediately
-- patient-facing surfaces should show a simple disruption message such as:
-  - `Emergency in progress. Waiting time may be longer than usual.`
-- avoid pretending emergency fits calmly into normal ETA precision
+When changing receptionist-direction backend code:
 
-## 10. Session Lifecycle Policy
-These operational states require explicit support:
-- doctor starts late
-- doctor cancels session
-- doctor ends early
-- doctor extends session
+- prefer active APIs over legacy page-specific hacks
+- keep compatibility behavior explicit
+- document when a function is canonical versus legacy-compatibility only
+- update supporting docs when behavior changes
 
-Current position:
-- some primitives exist
-- full product policy still needs implementation
+Read before editing:
 
-Target behavior should support:
-- reroute / reschedule / cancel visibility
-- receptionist follow-up on affected patients
-- ETA recalculation after meaningful timing changes
-- explicit session-change notifications where needed
-
-## 11. Release-Window / Same-Day Phone
-Not settled.
-
-Current decision:
-- keep release-window logic configurable
-- do not treat the current 1-hour rule as final product truth
-- same-day phone booking remains on hold for now
-
-Implementation guidance:
-- do not make the new recommendation engine depend on this unresolved policy yet
-
-## 12. Data Model Guidance
-Likely long-term direction:
-- `token_number` = stable session identity
-- live service order should not be ambiguously encoded in the same way as token identity
-- legacy overlap between queue type, token formatting, queue position, slot counters, and new priority model should be reduced carefully
-
-Compatibility note:
-- old Healthcare-linked queue fields may need temporary shim behavior during migration
-
-## 13. Settled Decisions
-These are now settled enough to implement:
-
-- canonical model is `channel`, `patient_type`, `priority`
-- `review` replaces `follow_up`
-- `special` replaces `VIP`
-- tokens are session-scoped numeric tokens
-- backend owns recommendation
-- special is a back-office priority flag, not booking-time queue manipulation
-- doctor gets `Call Next Special`
-- special does not disturb `Called` / `Ready` / `With Doctor`
-- emergency exists in both phone and walk-in
-- walk-in emergency is immediate operational issuance
-- phone emergency is advisory alert first, real queue object only on arrival
-- emergency bypasses formalities
-- emergency reconciliation happens later through a dedicated pending flow
-- release-window remains configurable and unresolved
-- same-day phone remains on hold
-
-## 14. Remaining Deferred Questions
-These can be deferred until after initial backend refactor:
-- exact recommendation scoring weights
-- exact late-start / cancellation / extension workflows
-- exact emergency minimum optional fields UX
-- whether receptionist needs any stronger non-queue attentiveness affordances for special
-- how aggressively ETA confidence should widen during emergency
-
-## 15. Recommended Implementation Order
-1. create new backend refactor branch
-2. add canonical fields / compatibility shims
-3. centralize session ranking in backend
-4. centralize token recommendation in backend
-5. implement special flag + doctor override semantics
-6. implement emergency alert + walk-in emergency issuance
-7. implement emergency reconciliation flow
-8. adjust ETA behavior for emergency disruption
-9. handle session lifecycle edge cases
-10. retire legacy vocabulary and token formatting incrementally
+1. `ARCHITECTURE.md`
+2. `docs/healthcare-compatibility-audit.md`
+3. `docs/service-point-policy.md`
+4. `docs/token-display-policy.md`
+5. the relevant API module
