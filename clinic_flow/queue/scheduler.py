@@ -12,7 +12,12 @@ def release_prebooked_slots() -> None:
 	Does not touch existing Queue Entries — only adjusts slot headroom.
 	"""
 	config = frappe.get_single("Slot Partition Config")
-	release_mins = config.release_minutes_before or 60
+	# v2: release_hours_before (float, e.g. 2.5 hours). Fall back to legacy
+	# release_minutes_before if the v2 field is not set.
+	if config.release_hours_before:
+		release_mins = config.release_hours_before * 60
+	else:
+		release_mins = config.release_minutes_before or 60
 
 	release_threshold = add_to_date(now_datetime(), minutes=release_mins)
 

@@ -2,7 +2,7 @@ import math
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import today
+from frappe.utils import today, getdate, get_datetime, add_to_date, now_datetime
 
 
 class QueueMixin(Document):
@@ -54,14 +54,14 @@ class QueueMixin(Document):
 			"Queue Session",
 			{"practitioner": self.practitioner, "session_date": self.appointment_date,
 			 "status": ["in", ["Scheduled", "Active"]]},
-			["prebooked_total", "walkin_total", "emergency_total", "session_capacity"],
+			["prebooked_total", "walkin_total", "followup_total", "session_capacity", "start_time"],
 			as_dict=True,
 		)
 
 		field_map = {
 			"PRE_BOOKED": "prebooked_total",
 			"WALK_IN":    "walkin_total",
-			"FOLLOW_UP":  "emergency_total",
+			"FOLLOW_UP":  "followup_total",
 		}
 		session_field = field_map.get(self.custom_queue_type, "prebooked_total")
 		limit: int | None = None
@@ -90,6 +90,33 @@ class QueueMixin(Document):
 
 		if not limit:
 			return
+
+		# For same-day walk-in within the release window, expand limit by unused
+		# PRE_BOOKED and FOLLOW_UP slots — mirrors get_availability() release logic.
+		if self.custom_queue_type == "WALK_IN" and getdate(self.appointment_date) == getdate():
+			release_mins = config.release_minutes_before or 60
+			start_time = session_row.get("start_time") if session_row else None
+			if start_time:
+				session_start = get_datetime(f"{self.appointment_date} {start_time}")
+				within_release = session_start <= add_to_date(now_datetime(), minutes=release_mins)
+				if within_release:
+					cap = (session_row.session_capacity if session_row else 20) or 20
+					for release_type, pct_attr, total_field in [
+						("PRE_BOOKED", "prebooked_pct", "prebooked_total"),
+						("FOLLOW_UP",  "followup_pct",  "followup_total"),
+					]:
+						if session_row and session_row.get(total_field):
+							rel_limit = session_row[total_field]
+						else:
+							rel_pct = getattr(config, pct_attr, None) or (60 if release_type == "PRE_BOOKED" else 10)
+							rel_limit = math.ceil(cap * rel_pct / 100)
+						rel_used = frappe.db.count("Patient Appointment", {
+							"practitioner":     self.practitioner,
+							"appointment_date": self.appointment_date,
+							"custom_queue_type": release_type,
+							"status":           ["not in", ["Cancelled", "No Show"]],
+						})
+						limit += max(0, rel_limit - rel_used)
 
 		count = frappe.db.count("Patient Appointment", {
 			"practitioner":    self.practitioner,
@@ -128,39 +155,19 @@ class QueueMixin(Document):
 			)
 			return
 
+		# Skip Queue Entry creation if one already exists for this appointment
+		# in any active state. The V2 dashboard creates Queue Entries directly
+		# at booking time (confirm_booking) and links them via the appointment
+		# field. When complete_reception() later saves the appointment as
+		# "Checked In", this guard prevents a duplicate entry being created.
 		already_queued = frappe.db.exists(
 			"Queue Entry",
-			{"appointment": self.name, "status": ["in", ["Waiting", "Called", "With Doctor"]]},
+			{"appointment": self.name, "status": ["not in", ["No Show", "Cancelled"]]},
 		)
 		if already_queued:
 			return
 
-		# Look for a session in priority order:
-		#   1. Active / Paused  — normal flow
-		#   2. Completed        — doctor is on a break between sessions; issue the token
-		#                         now and it will be inherited by the next session.
-		# If no session exists at all today, block with a clear error so the
-		# receptionist knows they need to start one (or redirect the patient).
-		# frappe.get_all rejects FIELD() in order_by — use raw SQL for priority ordering
-		sessions = frappe.db.sql("""
-			SELECT name, dept_abbr, status
-			FROM `tabQueue Session`
-			WHERE practitioner = %s
-			  AND session_date = %s
-			  AND status IN ('Active', 'Paused', 'Completed')
-			ORDER BY FIELD(status, 'Active', 'Paused', 'Completed'), creation DESC
-			LIMIT 1
-		""", (self.practitioner, today()), as_dict=True)
-		if not sessions:
-			frappe.throw(
-				_(
-					"No queue session exists for {0} today. "
-					"Please start a session before checking in patients."
-				).format(self.practitioner),
-				title=_("No Session Found"),
-			)
-
-		session = sessions[0]
+		session = self._clinic_flow_get_or_create_session()
 		between_sessions = session.status == "Completed"
 
 		from clinic_flow.queue.engine import build_token, get_next_sequence, _broadcast_queue_update
@@ -222,14 +229,57 @@ class QueueMixin(Document):
 		)
 		_broadcast_queue_update(session.name)
 
+	def _clinic_flow_get_or_create_session(self) -> frappe._dict:
+		"""
+		Return the operational Queue Session for this appointment date.
+
+		Priority:
+		  1. Active / Paused
+		  2. Scheduled   — pre-created from practitioner schedule, before doctor starts
+		  3. Completed   — between sessions; queue entry will be inherited later
+
+		If none exists yet, auto-materialize a Scheduled session from the practitioner's
+		schedule for that date, mirroring the receptionist dashboard flow.
+		"""
+		appointment_date = getdate(self.appointment_date or today())
+
+		sessions = frappe.db.sql("""
+			SELECT name, dept_abbr, status
+			FROM `tabQueue Session`
+			WHERE practitioner = %s
+			  AND session_date = %s
+			  AND status IN ('Active', 'Paused', 'Scheduled', 'Completed')
+			ORDER BY FIELD(status, 'Active', 'Paused', 'Scheduled', 'Completed'), creation DESC
+			LIMIT 1
+		""", (self.practitioner, appointment_date), as_dict=True)
+		if sessions:
+			return sessions[0]
+
+		from clinic_flow.api.admission import _sessions_for_date_range
+
+		for session in _sessions_for_date_range(appointment_date, appointment_date):
+			if session.practitioner == self.practitioner:
+				return frappe._dict({
+					"name": session.name,
+					"dept_abbr": session.dept_abbr,
+					"status": session.status,
+				})
+
+		frappe.throw(
+			_(
+				"No practitioner schedule exists for {0} on {1}, so no queue session "
+				"can be created for check-in."
+			).format(self.practitioner, appointment_date),
+			title=_("No Session Found"),
+		)
+
 
 def _increment_session_slot(queue_session: str, queue_type: str) -> None:
 	"""Increment the session's used-slot counter when a patient checks in."""
 	field_map = {
 		"PRE_BOOKED": "prebooked_used",
 		"WALK_IN":    "walkin_used",
-		"EMERGENCY":  "emergency_used",
-		"FOLLOW_UP":  "walkin_used",
+		"FOLLOW_UP":  "followup_used",
 	}
 	field = field_map.get(queue_type)
 	if field:
