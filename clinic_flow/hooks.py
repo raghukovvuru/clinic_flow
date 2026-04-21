@@ -7,14 +7,9 @@ app_license = "MIT"
 
 required_apps = ["frappe", "healthcare"]
 
-# ── v16: extend_doctype_class (preferred over doc_events for controller logic) ──
-# Adds on_update mixin to Patient Appointment without replacing Marley's controller.
-# Multiple apps can safely extend the same DocType this way.
-extend_doctype_class = {
-	"Patient Appointment": [
-		"clinic_flow.queue.appointment_mixin.QueueMixin"
-	]
-}
+# Slice 1 removed Patient Appointment as a queue-authority source.
+# Queue Entry creation now belongs exclusively to Clinic Flow admission APIs.
+# Keep Clinic Flow queue creation inside admission.py and receptionist APIs.
 
 # ── Scheduled jobs ───────────────────────────────────────────────────────────
 scheduler_events = {

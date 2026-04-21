@@ -28,12 +28,10 @@ class QueueMixin(Document):
 
 	def on_update(self) -> None:
 		super().on_update()
-		try:
-			self._clinic_flow_maybe_create_queue_entry()
-		except frappe.ValidationError:
-			raise  # Surface "No Session Found" and similar errors to the receptionist
-		except Exception:
-			frappe.log_error(frappe.get_traceback(), "clinic_flow: Queue Entry creation error")
+		# Slice 1 authority change:
+		# Queue Entry creation belongs to Clinic Flow admission (confirm_booking),
+		# not Patient Appointment lifecycle hooks.
+		return
 
 	# ── Booking-time slot enforcement ────────────────────────────────────────
 

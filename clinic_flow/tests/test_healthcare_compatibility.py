@@ -21,19 +21,11 @@ class TestHealthcareCompatibility(IntegrationTestCase):
 		self._ensure_gender("Other")
 
 	def test_required_healthcare_custom_fields_exist(self):
+		# Slice 1 authority change: only the Patient Encounter integration field
+		# is still actively managed by Clinic Flow. Queue-identity fields on
+		# Appointment Type, Medical Department, and Patient Appointment remain on
+		# existing sites from previous patch runs but are no longer managed here.
 		expected = {
-			"Appointment Type": {
-				"custom_queue_code": {"fieldtype": "Data"},
-				"custom_queue_type": {"fieldtype": "Select"},
-			},
-			"Medical Department": {
-				"custom_dept_abbr": {"fieldtype": "Data"},
-			},
-			"Patient Appointment": {
-				"custom_dept_abbr": {"fieldtype": "Data"},
-				"custom_queue_type": {"fieldtype": "Select"},
-				"custom_queue_token": {"fieldtype": "Data"},
-			},
 			"Patient Encounter": {
 				"custom_chief_complaint": {"fieldtype": "Long Text"},
 			},
@@ -68,12 +60,14 @@ class TestHealthcareCompatibility(IntegrationTestCase):
 					f"{doctype}.{fieldname} should be absent",
 				)
 
-	def test_patient_appointment_controller_is_extended(self):
+	def test_patient_appointment_controller_is_not_extended_by_queue_mixin(self):
+		# Slice 1 authority change: QueueMixin is no longer injected into
+		# Patient Appointment. Queue Entry creation belongs to admission.py.
 		controller = get_controller("Patient Appointment")
 		module = controller.__module__
 		mro_names = {cls.__name__ for cls in controller.__mro__}
 
-		self.assertIn("QueueMixin", mro_names)
+		self.assertNotIn("QueueMixin", mro_names)
 		self.assertTrue(module.startswith("healthcare."), module)
 
 	def test_required_patch_is_registered(self):
