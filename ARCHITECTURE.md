@@ -294,7 +294,7 @@ Slice 2 landed on this branch. These are now locked admission facts:
 - `Patient` and `Patient Appointment` are still created at admission time.
 - `_compat_queue_type()` writes `Queue Entry.queue_type` only as a compatibility field for neighboring runtime paths pending later slices.
 - Healthcare appointment creation no longer depends on `Appointment Type.custom_queue_code` or queue-type taxonomy. It uses any available appointment type.
-- `custom_queue_type` is no longer written onto new `Patient Appointment` records.
+- `custom_queue_type` is no longer written onto new `Patient Appointment` records by the active admission path.
 
 ---
 

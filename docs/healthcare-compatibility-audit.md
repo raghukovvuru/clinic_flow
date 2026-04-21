@@ -88,15 +88,15 @@ Legacy/orphaned knobs to treat as debt:
 
 These fields may still exist on a site from earlier transitions, but they should not be treated as active queue or booking controls.
 
-## Live Custom Field Inventory
+## Compatibility Field Inventory
 
-The following upstream custom fields exist on the current site:
+The following upstream custom fields are tracked for current compatibility history and live usage. Rows marked "Removed / absent" are already gone on the current runtime and are kept here only for audit history.
 
 ### Appointment Type
 
 | Field | Status | Why |
 | --- | --- | --- |
-| `custom_queue_code` | Keep for now | Still used to resolve appointment types from legacy queue codes in `admission.py`, `appointments.py`, `queue.py`, and documented in `engine.py`. |
+| `custom_queue_code` | Keep for now | Still used by the legacy appointment API and queue encounter fallback. The active admission path no longer depends on it. |
 | `custom_queue_type` | Review / likely debt | Present on site, but no active code references found in `clinic_flow`. Looks like leftover v1 modeling. |
 
 ### Medical Department
@@ -110,17 +110,17 @@ The following upstream custom fields exist on the current site:
 | Field | Status | Why |
 | --- | --- | --- |
 | `custom_queue_type` | Keep for now | Still central to appointment check-in, slot accounting, legacy compatibility, and receptionist legacy paths. |
-| `custom_queue_token` | Keep for now | Still written back by appointment check-in flow and read by appointment APIs and legacy workspace. |
+| `custom_queue_token` | Keep for now | Read-only compatibility field in the current runtime; historical appointment check-in write-back debt only. Read by appointment APIs and legacy workspace. |
 | `custom_dept_abbr` | Review | Still referenced in `appointment_mixin.py` as a fallback dept abbreviation source. May become removable once department resolution is fully session-based. |
-| `custom_original_encounter` | Review / likely debt | Present on site, but no active code references found in `clinic_flow`. |
+| `custom_original_encounter` | Removed / absent | Removed by patch and asserted absent by `clinic_flow/tests/test_healthcare_compatibility.py`. |
 
 ### Patient Encounter
 
 | Field | Status | Why |
 | --- | --- | --- |
 | `custom_chief_complaint` | Keep for now | Still used by doctor workspace APIs and encounter save/load mapping. |
-| `custom_awaiting_lab_return` | Review / likely debt | Present on site, but no active code references found in `clinic_flow`. |
-| `custom_lab_return_queued` | Review / likely debt | Present on site, but no active code references found in `clinic_flow`. |
+| `custom_awaiting_lab_return` | Removed / absent | Removed by patch and asserted absent by `clinic_flow/tests/test_healthcare_compatibility.py`. |
+| `custom_lab_return_queued` | Removed / absent | Removed by patch and asserted absent by `clinic_flow/tests/test_healthcare_compatibility.py`. |
 
 ### Patient
 
@@ -169,13 +169,13 @@ Current role:
 
 Used by:
 
-- [admission.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/api/admission.py)
 - [appointments.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/api/appointments.py)
 - [queue.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/api/queue.py)
 
 Current role:
 
-- maps legacy queue type semantics to Appointment Type records
+- legacy appointment API lookup and queue encounter fallback
+- not part of the active admission path
 
 #### `Medical Department.custom_dept_abbr`
 
