@@ -68,12 +68,14 @@ class TestHealthcareCompatibility(IntegrationTestCase):
 					f"{doctype}.{fieldname} should be absent",
 				)
 
-	def test_patient_appointment_controller_is_extended(self):
+	def test_patient_appointment_controller_is_not_extended_by_queue_mixin(self):
+		# Slice 1 authority change: QueueMixin is no longer injected into
+		# Patient Appointment. Queue Entry creation belongs to admission.py.
 		controller = get_controller("Patient Appointment")
 		module = controller.__module__
 		mro_names = {cls.__name__ for cls in controller.__mro__}
 
-		self.assertIn("QueueMixin", mro_names)
+		self.assertNotIn("QueueMixin", mro_names)
 		self.assertTrue(module.startswith("healthcare."), module)
 
 	def test_required_patch_is_registered(self):
