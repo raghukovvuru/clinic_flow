@@ -111,11 +111,19 @@ class TestSlice1OperationalAuthority(IntegrationTestCase):
             "custom_dept_abbr": f"S{tag[:3].upper()}",
         }).insert(ignore_permissions=True)
 
+        # op_consulting_charge_item must match Healthcare Settings to pass
+        # Healthcare's billing validation on Patient Appointment insert.
+        consulting_item = frappe.db.get_single_value(
+            "Healthcare Settings", "op_consulting_charge_item"
+        ) or "Outpatient Consultation Fee"
+
         practitioner = frappe.get_doc({
             "doctype": "Healthcare Practitioner",
             "first_name": f"PracSlice {tag}",
             "gender": "Male",
             "department": department.name,
+            "op_consulting_charge_item": consulting_item,
+            "op_consulting_charge": 500,
         }).insert(ignore_permissions=True)
 
         # Pre-create a Queue Session so _clinic_flow_get_or_create_session()
@@ -154,4 +162,7 @@ class TestSlice1OperationalAuthority(IntegrationTestCase):
             "department": department.name,
             "company": company,
             "custom_queue_type": "WALK_IN",
+            # Tells Healthcare to skip the OP Consulting Charge validation;
+            # charge will be collected at check-in instead.
+            "appointment_based_on_check_in": 1,
         }).insert(ignore_permissions=True)

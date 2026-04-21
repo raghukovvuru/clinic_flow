@@ -16,7 +16,8 @@ class TestSlice1ServicePointIdentity(IntegrationTestCase):
         self._ensure_gender("Male")
 
     def test_confirm_booking_builds_token_from_service_point_queue_code(self):
-        queue_session = self.make_queue_session_with_service_point("PED")
+        queue_session = self.make_queue_session_with_service_point()
+        sp_code = frappe.db.get_value("Queue Session", queue_session.name, "dept_abbr")
         patient = self.make_patient()
 
         result = frappe.get_attr("clinic_flow.api.admission.confirm_booking")(
@@ -27,13 +28,14 @@ class TestSlice1ServicePointIdentity(IntegrationTestCase):
         )
 
         self.assertTrue(
-            result["token"].startswith("PED-"),
-            f"Expected token to start with 'PED-', got: {result['token']}",
+            result["token"].startswith(f"{sp_code}-"),
+            f"Expected token to start with '{sp_code}-', got: {result['token']}",
         )
 
     def test_active_identity_does_not_require_healthcare_department_custom_field(self):
-        # Session has a Service Point but no Medical Department custom_dept_abbr fallback
-        queue_session = self.make_queue_session_with_service_point("OPD")
+        # Session has a Service Point but no Medical Department custom_dept_abbr dependency
+        queue_session = self.make_queue_session_with_service_point()
+        sp_code = frappe.db.get_value("Queue Session", queue_session.name, "dept_abbr")
         patient = self.make_patient()
 
         result = frappe.get_attr("clinic_flow.api.admission.confirm_booking")(
@@ -44,23 +46,23 @@ class TestSlice1ServicePointIdentity(IntegrationTestCase):
         )
 
         entry = frappe.get_doc("Queue Entry", result["queue_entry"])
-        expected_token = f"OPD-{entry.token_number:03d}"
+        expected_token = f"{sp_code}-{entry.token_number:03d}"
         self.assertEqual(
             entry.token,
             expected_token,
-            f"Token should be built from Service Point queue code OPD, got: {entry.token}",
+            f"Token should be built from Service Point queue code, got: {entry.token}",
         )
 
     def test_session_with_service_point_resolves_canonical_queue_code(self):
         from clinic_flow.queue.service_point import resolve_queue_code
 
-        sp = self.make_service_point("CARD")
+        sp = self.make_service_point()
         # Service Point takes priority over any dept_abbr
         resolved = resolve_queue_code(
             service_point=sp.name,
-            dept_abbr="OLD",
+            dept_abbr="ZZZ",
         )
-        self.assertEqual(resolved, "CARD")
+        self.assertEqual(resolved, sp.queue_code)
 
     def test_session_without_service_point_still_resolves_via_dept_abbr(self):
         """Backward-compat: sessions migrated without a service_point still work."""
@@ -85,9 +87,8 @@ class TestSlice1ServicePointIdentity(IntegrationTestCase):
             "status": "Active",
         }).insert(ignore_permissions=True)
 
-    def make_service_point(self, queue_code: str):
-        # Use a randomized suffix to avoid collisions across test runs
-        code = f"{queue_code}{frappe.generate_hash(length=2).upper()}"
+    def make_service_point(self):
+        code = f"T{frappe.generate_hash(length=3).upper()}"
         return frappe.get_doc({
             "doctype": "Service Point",
             "queue_code": code,
@@ -96,8 +97,8 @@ class TestSlice1ServicePointIdentity(IntegrationTestCase):
             "is_active": 1,
         }).insert(ignore_permissions=True)
 
-    def make_queue_session_with_service_point(self, queue_code: str):
-        sp = self.make_service_point(queue_code)
+    def make_queue_session_with_service_point(self):
+        sp = self.make_service_point()
         practitioner = frappe.get_doc({
             "doctype": "Healthcare Practitioner",
             "first_name": f"Prac {frappe.generate_hash(length=4)}",
