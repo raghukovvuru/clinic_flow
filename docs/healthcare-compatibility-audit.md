@@ -278,9 +278,7 @@ In:
 Current dependency metadata says:
 
 - `frappe = ">=16.0.0,<17.0.0"`
-- `health = ">=16.0.0,<17.0.0"`
-
-This should be reviewed, because `health` may not be the correct app key if the app dependency is actually `healthcare`.
+- `healthcare = ">=16.0.0,<17.0.0"`
 
 ## What To Do Next
 

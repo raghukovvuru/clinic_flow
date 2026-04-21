@@ -38,6 +38,12 @@ The preferred queue identity is `Service Point`.
 
 `Service Point` gives the app a durable queue code and display identity that is no longer tied only to `Medical Department.custom_dept_abbr`.
 
+Healthcare custom-field mapping is split across doctypes:
+
+- `Appointment Type`: `custom_queue_code` and historically `custom_queue_type`
+- `Medical Department`: `custom_dept_abbr`
+- `Patient Appointment`: `custom_queue_type`, `custom_queue_token`, `custom_dept_abbr`
+
 Resolution order for queue code reads:
 
 1. `Queue Session.service_point -> Service Point.queue_code`
