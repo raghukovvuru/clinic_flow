@@ -162,7 +162,7 @@ Used by:
 
 Current role:
 
-- legacy appointment check-in token write-back history only
+- read-only compatibility field; historical appointment check-in write-back debt only
 - API reads token for status/printing compatibility
 
 #### `Appointment Type.custom_queue_code`
