@@ -301,7 +301,20 @@ Slice 2 landed on this branch. These are now locked admission facts:
 
 ---
 
-## 10. Architectural Truths To Preserve
+## 10. Slice 3 Receptionist Boundary Update
+
+Slice 3 landed on this branch. These are now locked receptionist boundary facts:
+
+- Arrival (`mark_arrived`) is operational-only. It records physical presence and improves live queue visibility. It does not make a patient doctor-eligible.
+- Receptionist check-in (`complete_reception`) is the only active path to `Ready Near Doctor`.
+- Clinic Flow queue state is the authority. The Queue Entry status advances first. Healthcare appointment sync is downstream, side-effect-bounded, and must not drive queue decisions.
+- Fee-validity side effects are triggered by the Healthcare sync adapter (`_checkin_patient_appointment`) via `Patient Appointment.save()`, not by direct Clinic Flow logic.
+- Unused phone-protected quota releases to walk-in capacity at midnight of the session date (`release_phone_quota_at_midnight`). After midnight, same-day phone quota protection no longer applies.
+- Legacy appointment payment/check-in APIs (`record_payment_and_checkin`) are compatibility-only. Do not treat them as active receptionist paths or extend them with new business logic.
+
+---
+
+## 11. Architectural Truths To Preserve
 
 These are the current branch truths that docs and code should agree on:
 
@@ -315,11 +328,14 @@ These are the current branch truths that docs and code should agree on:
 - active admission logic is expressed through `channel`, `load_class`, and `Service Point` — not `queue_type` (Slice 2 locked)
 - `queue_type` on `Queue Entry` is a compatibility field only — not the active admission model (Slice 2 locked)
 - Healthcare appointment creation at admission time does not depend on queue-code custom field mapping (Slice 2 locked)
+- receptionist check-in is the only gate to `Ready Near Doctor`; arrival alone never makes a patient doctor-eligible (Slice 3 locked)
+- Healthcare sync is downstream of Clinic Flow queue-state transitions, not the other way around (Slice 3 locked)
+- unused phone quota releases to walk-in at midnight of the session date (Slice 3 locked)
 - patch-managed compatibility with Healthcare matters as much as code changes
 
 ---
 
-## 10. Supporting Docs
+## 12. Supporting Docs
 
 Use these as focused companion docs:
 
