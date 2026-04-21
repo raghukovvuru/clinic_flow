@@ -98,9 +98,7 @@ Still-active custom fields include:
 - `custom_queue_token`
 - `custom_dept_abbr`
 
-The check-in flow still uses:
-
-`Patient Appointment.status = "Checked In"` -> `QueueMixin.on_update()` -> create queue entry -> write back token
+Queue entries are created by Clinic Flow admission and receptionist flows. Appointment save/check-in behavior is only a compatibility path and must not be treated as the source of queue authority.
 
 ---
 
@@ -109,7 +107,6 @@ The check-in flow still uses:
 ### Legacy appointment path
 
 - `clinic_flow/api/appointments.py`
-- `clinic_flow/queue/appointment_mixin.py`
 - `clinic_flow/queue/scheduler.py`
 
 This path still handles:
@@ -121,7 +118,7 @@ This path still handles:
 - payment + check-in
 - slot release
 
-This is compatibility-critical and must not be casually rewritten.
+This is compatibility-critical and must not be casually rewritten, but it no longer owns queue-entry creation or queue identity.
 
 ### Queue/session runtime
 
@@ -280,7 +277,7 @@ Slice 1 landed on this branch. These are now locked operational facts:
 - `Queue Session` and `Queue Entry` are the operational source of truth for all receptionist and queue operations.
 - `Patient Appointment` is an integration anchor — it exists so Healthcare billing, fee-validity, and encounter flows work, but it must not create queue entries or define queue identity.
 - `Service Point` is the canonical queue identity. `Service Point.queue_code` is the canonical token prefix.
-- Healthcare appointment lifecycle hooks (via `extend_doctype_class`) no longer participate in queue-entry creation.
+- Healthcare appointment lifecycle hooks do not participate in queue-entry creation.
 - Healthcare queue-identity custom fields (`custom_queue_type`, `custom_queue_token`, `custom_dept_abbr` on Appointment Type, Medical Department, Patient Appointment) are no longer managed by the Clinic Flow patch. They remain on existing sites as compatibility debt.
 
 ---
@@ -310,7 +307,7 @@ Slice 3 landed on this branch. These are now locked receptionist boundary facts:
 - Clinic Flow queue state is the authority. The Queue Entry status advances first. Healthcare appointment sync is downstream, side-effect-bounded, and must not drive queue decisions.
 - Fee-validity side effects are triggered by the Healthcare sync adapter (`_checkin_patient_appointment`) via `Patient Appointment.save()`, not by direct Clinic Flow logic.
 - Unused phone-protected quota releases to walk-in capacity at midnight of the session date (`release_phone_quota_at_midnight`). After midnight, same-day phone quota protection no longer applies.
-- Legacy appointment payment/check-in APIs (`record_payment_and_checkin`) are compatibility-only. Do not treat them as active receptionist paths or extend them with new business logic.
+- Legacy appointment payment/check-in APIs are compatibility-only. Do not treat them as active receptionist paths or extend them with new business logic.
 
 ---
 

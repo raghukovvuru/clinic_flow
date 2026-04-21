@@ -22,7 +22,6 @@ This note audits how `clinic_flow` extends upstream `healthcare`, with focus on:
 
 The app is partly modernized:
 
-- `extend_doctype_class` is used in [hooks.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/hooks.py)
 - backend recommendation and queue logic are increasingly owned by `clinic_flow`
 
 But compatibility is still weaker than it should be because:
@@ -69,6 +68,19 @@ Key files:
 The live site still contains custom fields that are not referenced in `clinic_flow` anymore.
 
 These are likely debt unless another app still relies on them.
+
+### 4. Old prebooked-release knobs are orphaned runtime debt
+
+The older prebooked-release model left behind admin/schema state that is not part of the active post-Slice-3 runtime.
+
+The active runtime now uses midnight phone-quota release via `release_phone_quota_at_midnight`, with `release_minutes_before` and `phone_quota_released` as the live controls.
+
+Legacy/orphaned knobs to treat as debt:
+
+- `Slot Partition Config.release_hours_before`
+- `Queue Session.prebooked_released`
+
+These fields may still exist on a site from earlier transitions, but they should not be treated as active queue or booking controls.
 
 ## Live Custom Field Inventory
 
@@ -317,6 +329,7 @@ Longer term, move away from:
 - `custom_queue_type`
 - `custom_queue_token`
 - `custom_queue_code`
+- the older prebooked-release knobs (`release_hours_before`, `prebooked_released`)
 
 as the main semantic drivers.
 

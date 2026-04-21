@@ -32,6 +32,7 @@ Treat these as compatibility paths, not the default place for new product work:
 - `doctor_workspace`
 - legacy queue semantics centered on only `custom_queue_type`
 - direct dependence on `Medical Department.custom_dept_abbr` as the sole queue identity
+- legacy appointment-hook behavior is compatibility only; do not treat it as queue authority
 
 Legacy code is still load-bearing in parts of the app. Do not delete or bypass it casually.
 
@@ -43,7 +44,7 @@ Legacy code is still load-bearing in parts of the app. Do not delete or bypass i
 
 - Zero edits inside `apps/healthcare/`
 - Extend Healthcare behavior from `clinic_flow`
-- Use `extend_doctype_class` for `Patient Appointment` behavior
+- Treat `Patient Appointment` as an integration anchor only; do not route queue authority through its lifecycle hooks
 
 ### Treat the core doc set as locked
 
@@ -70,9 +71,9 @@ def my_fn(patient: str, amount: float) -> dict:
     ...
 ```
 
-### Never replace `record_payment_and_checkin()` with `frappe.db.set_value`
+### Legacy appointment check-in compatibility
 
-`doc.save()` is intentional. It triggers `QueueMixin.on_update()`, which creates the queue entry and writes back the token.
+Legacy appointment check-in code is compatibility only. Keep any remaining behavior bounded to the historical appointment path; do not use it as the source of queue authority or new queue logic.
 
 ### Never use `frappe.get_all(..., order_by="FIELD(...)")`
 
@@ -144,8 +145,7 @@ Do not rename or remove these without checking current patches, data migration r
 
 Confirm before changing these:
 
-- `QueueMixin.on_update()` and any code that creates queue entries on check-in
-- `record_payment_and_checkin()`
+- legacy appointment check-in compatibility paths and any code that still syncs appointment state back to Queue Entry
 - `rr_state` structure or round-robin sequencing behavior
 - queue-position calculation rules
 - `Service Point` resolution order
