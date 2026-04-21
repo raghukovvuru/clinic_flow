@@ -955,11 +955,13 @@ def complete_reception(
 		update["weight_recorded"] = float(weight_kg)
 		update["weight_recorded_at"] = now_datetime()
 
+	# Clinic Flow is the authority. Queue state advances here regardless of
+	# whether a linked Patient Appointment exists.
 	frappe.db.set_value("Queue Entry", queue_entry, update)
 
-	# ── Sync linked Patient Appointment → "Checked In" ───────────────────────
-	# This triggers Healthcare's on_update() which runs update_fee_validity()
-	# and manage_fee_validity() — correctly consuming the patient's fee validity.
+	# Downstream Healthcare sync — side-effect-bounded, must not drive queue
+	# state decisions. Sets the linked appointment to "Checked In" so
+	# Healthcare's fee-validity side effects (update_fee_validity) fire.
 	if entry.appointment:
 		_checkin_patient_appointment(
 			appointment=entry.appointment,
@@ -1381,13 +1383,18 @@ def _checkin_patient_appointment(
 	paid_amount: float | None,
 ) -> None:
 	"""
-	Set the linked Patient Appointment to 'Checked In' with payment data.
+	Downstream Healthcare sync adapter — sets the linked Patient Appointment to
+	'Checked In' so Healthcare's fee-validity side effects fire.
 
-	Healthcare's on_update() fires on save() and calls update_fee_validity() →
-	manage_fee_validity(), which:
-	  - for review patients: increments fee_validity.visited
-	  - for new patients:    creates a new Fee Validity record
-	  - for cancelled appts: decrements visited (handled by Healthcare itself)
+	This helper is a one-way, side-effect-bounded integration step. It must not:
+	  - create Queue Entries
+	  - decide queue progression
+	  - determine doctor eligibility
+
+	Clinic Flow queue state is already advanced before this is called.
+	Healthcare's on_update() → update_fee_validity() → manage_fee_validity():
+	  - review patients: increments fee_validity.visited
+	  - new patients:    creates a new Fee Validity record
 	"""
 	try:
 		appt = frappe.get_doc("Patient Appointment", appointment)

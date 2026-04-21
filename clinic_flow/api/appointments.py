@@ -434,9 +434,17 @@ def record_payment_and_checkin(
 	paid_amount: float,
 ) -> dict:
 	"""
-	Records payment on the appointment and sets status to Checked In.
-	Uses doc.save() so the QueueMixin.on_update() fires and issues the token.
+	Legacy compatibility path only.
+
+	The active receptionist flow is: admission → arrival → complete_reception
+	(clinic_flow.api.queue.complete_reception). That path is Clinic Flow's
+	authority for queue state and Healthcare sync.
+
+	This function remains only for compatibility with appointment-centric callers
+	that predate the v2 admission model. Do not extend or treat as the active path.
 	"""
+	frappe.logger().warning("clinic_flow: legacy record_payment_and_checkin path invoked")
+
 	doc = frappe.get_doc("Patient Appointment", appointment)
 
 	if float(paid_amount) > 0:
