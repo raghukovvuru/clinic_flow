@@ -58,10 +58,14 @@ Several core flows still read/write:
 
 Key files:
 
-- [appointment_mixin.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/queue/appointment_mixin.py)
 - [appointments.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/api/appointments.py)
 - [admission.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/api/admission.py)
 - [queue.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/api/queue.py)
+
+Historical context:
+
+- `appointment_mixin.py` used to participate in the appointment-based queue path, but it is no longer evidence that appointment lifecycle hooks own queue authority.
+- token write-back from appointment check-in should be treated as legacy compatibility history, not the active queue-source-of-truth path.
 
 ### 3. Some legacy fields appear orphaned
 
@@ -73,7 +77,9 @@ These are likely debt unless another app still relies on them.
 
 The older prebooked-release model left behind admin/schema state that is not part of the active post-Slice-3 runtime.
 
-The active runtime now uses midnight phone-quota release via `release_phone_quota_at_midnight`, with `release_minutes_before` and `phone_quota_released` as the live controls.
+The active midnight rollover now uses `phone_pct` plus `phone_quota_released` to move unused phone capacity into walk-in capacity.
+
+`release_minutes_before` still matters in legacy appointment availability / slot-release logic elsewhere, but it is not the midnight rollover mechanism.
 
 Legacy/orphaned knobs to treat as debt:
 
@@ -151,13 +157,12 @@ Current role:
 
 Used by:
 
-- [appointment_mixin.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/queue/appointment_mixin.py)
 - [appointments.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/api/appointments.py)
 - legacy [receptionist_workspace.js](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/clinic_flow/page/receptionist_workspace/receptionist_workspace.js)
 
 Current role:
 
-- appointment check-in writes back queue token
+- legacy appointment check-in token write-back history only
 - API reads token for status/printing compatibility
 
 #### `Appointment Type.custom_queue_code`
@@ -178,11 +183,11 @@ Used by:
 
 - [admission.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/api/admission.py)
 - [queue.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/api/queue.py)
-- [appointment_mixin.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/queue/appointment_mixin.py)
 
 Current role:
 
-- compatibility department abbreviation lookup
+- compatibility department abbreviation lookup for live admission and queue code resolution
+- historical appointment-path fallback only; do not read this as a queue-authority hook
 
 #### `Patient Encounter.custom_chief_complaint`
 
