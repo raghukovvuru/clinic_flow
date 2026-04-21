@@ -243,8 +243,9 @@ Most important ones:
 Important constraints:
 
 - never modify Healthcare source files
-- use `extend_doctype_class` on `Patient Appointment`
-- maintain required custom fields and patch-managed setup
+- `Patient Appointment` is an integration anchor only — it does not drive queue creation
+- only `Patient Encounter.custom_chief_complaint` is actively managed by the patch
+- queue-identity custom fields on Appointment Type, Medical Department, and Patient Appointment remain on existing sites from previous patch runs but are not part of the target model
 
 Read `docs/healthcare-compatibility-audit.md` before changing fixtures or upstream-field assumptions.
 
@@ -272,21 +273,34 @@ Do not assume that exporting fixtures alone is enough to reproduce working state
 
 ---
 
-## 8. Architectural Truths To Preserve
+## 8. Slice 1 Authority Update
+
+Slice 1 landed on this branch. These are now locked operational facts:
+
+- `Queue Session` and `Queue Entry` are the operational source of truth for all receptionist and queue operations.
+- `Patient Appointment` is an integration anchor — it exists so Healthcare billing, fee-validity, and encounter flows work, but it must not create queue entries or define queue identity.
+- `Service Point` is the canonical queue identity. `Service Point.queue_code` is the canonical token prefix.
+- Healthcare appointment lifecycle hooks (via `extend_doctype_class`) no longer participate in queue-entry creation.
+- Healthcare queue-identity custom fields (`custom_queue_type`, `custom_queue_token`, `custom_dept_abbr` on Appointment Type, Medical Department, Patient Appointment) are no longer managed by the Clinic Flow patch. They remain on existing sites as compatibility debt.
+
+---
+
+## 9. Architectural Truths To Preserve
 
 These are the current branch truths that docs and code should agree on:
 
 - `receptionist_dashboard` and `doctor_workspace_v2` are the active UI direction
 - legacy pages are compatibility paths, not the default destination for new work
-- `Service Point` is the preferred queue identity
+- `Service Point` is the canonical queue identity (Slice 1 locked)
+- `Queue Session` and `Queue Entry` are the operational source of truth (Slice 1 locked)
 - `token_number` plus display-token composition is the preferred token model
 - `priority` is distinct from legacy `queue_type`
-- the appointment/check-in path is still load-bearing and cannot be bypassed
+- `Patient Appointment` is an integration anchor, not a queue-authority object (Slice 1 locked)
 - patch-managed compatibility with Healthcare matters as much as code changes
 
 ---
 
-## 9. Supporting Docs
+## 10. Supporting Docs
 
 Use these as focused companion docs:
 

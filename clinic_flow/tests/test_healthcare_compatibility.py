@@ -21,19 +21,11 @@ class TestHealthcareCompatibility(IntegrationTestCase):
 		self._ensure_gender("Other")
 
 	def test_required_healthcare_custom_fields_exist(self):
+		# Slice 1 authority change: only the Patient Encounter integration field
+		# is still actively managed by Clinic Flow. Queue-identity fields on
+		# Appointment Type, Medical Department, and Patient Appointment remain on
+		# existing sites from previous patch runs but are no longer managed here.
 		expected = {
-			"Appointment Type": {
-				"custom_queue_code": {"fieldtype": "Data"},
-				"custom_queue_type": {"fieldtype": "Select"},
-			},
-			"Medical Department": {
-				"custom_dept_abbr": {"fieldtype": "Data"},
-			},
-			"Patient Appointment": {
-				"custom_dept_abbr": {"fieldtype": "Data"},
-				"custom_queue_type": {"fieldtype": "Select"},
-				"custom_queue_token": {"fieldtype": "Data"},
-			},
 			"Patient Encounter": {
 				"custom_chief_complaint": {"fieldtype": "Long Text"},
 			},
