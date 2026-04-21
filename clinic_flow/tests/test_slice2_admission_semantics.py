@@ -126,6 +126,30 @@ class TestSlice2AdmissionSemantics(IntegrationTestCase):
         self.assertEqual(session.non_review_load_count, 1)
         self.assertEqual(session.review_load_count, 0)
 
+    # ── Healthcare appointment creation tests ─────────────────────────────
+
+    def test_confirm_booking_creates_patient_appointment_without_queue_code_lookup(self):
+        # Appointment Type has no custom_queue_code — the active admission path
+        # must not require queue-code mapping to create an appointment.
+        self.make_appointment_type()
+
+        # Use a session backed by a practitioner with a department so that
+        # Healthcare's Patient Appointment validation passes.
+        queue_session = self.make_queue_session_with_department()
+        patient = self.make_patient()
+
+        result = frappe.get_attr("clinic_flow.api.admission.confirm_booking")(
+            queue_session=queue_session.name,
+            patient=patient.name,
+            channel="walkin",
+            load_class="non_review_load",
+        )
+
+        entry = frappe.get_doc("Queue Entry", result["queue_entry"])
+        self.assertTrue(entry.appointment, "Queue Entry should have a linked Patient Appointment")
+        appointment = frappe.get_doc("Patient Appointment", entry.appointment)
+        self.assertEqual(appointment.patient, patient.name)
+
     # ── canonical return value tests ──────────────────────────────────────
 
     def test_confirm_booking_returns_channel_and_load_class(self):
@@ -161,7 +185,7 @@ class TestSlice2AdmissionSemantics(IntegrationTestCase):
         }).insert(ignore_permissions=True)
 
     def make_service_point(self):
-        code = f"T{frappe.generate_hash(length=3).upper()}"
+        code = f"T{frappe.generate_hash(length=6).upper()}"
         return frappe.get_doc({
             "doctype": "Service Point",
             "queue_code": code,
@@ -203,4 +227,44 @@ class TestSlice2AdmissionSemantics(IntegrationTestCase):
             "appointment_type": f"Standard Consult {tag}",
             "allow_booking_for": "Practitioner",
             "default_duration": 15,
+        }).insert(ignore_permissions=True)
+
+    def make_queue_session_with_department(self):
+        """Queue session backed by a practitioner with a department so that
+        Healthcare's Patient Appointment validation passes."""
+        tag = frappe.generate_hash(length=6)
+        sp = self.make_service_point()
+
+        dept = frappe.get_doc({
+            "doctype": "Medical Department",
+            "department": f"S2 Dept {tag}",
+            "custom_dept_abbr": f"S{tag[:3].upper()}",
+        }).insert(ignore_permissions=True)
+
+        consulting_item = (
+            frappe.db.get_single_value("Healthcare Settings", "op_consulting_charge_item")
+            or "Outpatient Consultation Fee"
+        )
+        practitioner = frappe.get_doc({
+            "doctype": "Healthcare Practitioner",
+            "first_name": f"PracS2 {tag}",
+            "gender": "Male",
+            "department": dept.name,
+            "op_consulting_charge_item": consulting_item,
+            "op_consulting_charge": 500,
+        }).insert(ignore_permissions=True)
+
+        return frappe.get_doc({
+            "doctype": "Queue Session",
+            "session_name": f"S2 Full Session {tag}",
+            "practitioner": practitioner.name,
+            "session_date": today(),
+            "start_time": "09:00:00",
+            "end_time": "12:00:00",
+            "service_point": sp.name,
+            "dept_abbr": sp.queue_code,
+            "session_capacity": 20,
+            "planned_capacity": 20,
+            "stretch_capacity": 22,
+            "status": "Scheduled",
         }).insert(ignore_permissions=True)

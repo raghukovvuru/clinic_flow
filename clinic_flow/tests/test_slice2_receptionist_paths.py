@@ -147,7 +147,7 @@ class TestSlice2ReceptionistPaths(IntegrationTestCase):
         }).insert(ignore_permissions=True)
 
     def make_service_point(self):
-        code = f"P{frappe.generate_hash(length=3).upper()}"
+        code = f"P{frappe.generate_hash(length=6).upper()}"
         return frappe.get_doc({
             "doctype": "Service Point",
             "queue_code": code,
