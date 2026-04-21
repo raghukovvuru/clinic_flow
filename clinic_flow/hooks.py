@@ -17,7 +17,11 @@ scheduler_events = {
 		# Runs every 5 minutes — checks if any session needs pre-booked slots released
 		"*/5 * * * *": [
 			"clinic_flow.queue.scheduler.release_prebooked_slots"
-		]
+		],
+		# Runs at midnight — releases unused phone-protected quota to walk-in capacity
+		"0 0 * * *": [
+			"clinic_flow.queue.scheduler.release_phone_quota_at_midnight"
+		],
 	}
 }
 

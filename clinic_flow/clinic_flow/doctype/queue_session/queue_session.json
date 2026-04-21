@@ -31,6 +31,7 @@
   "weighted_load_total",
   "phone_booked_count",
   "walkin_count",
+  "phone_quota_released",
   "vip_buffer_section",
   "vip_buffer_positions",
   "vip_buffer_used",
@@ -208,6 +209,14 @@
    "fieldtype": "Int",
    "label": "Walk-In Count",
    "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "phone_quota_released",
+   "fieldtype": "Check",
+   "label": "Phone Quota Released",
+   "read_only": 1,
+   "description": "Set to 1 at midnight of the session date when unused phone-protected quota is transferred to walk-in capacity."
   },
   {
    "fieldname": "vip_buffer_section",
