@@ -64,7 +64,7 @@ Key files:
 
 Historical context:
 
-- `appointment_mixin.py` used to participate in the appointment-based queue path, but it is no longer evidence that appointment lifecycle hooks own queue authority.
+- `appointment_mixin.py` used to participate in the appointment-based queue path, but it is historical compatibility only and is no longer evidence that appointment lifecycle hooks own queue authority.
 - token write-back from appointment check-in should be treated as legacy compatibility history, not the active queue-source-of-truth path.
 
 ### 3. Some legacy fields appear orphaned
@@ -111,7 +111,7 @@ The following upstream custom fields are tracked for current compatibility histo
 | --- | --- | --- |
 | `custom_queue_type` | Keep for now | Still central to appointment check-in, slot accounting, legacy compatibility, and receptionist legacy paths. |
 | `custom_queue_token` | Keep for now | Read-only compatibility field in the current runtime; historical appointment check-in write-back debt only. Read by appointment APIs and legacy workspace. |
-| `custom_dept_abbr` | Review | Still referenced in `appointment_mixin.py` as a fallback dept abbreviation source. May become removable once department resolution is fully session-based. |
+| `custom_dept_abbr` | Review / likely debt | No active `clinic_flow` caller found. The old mixin fallback was historical compatibility only and should not be treated as queue-authority evidence. |
 | `custom_original_encounter` | Removed / absent | Removed by patch and asserted absent by `clinic_flow/tests/test_healthcare_compatibility.py`. |
 
 ### Patient Encounter
@@ -141,7 +141,6 @@ These do not appear to be owned by `clinic_flow` and should not be treated as it
 
 Used by:
 
-- [appointment_mixin.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/queue/appointment_mixin.py)
 - [appointments.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/api/appointments.py)
 - [queue.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/api/queue.py)
 - legacy [receptionist_workspace.js](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/clinic_flow/page/receptionist_workspace/receptionist_workspace.js)
@@ -347,7 +346,7 @@ These should become compatibility shims, not primary architecture.
 
 ### Keep but revisit
 
-- `Patient Appointment.custom_dept_abbr`
+- `Patient Appointment.custom_dept_abbr` as compatibility-history only
 
 ### Review for removal
 

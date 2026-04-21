@@ -113,7 +113,6 @@ Queue entries are created by Clinic Flow admission and receptionist flows. Appoi
 ### Legacy appointment path
 
 - `clinic_flow/api/appointments.py`
-- `clinic_flow/queue/scheduler.py`
 
 This path still handles:
 
@@ -122,9 +121,14 @@ This path still handles:
 - appointment booking
 - consultation charge lookup
 - payment + check-in
-- slot release
 
 This is compatibility-critical and must not be casually rewritten, but it no longer owns queue-entry creation or queue identity.
+
+### Midnight phone rollover job
+
+- `clinic_flow/queue/scheduler.py`
+
+This job runs the midnight phone quota rollover. It is separate from the legacy appointment path and does not provide the old slot-release runtime.
 
 ### Queue/session runtime
 

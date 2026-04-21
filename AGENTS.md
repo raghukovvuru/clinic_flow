@@ -201,10 +201,13 @@ Core runtime:
 - `clinic_flow/api/emergency.py`
 - `clinic_flow/api/eta.py`
 - `clinic_flow/api/family.py`
-- `clinic_flow/queue/appointment_mixin.py`
 - `clinic_flow/queue/engine.py`
 - `clinic_flow/queue/service_point.py`
 - `clinic_flow/queue/scheduler.py`
+
+Legacy compatibility:
+
+- `clinic_flow/queue/appointment_mixin.py`
 
 Desk pages:
 
