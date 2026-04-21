@@ -252,20 +252,17 @@ Risk:
 - new site setup or restore may miss required fields
 - upgrade patches may silently conflict with site-local state
 
-### Legacy scheduler behavior still active
+### Legacy scheduler behavior
 
-Still scheduled in:
+Historical note:
 
-- [hooks.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/hooks.py)
-
-Job:
-
-- `clinic_flow.queue.scheduler.release_prebooked_slots`
+- the old prebooked-release job was removed in the cleanup work and is no longer scheduled
+- this section remains only as compatibility history for older site states
 
 Risk:
 
-- unresolved release-window policy continues to influence old appointment behavior
-- future upgrades may keep carrying legacy logic longer than intended
+- older sites may still carry orphaned release-window fields or data
+- future upgrades should not reintroduce the removed prebooked-release scheduler path
 
 ### Dependency metadata drift
 
