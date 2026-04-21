@@ -53,3 +53,8 @@ jspm_packages/
 
 # Aider AI Chat
 .aider*
+
+# Local AI/worktree artifacts
+.claude/
+.worktrees/
+graphify-out/
