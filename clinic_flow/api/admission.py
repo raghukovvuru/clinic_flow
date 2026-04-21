@@ -607,12 +607,7 @@ def confirm_booking(
     # queue_position = token_number at booking time (ETA engine can reorder later)
     queue_position = token_number
 
-    # Canonical vNext semantics are written alongside the legacy queue_type
-    # during the refactor period. Keep the legacy mapping behavior intact for
-    # now so downstream Healthcare / queue code does not change unexpectedly.
-    patient_type = _canonical_patient_type(load_class)
     priority = _canonical_priority(is_special=is_special, emergency=False)
-    queue_type = _legacy_queue_type(channel, patient_type, priority)
 
     # Build token label (for display, e.g. PED-042)
     dept_abbr = resolve_queue_code(
@@ -630,7 +625,6 @@ def confirm_booking(
     patient_appointment = _create_patient_appointment(
         patient=patient,
         session_doc=session_doc,
-        queue_type=queue_type,
         token_number=token_number,
     )
 
@@ -644,7 +638,6 @@ def confirm_booking(
     entry.token_number   = token_number
     entry.token          = token_label
     entry.queue_position = queue_position
-    entry.queue_type     = queue_type
     entry.load_class     = load_class
     _set_canonical_queue_entry_fields(
         entry,
@@ -652,6 +645,8 @@ def confirm_booking(
         load_class=load_class,
         priority=priority,
     )
+    # Compatibility-only field for neighboring runtime paths pending later slices.
+    entry.queue_type     = _compat_queue_type(channel=channel, priority=priority)
     _set_special_queue_entry_fields(entry, is_special=is_special)
     entry.status         = "Booked"
     entry.issued_by      = frappe.session.user
@@ -739,11 +734,7 @@ def _canonical_patient_type(load_class: str) -> str:
 
 
 def _canonical_priority(is_special: bool = False, emergency: bool = False) -> str:
-    """
-    Canonical priority model used by the refactor:
-      normal | special | emergency
-    Phase 1 only dual-writes this alongside legacy queue_type semantics.
-    """
+    """Return canonical admission priority: normal | special | emergency."""
     if emergency:
         return "emergency"
     if is_special:
@@ -751,18 +742,8 @@ def _canonical_priority(is_special: bool = False, emergency: bool = False) -> st
     return "normal"
 
 
-def _legacy_queue_type(channel: str, patient_type: str, priority: str) -> str:
-    """
-    Transitional mapping into the legacy queue_type enum.
-
-    Notes:
-    - Emergency still maps to legacy EMERGENCY because live dequeue semantics
-      depend on it today.
-    - Special no longer maps to EMERGENCY. It inherits the channel-backed legacy
-      queue type and uses canonical `priority` for its distinct behavior.
-    - `patient_type` is accepted here to keep the mapping boundary explicit even
-      though Phase 1 does not use it to derive FOLLOW_UP anymore.
-    """
+def _compat_queue_type(channel: str, priority: str) -> str:
+    """Compatibility-only mapping into legacy queue_type. Not an admission business concept."""
     if priority == "emergency":
         return "EMERGENCY"
     if (channel or "").strip().lower() == "phone":
@@ -837,26 +818,20 @@ def _load_ratio(session: dict) -> float:
 def _create_patient_appointment(
     patient: str,
     session_doc,
-    queue_type: str,
     token_number: int,
 ) -> str | None:
     """
-    Create a Patient Appointment linked to this booking so that Marley Healthcare's
+    Create a Patient Appointment at admission time so that Marley Healthcare's
     standard workflows (fee validity, check-in, sales invoice) remain functional.
+
+    Uses standard Healthcare fields. Does not depend on queue-code custom fields
+    or queue-type taxonomy on the appointment record.
 
     Returns the new Patient Appointment name, or None on failure (non-blocking).
     """
-    # Resolve Appointment Type from queue_type code
-    code_map = {"PRE_BOOKED": "PRE", "WALK_IN": "WLK", "FOLLOW_UP": "FLW", "EMERGENCY": "EMR"}
-    code = code_map.get(queue_type)
-    appointment_type = None
-    if code:
-        appointment_type = frappe.db.get_value(
-            "Appointment Type", {"custom_queue_code": code}, "name"
-        )
-    if not appointment_type:
-        result = frappe.db.sql("SELECT name FROM `tabAppointment Type` LIMIT 1")
-        appointment_type = result[0][0] if result else None
+    # Prefer any available appointment type; Clinic Flow does not require a queue-code mapping.
+    result = frappe.db.sql("SELECT name FROM `tabAppointment Type` LIMIT 1")
+    appointment_type = result[0][0] if result else None
 
     if not appointment_type:
         frappe.log_error(
@@ -895,7 +870,6 @@ def _create_patient_appointment(
             "appointment_time":              appt_time,
             "department":                    dept,
             "company":                       company,
-            "custom_queue_type":             queue_type,
             "duration":                      1,
             # Tells Healthcare to skip strict time-range overlap check
             "appointment_based_on_check_in": 1,

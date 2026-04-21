@@ -285,7 +285,23 @@ Slice 1 landed on this branch. These are now locked operational facts:
 
 ---
 
-## 9. Architectural Truths To Preserve
+## 9. Slice 2 Admission Update
+
+Slice 2 landed on this branch. These are now locked admission facts:
+
+- Active admission behavior is expressed in `channel`, `load_class`, token reservation, and `Service Point` identity. Not `queue_type`.
+- The receptionist dashboard preserves three intake paths:
+  - phone availability-first
+  - phone direct / lookup-assisted booking
+  - walk-in token-first
+- `Patient` and `Patient Appointment` are still created at admission time.
+- `_compat_queue_type()` writes `Queue Entry.queue_type` only as a compatibility field for neighboring runtime paths pending later slices.
+- Healthcare appointment creation no longer depends on `Appointment Type.custom_queue_code` or queue-type taxonomy. It uses any available appointment type.
+- `custom_queue_type` is no longer written onto new `Patient Appointment` records.
+
+---
+
+## 10. Architectural Truths To Preserve
 
 These are the current branch truths that docs and code should agree on:
 
@@ -296,6 +312,9 @@ These are the current branch truths that docs and code should agree on:
 - `token_number` plus display-token composition is the preferred token model
 - `priority` is distinct from legacy `queue_type`
 - `Patient Appointment` is an integration anchor, not a queue-authority object (Slice 1 locked)
+- active admission logic is expressed through `channel`, `load_class`, and `Service Point` — not `queue_type` (Slice 2 locked)
+- `queue_type` on `Queue Entry` is a compatibility field only — not the active admission model (Slice 2 locked)
+- Healthcare appointment creation at admission time does not depend on queue-code custom field mapping (Slice 2 locked)
 - patch-managed compatibility with Healthcare matters as much as code changes
 
 ---
