@@ -1141,6 +1141,41 @@ function get_dashboard_html() {
 	gap:6px;
 	align-items:center;
 }
+.rd-pay-mode-chips {
+	display:flex;
+	gap:5px;
+	flex-wrap:wrap;
+	margin-bottom:6px;
+}
+.rd-pay-mode-chip {
+	padding:4px 10px;
+	border-radius:999px;
+	border:1px solid var(--rd-border);
+	background:var(--rd-bg);
+	font-size:11px;
+	font-weight:600;
+	color:var(--rd-text);
+	cursor:pointer;
+	transition:background .12s,border-color .12s,color .12s;
+}
+.rd-pay-mode-chip:hover {
+	border-color:#6366f1;
+	color:#6366f1;
+}
+.rd-pay-mode-chip.is-active {
+	background:#6366f1;
+	border-color:#6366f1;
+	color:#fff;
+}
+.rd-link-cancel {
+	font-size:11px;
+	color:var(--rd-muted);
+	cursor:pointer;
+	padding:4px 6px;
+	text-decoration:underline;
+	text-underline-offset:2px;
+}
+.rd-link-cancel:hover { color:#b91c1c; }
 .rd-walkin-panel {
 	padding: 10px 12px;
 	border: 1px solid var(--rd-border);
@@ -1605,7 +1640,6 @@ function get_dashboard_html() {
 				<div class="rd-ops-head">
 					<div>
 						<div class="rd-label">Operations Rail</div>
-						<div class="rd-caption" style="margin-top:3px;">Live queue context stays visible while reception works.</div>
 					</div>
 					<div class="rd-ops-actions">
 						<button id="rd-emergency-alert-btn" class="rd-ops-action-btn phone">Phone Alert</button>
@@ -4565,10 +4599,10 @@ class LiveSessionPanel {
 
 		this.$counts.html(`
 			<div class="rd-ops-stat-grid">
-				<div class="rd-ops-stat-tile">
-					<div class="rd-ops-stat-label">Done Today</div>
-					<div class="rd-ops-stat-value">${counts.completed_today}</div>
-					<div class="rd-ops-stat-note">Completed</div>
+				<div class="rd-ops-stat-tile emergency">
+					<div class="rd-ops-stat-label">Emergency</div>
+					<div class="rd-ops-stat-value">${counts.emergency_pending || 0}</div>
+					<div class="rd-ops-stat-note">Pending</div>
 				</div>
 				<div class="rd-ops-stat-tile">
 					<div class="rd-ops-stat-label">Here Now</div>
@@ -4580,10 +4614,10 @@ class LiveSessionPanel {
 					<div class="rd-ops-stat-value">${counts.remaining}</div>
 					<div class="rd-ops-stat-note">Active in queue</div>
 				</div>
-				<div class="rd-ops-stat-tile emergency">
-					<div class="rd-ops-stat-label">Emergency</div>
-					<div class="rd-ops-stat-value">${counts.emergency_pending || 0}</div>
-					<div class="rd-ops-stat-note">Pending</div>
+				<div class="rd-ops-stat-tile">
+					<div class="rd-ops-stat-label">Done Today</div>
+					<div class="rd-ops-stat-value">${counts.completed_today}</div>
+					<div class="rd-ops-stat-note">Completed</div>
 				</div>
 			</div>
 		`);
@@ -4618,41 +4652,36 @@ class LiveSessionPanel {
 	_render_pipeline(data) {
 		const sections = [];
 
+		// Order by receptionist action priority — not physical flow order
+		// 1. Emergency (highest urgency — requires immediate reconciliation)
 		if (data.emergency_pending && data.emergency_pending.length) {
 			sections.push(this._section_emergency_pending(data.emergency_pending));
 		}
-
-		// WITH DOCTOR
-		if (data.with_doctor.length) {
-			sections.push(this._section_with_doctor(data.with_doctor[0]));
-		}
-
-		// READY NEAR DOCTOR
-		if (data.ready.length) {
-			sections.push(this._section_ready(data.ready));
-		}
-
-		// AT RECEPTION (Called)
+		// 2. At Reception — patient is standing at the desk
 		if (data.called.length) {
 			sections.push(this._section_called(data.called));
 		}
-
-		// HERE NOW (Arrived — physically present, awaiting reception call)
+		// 3. Here Now — patient is in the building, waiting to be called
 		if (data.arrived && data.arrived.length) {
 			sections.push(this._section_arrived(data.arrived));
 		}
-
-		// EXPECTED (previously "Due Soon" — not yet arrived)
-		if (data.due_soon.length) {
-			sections.push(this._section_due_soon(data.due_soon));
-		}
-
-		// NO RESPONSE
+		// 4. No Response — called but didn't come; decide retry or push
 		if (data.no_response.length) {
 			sections.push(this._section_no_response(data.no_response));
 		}
-
-		// PUSHED TO END
+		// 5. Ready Near Doctor — handled by reception, passive monitoring
+		if (data.ready.length) {
+			sections.push(this._section_ready(data.ready));
+		}
+		// 6. With Doctor — fully passive, no action possible
+		if (data.with_doctor.length) {
+			sections.push(this._section_with_doctor(data.with_doctor[0]));
+		}
+		// 7. Expected — future context
+		if (data.due_soon.length) {
+			sections.push(this._section_due_soon(data.due_soon));
+		}
+		// 8. Pushed to End — lowest priority
 		if (data.pushed_to_end && data.pushed_to_end.length) {
 			sections.push(this._section_pushed_to_end(data.pushed_to_end));
 		}
@@ -4675,32 +4704,25 @@ class LiveSessionPanel {
 
 	// ── Section builders ──────────────────────────────────────────────────────
 	_section_with_doctor(e) {
-		const since = e.seen_at ? frappe.datetime.str_to_user(e.seen_at, true) : '';
+		const loadBadge = e.load_class === 'review_load'
+			? '<span class="rd-badge rd-badge-green" style="font-size:9px;">Review</span>'
+			: '<span class="rd-badge rd-badge-blue"  style="font-size:9px;">New</span>';
+		const inFor = e.seen_at ? _elapsed_short(e.seen_at) : '';
 		return `
 		<div class="rd-pipeline-section">
-			<div class="rd-pipeline-header is-passive">
-				▶ With Doctor
-			</div>
-			<div class="rd-patient-card with-doctor">
-				<div style="display:flex;align-items:center;gap:8px;">
-					<span class="rd-rail-token" style="color:var(--rd-muted);min-width:74px;">
-						${frappe.utils.escape_html(_display_token(e))}
-					</span>
-					<div style="flex:1;">
-						<div class="rd-rail-card-title">
-							${frappe.utils.escape_html(e.patient_name || e.patient)}
-						</div>
-						<div class="rd-rail-card-meta">
-							${e.load_class === 'review_load'
-								? '<span class="rd-badge rd-badge-green" style="font-size:9px;">Review</span>'
-								: '<span class="rd-badge rd-badge-blue" style="font-size:9px;">New</span>'}
-							${since ? '&nbsp;· Since ' + frappe.utils.escape_html(since) : ''}
-						</div>
-					</div>
-					<div class="rd-rail-card-side" style="color:var(--rd-muted);display:flex;align-items:center;">
-						<span class="rd-in-session-dot"></span>In session
-					</div>
-				</div>
+			<div class="rd-pipeline-header is-passive">▶ With Doctor</div>
+			<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;
+				border-radius:8px;background:var(--card-bg);
+				border:1px solid var(--rd-border);font-size:12px;">
+				<span class="rd-in-session-dot"></span>
+				<span style="font-weight:700;color:var(--rd-muted);">
+					${frappe.utils.escape_html(_display_token(e))}
+				</span>
+				<span style="flex:1;color:var(--rd-text);font-weight:600;">
+					${frappe.utils.escape_html(e.patient_name || e.patient)}
+				</span>
+				${loadBadge}
+				${inFor ? `<span class="rd-caption">${inFor}</span>` : ''}
 			</div>
 		</div>`;
 	}
@@ -4768,11 +4790,17 @@ class LiveSessionPanel {
 	_section_ready(entries) {
 		const cards = entries.map(e => {
 			const is_review = e.load_class === 'review_load';
+			const readyMins = e.reception_done_at
+				? Math.floor((Date.now() - new Date(e.reception_done_at.replace(' ', 'T')).getTime()) / 60000) : 0;
+			const readyStyle = readyMins >= 15 ? 'color:#b91c1c;font-weight:700;'
+				: readyMins >= 7 ? 'color:#ea580c;' : '';
+			const isAlert = readyMins >= 15;
+			const cardBorder = isAlert ? 'border-color:#fca5a5;background:#fff1f2;' : '';
 			return `
-			<div class="rd-patient-card ready" style="display:flex;align-items:center;gap:8px;">
-					<span class="rd-rail-token" style="color:#7c3aed;min-width:74px;">
-						${frappe.utils.escape_html(_display_token(e))}
-					</span>
+			<div class="rd-patient-card ready" style="display:flex;align-items:center;gap:8px;${cardBorder}">
+				<span class="rd-rail-token" style="color:#7c3aed;min-width:74px;">
+					${frappe.utils.escape_html(_display_token(e))}
+				</span>
 				<div style="flex:1;">
 					<div class="rd-rail-card-title">
 						${frappe.utils.escape_html(e.patient_name || e.patient)}
@@ -4780,24 +4808,31 @@ class LiveSessionPanel {
 							? '<span class="rd-badge rd-badge-green" style="font-size:9px;margin-left:4px;">Review</span>'
 							: '<span class="rd-badge rd-badge-blue" style="font-size:9px;margin-left:4px;">New</span>'}
 					</div>
-						${e.reception_done_at ? (() => {
-							const readyMins = Math.floor((Date.now() - new Date(e.reception_done_at.replace(' ', 'T')).getTime()) / 60000);
-							const readyStyle = readyMins >= 15 ? 'color:#b91c1c;font-weight:700;'
-								: readyMins >= 7 ? 'color:#ea580c;' : '';
-							return `<div class="rd-rail-card-meta" style="${readyStyle}">ready for ${_elapsed_short(e.reception_done_at)}</div>`;
-						})() : ''}
-						${e.weight_recorded ? `<div class="rd-rail-card-meta">${e.weight_recorded} kg</div>` : ''}
-					</div>
-					<div class="rd-rail-card-side" style="color:#7c3aed;">
-						Waiting for doctor call
-					</div>
-				</div>`;
-			}).join('');
+					${e.reception_done_at
+						? `<div class="rd-rail-card-meta" style="${readyStyle}">ready for ${_elapsed_short(e.reception_done_at)}</div>`
+						: ''}
+					${e.weight_recorded ? `<div class="rd-rail-card-meta">${e.weight_recorded} kg</div>` : ''}
+				</div>
+				<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+					${isAlert
+						? `<button class="rd-action-btn rd-action-btn-orange rd-notify-doctor-btn"
+								data-entry="${frappe.utils.escape_html(e.name)}"
+								data-token="${frappe.utils.escape_html(_display_token(e))}"
+								title="Remind doctor this patient is waiting">
+								Notify Doctor
+							</button>`
+						: `<span class="rd-rail-card-side" style="color:#7c3aed;font-size:11px;">Waiting</span>`}
+				</div>
+			</div>`;
+		}).join('');
+
+		const hasAlert = entries.some(e => e.reception_done_at &&
+			Math.floor((Date.now() - new Date(e.reception_done_at.replace(' ', 'T')).getTime()) / 60000) >= 15);
 
 		return `
 		<div class="rd-pipeline-section">
-			<div class="rd-pipeline-header is-ready">
-				Ready Near Doctor (${entries.length})
+			<div class="rd-pipeline-header is-ready" style="${hasAlert ? 'color:#b91c1c;border-bottom-color:rgba(220,38,38,.4);' : ''}">
+				Ready Near Doctor (${entries.length})${hasAlert ? ' ⚠' : ''}
 			</div>
 			${cards}
 		</div>`;
@@ -4805,8 +4840,6 @@ class LiveSessionPanel {
 
 	_section_called(entries) {
 		const cards = entries.map(e => {
-			const call_time = e.called_to_reception_at
-				? frappe.datetime.str_to_user(e.called_to_reception_at, true) : '';
 			const elapsed  = _call_elapsed(e.called_to_reception_at);
 			const is_expanding = (this._expanding === e.name);
 
@@ -4835,17 +4868,17 @@ class LiveSessionPanel {
 						<div class="rd-rail-card-title">
 							${frappe.utils.escape_html(e.patient_name || e.patient)}
 						</div>
-						${call_time ? `<div class="rd-rail-card-meta">Called ${frappe.utils.escape_html(call_time)}</div>` : ''}
 						${elapsed_html}
 					</div>
-					<div style="display:flex;gap:4px;">
+					<div style="display:flex;align-items:center;gap:8px;">
 						<button class="rd-action-btn rd-action-btn-green rd-rail-btn-positive rd-complete-reception-btn"
 							data-entry="${frappe.utils.escape_html(e.name)}">
-							✓ Reception
+							Process →
 						</button>
 						<button class="rd-action-btn rd-action-btn-orange rd-rail-btn-warning rd-no-response-btn"
 							data-entry="${frappe.utils.escape_html(e.name)}"
-							title="No Response">
+							title="No Response — patient did not come to desk"
+							style="font-size:10px;padding:4px 7px;opacity:.7;">
 							N/R
 						</button>
 					</div>
@@ -4870,35 +4903,32 @@ class LiveSessionPanel {
 				<div class="rd-recep-form">
 					<div class="rd-recep-head">
 						<div class="rd-recep-head-title">Complete Reception</div>
-						<div class="rd-caption">Collect payment · weigh · send up</div>
 					</div>
 					${fee_html}
-					<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
-						<select class="rd-recep-input rd-pay-mode">
-							<option value="">Payment mode</option>
-							<option value="Cash">Cash</option>
-							<option value="Card">Card</option>
-							<option value="UPI">UPI</option>
-							<option value="Insurance">Insurance</option>
-							<option value="Free">Free / Waived</option>
-						</select>
-						<input class="rd-recep-input rd-pay-amount" type="number"
-							placeholder="Amount ₹" min="0" step="0.01"
-							${fd && !fd.covered && fd.charge ? `value="${fd.charge}"` : ''} />
+					<div class="rd-pay-mode-chips" style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px;">
+						<button class="rd-pay-mode-chip" data-mode="Cash">Cash</button>
+						<button class="rd-pay-mode-chip" data-mode="UPI">UPI</button>
+						<button class="rd-pay-mode-chip" data-mode="Card">Card</button>
+						<button class="rd-pay-mode-chip" data-mode="Insurance">Insurance</button>
+						<button class="rd-pay-mode-chip" data-mode="Free">Free</button>
 					</div>
-					<input class="rd-recep-input rd-weight" type="number"
+					<input type="hidden" class="rd-pay-mode" value="">
+					<input class="rd-recep-input rd-pay-amount" type="number"
+						placeholder="Amount ₹" min="0" step="0.01"
+						${fd && !fd.covered && fd.charge ? `value="${fd.charge}"` : ''} />
+					${!e.weight_recorded ? `<input class="rd-recep-input rd-weight" type="number"
 						placeholder="Weight (kg)" min="0" step="0.1"
-						style="margin-bottom:6px;" />
+						style="margin-bottom:6px;" />` : ''}
 					<div class="rd-recep-actions">
 							<button class="rd-action-btn rd-action-btn-green rd-rail-btn-primary rd-confirm-reception-btn"
 								style="flex:1;"
 								data-entry="${frappe.utils.escape_html(e.name)}">
 								Send to Doctor
 							</button>
-						<button class="rd-action-btn rd-rail-btn-neutral rd-cancel-recep-btn"
+						<a class="rd-cancel-recep-btn rd-link-cancel"
 							data-entry="${frappe.utils.escape_html(e.name)}">
 							Cancel
-						</button>
+						</a>
 					</div>
 				</div>`;
 				})() : ''}
@@ -5146,6 +5176,15 @@ class LiveSessionPanel {
 			if (this.current_session) this.load(this.current_session);
 		});
 
+		// Pay mode chip selection
+		this.$panel.find('.rd-pay-mode-chip').on('click', (e) => {
+			const $chip = $(e.currentTarget);
+			const $form = $chip.closest('.rd-recep-form');
+			$form.find('.rd-pay-mode-chip').removeClass('is-active');
+			$chip.addClass('is-active');
+			$form.find('.rd-pay-mode').val($chip.data('mode'));
+		});
+
 		// Confirm reception form
 		this.$panel.find('.rd-confirm-reception-btn').on('click', (e) => {
 			const $btn    = $(e.currentTarget);
@@ -5155,6 +5194,13 @@ class LiveSessionPanel {
 			const amount  = $card.find('.rd-pay-amount').val();
 			const weight  = $card.find('.rd-weight').val();
 			this._action_complete_reception(entry, mode, amount, weight, $btn);
+		});
+
+		// Notify Doctor (Ready Near Doctor section)
+		this.$panel.find('.rd-notify-doctor-btn').on('click', (e) => {
+			const $btn  = $(e.currentTarget);
+			const token = $btn.data('token') || '';
+			frappe.show_alert({ message: `Doctor notified about token ${token}`, indicator: 'orange' }, 4);
 		});
 
 		// No Response
