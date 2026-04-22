@@ -22,7 +22,6 @@ This note audits how `clinic_flow` extends upstream `healthcare`, with focus on:
 
 The app is partly modernized:
 
-- `extend_doctype_class` is used in [hooks.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/hooks.py)
 - backend recommendation and queue logic are increasingly owned by `clinic_flow`
 
 But compatibility is still weaker than it should be because:
@@ -59,10 +58,14 @@ Several core flows still read/write:
 
 Key files:
 
-- [appointment_mixin.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/queue/appointment_mixin.py)
 - [appointments.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/api/appointments.py)
 - [admission.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/api/admission.py)
 - [queue.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/api/queue.py)
+
+Historical context:
+
+- `appointment_mixin.py` used to participate in the appointment-based queue path, but it is historical compatibility only and is no longer evidence that appointment lifecycle hooks own queue authority.
+- token write-back from appointment check-in should be treated as legacy compatibility history, not the active queue-source-of-truth path.
 
 ### 3. Some legacy fields appear orphaned
 
@@ -70,15 +73,30 @@ The live site still contains custom fields that are not referenced in `clinic_fl
 
 These are likely debt unless another app still relies on them.
 
-## Live Custom Field Inventory
+### 4. Old prebooked-release knobs are orphaned runtime debt
 
-The following upstream custom fields exist on the current site:
+The older prebooked-release model left behind admin/schema state that is not part of the active post-Slice-3 runtime.
+
+The active midnight rollover now uses `phone_pct` plus `phone_quota_released` to move unused phone capacity into walk-in capacity.
+
+`release_minutes_before` still matters in legacy appointment availability / slot-release logic elsewhere, but it is not the midnight rollover mechanism.
+
+Legacy/orphaned knobs to treat as debt:
+
+- `Slot Partition Config.release_hours_before`
+- `Queue Session.prebooked_released`
+
+These fields may still exist on a site from earlier transitions, but they should not be treated as active queue or booking controls.
+
+## Compatibility Field Inventory
+
+The following upstream custom fields are tracked for current compatibility history and live usage. Rows marked "Removed / absent" are already gone on the current runtime and are kept here only for audit history.
 
 ### Appointment Type
 
 | Field | Status | Why |
 | --- | --- | --- |
-| `custom_queue_code` | Keep for now | Still used to resolve appointment types from legacy queue codes in `admission.py`, `appointments.py`, `queue.py`, and documented in `engine.py`. |
+| `custom_queue_code` | Keep for now | Still used by the legacy appointment API and queue encounter fallback. The active admission path no longer depends on it. |
 | `custom_queue_type` | Review / likely debt | Present on site, but no active code references found in `clinic_flow`. Looks like leftover v1 modeling. |
 
 ### Medical Department
@@ -92,17 +110,17 @@ The following upstream custom fields exist on the current site:
 | Field | Status | Why |
 | --- | --- | --- |
 | `custom_queue_type` | Keep for now | Still central to appointment check-in, slot accounting, legacy compatibility, and receptionist legacy paths. |
-| `custom_queue_token` | Keep for now | Still written back by appointment check-in flow and read by appointment APIs and legacy workspace. |
-| `custom_dept_abbr` | Review | Still referenced in `appointment_mixin.py` as a fallback dept abbreviation source. May become removable once department resolution is fully session-based. |
-| `custom_original_encounter` | Review / likely debt | Present on site, but no active code references found in `clinic_flow`. |
+| `custom_queue_token` | Keep for now | Read-only compatibility field in the current runtime; historical appointment check-in write-back debt only. Read by appointment APIs and legacy workspace. |
+| `custom_dept_abbr` | Review / likely debt | No active `clinic_flow` caller found. The old mixin fallback was historical compatibility only and should not be treated as queue-authority evidence. |
+| `custom_original_encounter` | Removed / absent | Removed by patch and asserted absent by `clinic_flow/tests/test_healthcare_compatibility.py`. |
 
 ### Patient Encounter
 
 | Field | Status | Why |
 | --- | --- | --- |
 | `custom_chief_complaint` | Keep for now | Still used by doctor workspace APIs and encounter save/load mapping. |
-| `custom_awaiting_lab_return` | Review / likely debt | Present on site, but no active code references found in `clinic_flow`. |
-| `custom_lab_return_queued` | Review / likely debt | Present on site, but no active code references found in `clinic_flow`. |
+| `custom_awaiting_lab_return` | Removed / absent | Removed by patch and asserted absent by `clinic_flow/tests/test_healthcare_compatibility.py`. |
+| `custom_lab_return_queued` | Removed / absent | Removed by patch and asserted absent by `clinic_flow/tests/test_healthcare_compatibility.py`. |
 
 ### Patient
 
@@ -123,7 +141,6 @@ These do not appear to be owned by `clinic_flow` and should not be treated as it
 
 Used by:
 
-- [appointment_mixin.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/queue/appointment_mixin.py)
 - [appointments.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/api/appointments.py)
 - [queue.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/api/queue.py)
 - legacy [receptionist_workspace.js](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/clinic_flow/page/receptionist_workspace/receptionist_workspace.js)
@@ -139,26 +156,25 @@ Current role:
 
 Used by:
 
-- [appointment_mixin.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/queue/appointment_mixin.py)
 - [appointments.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/api/appointments.py)
 - legacy [receptionist_workspace.js](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/clinic_flow/page/receptionist_workspace/receptionist_workspace.js)
 
 Current role:
 
-- appointment check-in writes back queue token
+- read-only compatibility field; historical appointment check-in write-back debt only
 - API reads token for status/printing compatibility
 
 #### `Appointment Type.custom_queue_code`
 
 Used by:
 
-- [admission.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/api/admission.py)
 - [appointments.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/api/appointments.py)
 - [queue.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/api/queue.py)
 
 Current role:
 
-- maps legacy queue type semantics to Appointment Type records
+- legacy appointment API lookup and queue encounter fallback
+- not part of the active admission path
 
 #### `Medical Department.custom_dept_abbr`
 
@@ -166,11 +182,11 @@ Used by:
 
 - [admission.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/api/admission.py)
 - [queue.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/api/queue.py)
-- [appointment_mixin.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/queue/appointment_mixin.py)
 
 Current role:
 
-- compatibility department abbreviation lookup
+- compatibility department abbreviation lookup for live admission and queue code resolution
+- historical appointment-path fallback only; do not read this as a queue-authority hook
 
 #### `Patient Encounter.custom_chief_complaint`
 
@@ -240,20 +256,17 @@ Risk:
 - new site setup or restore may miss required fields
 - upgrade patches may silently conflict with site-local state
 
-### Legacy scheduler behavior still active
+### Legacy scheduler behavior
 
-Still scheduled in:
+Historical note:
 
-- [hooks.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/hooks.py)
-
-Job:
-
-- `clinic_flow.queue.scheduler.release_prebooked_slots`
+- the old prebooked-release job was removed in the cleanup work and is no longer scheduled
+- this section remains only as compatibility history for older site states
 
 Risk:
 
-- unresolved release-window policy continues to influence old appointment behavior
-- future upgrades may keep carrying legacy logic longer than intended
+- older sites may still carry orphaned release-window fields or data
+- future upgrades should not reintroduce the removed prebooked-release scheduler path
 
 ### Dependency metadata drift
 
@@ -264,9 +277,7 @@ In:
 Current dependency metadata says:
 
 - `frappe = ">=16.0.0,<17.0.0"`
-- `health = ">=16.0.0,<17.0.0"`
-
-This should be reviewed, because `health` may not be the correct app key if the app dependency is actually `healthcare`.
+- `healthcare = ">=16.0.0,<17.0.0"`
 
 ## What To Do Next
 
@@ -317,6 +328,7 @@ Longer term, move away from:
 - `custom_queue_type`
 - `custom_queue_token`
 - `custom_queue_code`
+- the older prebooked-release knobs (`release_hours_before`, `prebooked_released`)
 
 as the main semantic drivers.
 
@@ -334,7 +346,7 @@ These should become compatibility shims, not primary architecture.
 
 ### Keep but revisit
 
-- `Patient Appointment.custom_dept_abbr`
+- `Patient Appointment.custom_dept_abbr` as compatibility-history only
 
 ### Review for removal
 

@@ -1,3 +1,10 @@
+"""
+Legacy appointment-centric receptionist compatibility APIs.
+
+Active receptionist flow lives in admission.py, arrival.py, and
+queue.complete_reception(). Do not add new product behavior here.
+"""
+
 import math
 import frappe
 from frappe import _
@@ -455,7 +462,7 @@ def record_payment_and_checkin(
 	doc.status = "Checked In"
 	doc.save(ignore_permissions=True)
 
-	# Token is written by QueueMixin.on_update — read it back after save
+	# Read the linked Queue Entry token back for legacy callers after save.
 	token = frappe.db.get_value("Patient Appointment", appointment, "custom_queue_token")
 	prac_name = frappe.db.get_value(
 		"Healthcare Practitioner", doc.practitioner, "practitioner_name"

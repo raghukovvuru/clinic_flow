@@ -38,6 +38,12 @@ The preferred queue identity is `Service Point`.
 
 `Service Point` gives the app a durable queue code and display identity that is no longer tied only to `Medical Department.custom_dept_abbr`.
 
+Healthcare custom-field mapping is split across doctypes:
+
+- `Appointment Type`: `custom_queue_code` and historically `custom_queue_type`
+- `Medical Department`: `custom_dept_abbr`
+- `Patient Appointment`: `custom_queue_type`, `custom_queue_token`, `custom_dept_abbr`
+
 Resolution order for queue code reads:
 
 1. `Queue Session.service_point -> Service Point.queue_code`
@@ -98,9 +104,7 @@ Still-active custom fields include:
 - `custom_queue_token`
 - `custom_dept_abbr`
 
-The check-in flow still uses:
-
-`Patient Appointment.status = "Checked In"` -> `QueueMixin.on_update()` -> create queue entry -> write back token
+Queue entries are created by Clinic Flow admission and receptionist flows. Appointment save/check-in behavior is only a compatibility path and must not be treated as the source of queue authority.
 
 ---
 
@@ -109,8 +113,6 @@ The check-in flow still uses:
 ### Legacy appointment path
 
 - `clinic_flow/api/appointments.py`
-- `clinic_flow/queue/appointment_mixin.py`
-- `clinic_flow/queue/scheduler.py`
 
 This path still handles:
 
@@ -119,9 +121,14 @@ This path still handles:
 - appointment booking
 - consultation charge lookup
 - payment + check-in
-- slot release
 
-This is compatibility-critical and must not be casually rewritten.
+This is compatibility-critical and must not be casually rewritten, but it no longer owns queue-entry creation or queue identity.
+
+### Midnight phone rollover job
+
+- `clinic_flow/queue/scheduler.py`
+
+This job runs the midnight phone quota rollover. It is separate from the legacy appointment path and does not provide the old slot-release runtime.
 
 ### Queue/session runtime
 
@@ -280,7 +287,7 @@ Slice 1 landed on this branch. These are now locked operational facts:
 - `Queue Session` and `Queue Entry` are the operational source of truth for all receptionist and queue operations.
 - `Patient Appointment` is an integration anchor — it exists so Healthcare billing, fee-validity, and encounter flows work, but it must not create queue entries or define queue identity.
 - `Service Point` is the canonical queue identity. `Service Point.queue_code` is the canonical token prefix.
-- Healthcare appointment lifecycle hooks (via `extend_doctype_class`) no longer participate in queue-entry creation.
+- Healthcare appointment lifecycle hooks do not participate in queue-entry creation.
 - Healthcare queue-identity custom fields (`custom_queue_type`, `custom_queue_token`, `custom_dept_abbr` on Appointment Type, Medical Department, Patient Appointment) are no longer managed by the Clinic Flow patch. They remain on existing sites as compatibility debt.
 
 ---
@@ -297,7 +304,7 @@ Slice 2 landed on this branch. These are now locked admission facts:
 - `Patient` and `Patient Appointment` are still created at admission time.
 - `_compat_queue_type()` writes `Queue Entry.queue_type` only as a compatibility field for neighboring runtime paths pending later slices.
 - Healthcare appointment creation no longer depends on `Appointment Type.custom_queue_code` or queue-type taxonomy. It uses any available appointment type.
-- `custom_queue_type` is no longer written onto new `Patient Appointment` records.
+- `custom_queue_type` is no longer written onto new `Patient Appointment` records by the active admission path.
 
 ---
 
@@ -310,7 +317,7 @@ Slice 3 landed on this branch. These are now locked receptionist boundary facts:
 - Clinic Flow queue state is the authority. The Queue Entry status advances first. Healthcare appointment sync is downstream, side-effect-bounded, and must not drive queue decisions.
 - Fee-validity side effects are triggered by the Healthcare sync adapter (`_checkin_patient_appointment`) via `Patient Appointment.save()`, not by direct Clinic Flow logic.
 - Unused phone-protected quota releases to walk-in capacity at midnight of the session date (`release_phone_quota_at_midnight`). After midnight, same-day phone quota protection no longer applies.
-- Legacy appointment payment/check-in APIs (`record_payment_and_checkin`) are compatibility-only. Do not treat them as active receptionist paths or extend them with new business logic.
+- Legacy appointment payment/check-in APIs are compatibility-only. Do not treat them as active receptionist paths or extend them with new business logic.
 
 ---
 
