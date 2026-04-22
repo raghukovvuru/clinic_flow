@@ -24,6 +24,11 @@ class TestPostSliceLegacyCleanup(IntegrationTestCase):
 
 
 class TestPostSliceLegacyCleanupSourceMarkers(unittest.TestCase):
+	def test_queue_mixin_module_is_retired(self):
+		source = Path(__file__).resolve().parents[1] / "queue" / "appointment_mixin.py"
+
+		self.assertFalse(source.exists())
+
 	def test_appointments_module_keeps_legacy_compatibility_marker(self):
 		source = Path(__file__).resolve().parents[1] / "api" / "appointments.py"
 
