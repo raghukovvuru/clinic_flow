@@ -1,3 +1,7 @@
+// Legacy compatibility page.
+// Active receptionist operations live in receptionist_dashboard.
+// Do not extend this page for new product work.
+
 frappe.pages['receptionist-workspace'].on_page_load = function(wrapper) {
 	frappe.ui.make_app_page({
 		parent: wrapper,

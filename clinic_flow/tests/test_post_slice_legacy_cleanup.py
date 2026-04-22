@@ -1,4 +1,5 @@
 from pathlib import Path
+import unittest
 
 import frappe
 from frappe.model.base_document import get_controller
@@ -21,7 +22,22 @@ class TestPostSliceLegacyCleanup(IntegrationTestCase):
 			["clinic_flow.queue.scheduler.release_phone_quota_at_midnight"],
 		)
 
+
+class TestPostSliceLegacyCleanupSourceMarkers(unittest.TestCase):
 	def test_appointments_module_keeps_legacy_compatibility_marker(self):
-		source = Path(frappe.get_app_path("clinic_flow")) / "api" / "appointments.py"
+		source = Path(__file__).resolve().parents[1] / "api" / "appointments.py"
 
 		self.assertIn("Legacy compatibility path only", source.read_text())
+
+	def test_receptionist_workspace_is_marked_compatibility_only(self):
+		source = (
+			Path(__file__).resolve().parents[1]
+			/ "clinic_flow"
+			/ "page"
+			/ "receptionist_workspace"
+			/ "receptionist_workspace.js"
+		)
+
+		content = source.read_text()
+		self.assertIn("Legacy compatibility page.", content)
+		self.assertIn("Do not extend this page for new product work.", content)

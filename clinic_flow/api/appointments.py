@@ -1,3 +1,10 @@
+"""
+Legacy appointment-centric receptionist compatibility APIs.
+
+Active receptionist flow lives in admission.py, arrival.py, and
+queue.complete_reception(). Do not add new product behavior here.
+"""
+
 import math
 import frappe
 from frappe import _
