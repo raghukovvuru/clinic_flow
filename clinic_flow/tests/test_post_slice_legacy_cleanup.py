@@ -1,9 +1,12 @@
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 import frappe
 from frappe.model.base_document import get_controller
 from frappe.tests import IntegrationTestCase
+
+from clinic_flow.api.boot import extend_boot
 
 
 class TestPostSliceLegacyCleanup(IntegrationTestCase):
@@ -21,6 +24,17 @@ class TestPostSliceLegacyCleanup(IntegrationTestCase):
 			cron.get("0 0 * * *"),
 			["clinic_flow.queue.scheduler.release_phone_quota_at_midnight"],
 		)
+
+	def test_boot_redirects_doctors_to_doctor_workspace_v2(self):
+		bootinfo = {}
+
+		with (
+			patch.dict(frappe.session, {"user": "test-physician@example.com"}),
+			patch("clinic_flow.api.boot.frappe.get_roles", return_value=["Physician"]),
+		):
+			extend_boot(bootinfo)
+
+		self.assertEqual(bootinfo.get("home_page"), "doctor-workspace-v2")
 
 
 class TestPostSliceLegacyCleanupSourceMarkers(unittest.TestCase):

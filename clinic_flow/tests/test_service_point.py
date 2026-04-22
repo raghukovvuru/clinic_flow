@@ -1,6 +1,7 @@
 import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import nowdate
+from unittest.mock import patch
 
 from clinic_flow.patches.v16_0.create_service_points import (
 	_abort_on_collisions,
@@ -43,6 +44,16 @@ class TestServicePoint(IntegrationTestCase):
 		self._make_service_point(queue_code=code)
 		with self.assertRaises(frappe.exceptions.DuplicateEntryError):
 			self._make_service_point(queue_code=code)
+
+	def test_code_generation_skips_existing_service_point_name(self) -> None:
+		with (
+			patch("clinic_flow.tests.test_service_point.frappe.generate_hash") as mock_hash,
+			patch("clinic_flow.tests.test_service_point.frappe.db.exists") as mock_exists,
+		):
+			mock_hash.side_effect = ["abc", "def"]
+			mock_exists.side_effect = [True, False]
+
+			self.assertEqual(self._code(), "TDEF")
 
 	# ── resolve_queue_code fallback chain ──────────────────────────────
 
@@ -226,7 +237,10 @@ class TestServicePoint(IntegrationTestCase):
 
 	def _code(self) -> str:
 		"""Random 4-char uppercase queue code unique across the site."""
-		return f"T{frappe.generate_hash(length=3).upper()}"
+		while True:
+			code = f"T{frappe.generate_hash(length=3).upper()}"
+			if not frappe.db.exists("Service Point", code):
+				return code
 
 	def _ensure_gender(self, gender_name: str) -> str:
 		if frappe.db.exists("Gender", gender_name):
