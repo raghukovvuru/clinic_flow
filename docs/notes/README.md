@@ -44,3 +44,16 @@ Before continuing a track in a new session:
 3. verify the specific runtime files for the current slice
 
 Notes are handoff aids, not ground truth. Live code still wins.
+
+## Required After Implementation
+
+After every implementation slice that changes system behavior:
+
+1. write or update a scope note in this folder
+2. update relevant core docs so repo documentation matches live code behavior
+3. treat docs updates as the default expectation
+4. do not rely on specs/plans alone as the lasting implementation record
+
+Implementation notes are mandatory handoff summaries, not optional extras.
+
+If a slice truly does not need a core-doc update, the note must say why.
