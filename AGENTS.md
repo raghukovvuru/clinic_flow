@@ -244,6 +244,27 @@ Support docs:
 
 ---
 
+## Documentation Update Policy
+
+After every implementation slice that changes behavior, schema, API contract, workflow, operational semantics, or integration boundaries:
+
+- write an implementation summary note in `docs/notes/<scope>.md`
+- update relevant core docs so they reflect live code behavior
+- do not treat specs/plans/commit messages as substitutes for core-doc updates
+
+Minimum completion criteria after implementation:
+
+- `docs/notes/<scope>.md` includes:
+  - what changed
+  - what was verified
+  - what stayed out of scope
+  - next integration step
+- `ARCHITECTURE.md` is updated when runtime behavior, schema meaning, or authority boundaries changed
+- relevant policy docs in `docs/` are updated when operational rules changed
+- `AGENTS.md` is updated only when repo guardrails or workflow rules changed
+
+If no core-doc update is needed, state that explicitly in the implementation summary note with a short reason.
+
 ## Safe Defaults
 
 - Prefer additive changes over broad rewrites
