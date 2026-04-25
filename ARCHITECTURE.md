@@ -90,6 +90,15 @@ Newer operational fields exist and are active:
 - `load_class`
 - `priority`
 - special-audit fields
+
+Overflow-audit fields are now active for authorized special-capacity exceptions:
+
+- `is_overflow`
+- `overflow_reason`
+- `overflow_authorized_by`
+- `overflow_authorized_at`
+- `overflow_source`
+
 - arrival and timing fields used by the newer flows
 
 The important rule is that new behavior increasingly keys off `channel`, `load_class`, and `priority`, while old behavior still reads `queue_type`.
@@ -164,6 +173,17 @@ It owns:
 - emergency issuance and reconciliation flows
 - arrival-counter lookups and status transitions
 
+The admission runtime also owns special-overflow authorization behavior.
+
+Current rules:
+
+- special remains `priority = special`, not emergency
+- when capacity is exhausted, special booking can proceed only through explicit overflow authorization
+- overflow authorization records audit metadata on `Queue Entry`
+- phone special overflow keeps `channel = phone`
+- live walk-in special overflow may be created directly in `Arrived` state
+- booked/arrived special entries are not doctor-callable until they become `Ready Near Doctor`
+
 ### Doctor runtime
 
 - `clinic_flow/api/workspace.py`
@@ -231,6 +251,13 @@ Current behavior is transitional:
 - some dequeue and UI behavior already use canonical `priority`
 
 Special handling is now a doctor-side queue behavior, not just a token-position trick.
+
+Special behavior now has two distinct concerns:
+
+- admission-side overflow authorization at capacity boundary
+- doctor-side explicit pull (`Call Next Special`) for eligible ready patients
+
+This does not create a separate persisted special queue and does not reuse emergency semantics.
 
 ---
 
