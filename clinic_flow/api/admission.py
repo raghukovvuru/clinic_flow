@@ -12,7 +12,7 @@ from datetime import timedelta
 
 import frappe
 from frappe import _
-from frappe.utils import getdate, now_datetime, today, get_datetime, add_to_date
+from frappe.utils import add_to_date, get_datetime, getdate, now_datetime, sbool, today
 from clinic_flow.queue.engine import build_display_token
 from clinic_flow.queue.service_point import resolve_queue_code, resolve_service_point
 
@@ -532,6 +532,11 @@ def confirm_booking(
     notes: str = "",
     token_number: int | None = None,
     is_special: bool = False,
+    special_reason: str = "",
+    authorize_overflow: bool = False,
+    overflow_reason: str = "",
+    overflow_source: str = "",
+    mark_arrived: bool = False,
     weight: float | None = None,
     complaint: str | None = None,
     age_at_visit: str | None = None,
@@ -554,7 +559,12 @@ def confirm_booking(
     patient       = (patient or "").strip()
     channel       = (channel or "walkin").strip().lower()
     load_class    = (load_class or "non_review_load").strip()
-    is_special    = bool(is_special)
+    is_special = sbool(is_special)
+    special_reason = (special_reason or "").strip()
+    authorize_overflow = sbool(authorize_overflow)
+    overflow_reason = (overflow_reason or "").strip()
+    overflow_source = (overflow_source or "").strip()
+    mark_arrived = sbool(mark_arrived)
 
     if not queue_session:
         frappe.throw(_("Queue Session is required."))
@@ -575,18 +585,23 @@ def confirm_booking(
     config = frappe.get_single("Slot Partition Config")
     phone_pct: int = config.phone_pct or 60
 
-    planned      = session_doc.planned_capacity or 0
-    stretch      = session_doc.stretch_capacity or planned
+    planned = session_doc.planned_capacity or 0
     phone_quota  = int(planned * phone_pct / 100)
-    total_booked = (session_doc.phone_booked_count or 0) + (session_doc.walkin_count or 0)
+    capacity_state = _get_booking_capacity_state(
+        session_doc=session_doc,
+        channel=channel,
+        phone_quota=phone_quota,
+    )
+    is_overflow = _validate_booking_capacity(
+        is_special=is_special,
+        authorize_overflow=authorize_overflow,
+        overflow_reason=overflow_reason,
+        overflow_source=overflow_source,
+        capacity_state=capacity_state,
+    )
 
-    # Capacity check
-    if channel == "phone":
-        if (session_doc.phone_booked_count or 0) >= phone_quota:
-            frappe.throw(_("Phone booking quota ({0}) is full for this session.").format(phone_quota))
-    else:  # walkin
-        if total_booked >= stretch:
-            frappe.throw(_("Session is full ({0}/{1} booked).").format(total_booked, stretch))
+    if mark_arrived and channel != "walkin":
+        frappe.throw(_("Only walk-in bookings can be marked arrived during admission."))
 
     # Assign token number
     existing_tokens = {
@@ -647,8 +662,16 @@ def confirm_booking(
     )
     # Compatibility-only field for neighboring runtime paths pending later slices.
     entry.queue_type     = _compat_queue_type(channel=channel, priority=priority)
-    _set_special_queue_entry_fields(entry, is_special=is_special)
-    entry.status         = "Booked"
+    _set_special_queue_entry_fields(entry, is_special=is_special, reason=special_reason)
+    _set_overflow_queue_entry_fields(
+        entry,
+        is_overflow=is_overflow,
+        reason=overflow_reason,
+        source=overflow_source,
+    )
+    entry.status = "Arrived" if mark_arrived else "Booked"
+    if mark_arrived:
+        entry.arrived_at = now_datetime()
     entry.issued_by      = frappe.session.user
     entry.issued_by_role = "Reception"
     entry.appointment    = patient_appointment
@@ -707,6 +730,8 @@ def confirm_booking(
         "load_class":            load_class,
         "channel":               channel,
         "is_special":            is_special,
+        "is_overflow":           is_overflow,
+        "overflow_source":       overflow_source if is_overflow else "",
         "predicted_doctor_time": eta["predicted_doctor_time"],
         "report_by_time":        eta["report_by_time"],
         "estimated_window_end":  eta["estimated_window_end"],
@@ -716,6 +741,62 @@ def confirm_booking(
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
+
+def _get_booking_capacity_state(session_doc, channel: str, phone_quota: int) -> dict:
+    """Return the current capacity state for the requested booking channel."""
+    planned = int(session_doc.planned_capacity or 0)
+    stretch = int(session_doc.stretch_capacity or planned)
+    phone_booked = int(session_doc.phone_booked_count or 0)
+    walkin_booked = int(session_doc.walkin_count or 0)
+    total_booked = phone_booked + walkin_booked
+
+    if channel == "phone":
+        return {
+            "is_full": phone_booked >= phone_quota,
+            "message": _("Phone booking quota ({0}) is full for this session.").format(phone_quota),
+            "planned_capacity": planned,
+            "stretch_capacity": stretch,
+            "phone_quota": phone_quota,
+            "booked": phone_booked,
+            "total_booked": total_booked,
+        }
+
+    return {
+        "is_full": total_booked >= stretch,
+        "message": _("Session is full ({0}/{1} booked).").format(total_booked, stretch),
+        "planned_capacity": planned,
+        "stretch_capacity": stretch,
+        "phone_quota": phone_quota,
+        "booked": walkin_booked,
+        "total_booked": total_booked,
+    }
+
+
+def _validate_booking_capacity(
+    is_special: bool,
+    authorize_overflow: bool,
+    overflow_reason: str,
+    overflow_source: str,
+    capacity_state: dict,
+) -> bool:
+    """Validate booking capacity. Returns True when special overflow is used."""
+    if not capacity_state.get("is_full"):
+        return False
+
+    if not is_special:
+        frappe.throw(capacity_state.get("message") or _("Session is full."))
+
+    if not authorize_overflow:
+        frappe.throw(_("Special overflow requires authorization because capacity is full."))
+
+    frappe.only_for(["Queue Manager", "System Manager"])
+
+    if not overflow_reason:
+        frappe.throw(_("Overflow reason is required."))
+    if not overflow_source:
+        frappe.throw(_("Overflow source is required."))
+
+    return True
 
 def _parse_special_positions(raw: str | None) -> list[int]:
     """Parse the JSON vip_buffer_positions field (DB name kept). Returns sorted list."""
@@ -779,6 +860,28 @@ def _set_special_queue_entry_fields(entry, is_special: bool = False, reason: str
         "marked_special_by": frappe.session.user,
         "marked_special_at": now_datetime(),
         "special_reason": reason or "",
+    }
+    for fieldname, value in field_map.items():
+        if meta.has_field(fieldname):
+            setattr(entry, fieldname, value)
+
+
+def _set_overflow_queue_entry_fields(
+    entry,
+    is_overflow: bool = False,
+    reason: str = "",
+    source: str = "",
+) -> None:
+    """Persist overflow audit metadata when a special booking bypasses capacity."""
+    if not is_overflow:
+        return
+    meta = frappe.get_meta("Queue Entry")
+    field_map = {
+        "is_overflow": 1,
+        "overflow_reason": reason,
+        "overflow_authorized_by": frappe.session.user,
+        "overflow_authorized_at": now_datetime(),
+        "overflow_source": source,
     }
     for fieldname, value in field_map.items():
         if meta.has_field(fieldname):
