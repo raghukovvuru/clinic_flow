@@ -128,6 +128,31 @@ Legacy compatibility note:
 - some special-buffer fields still exist on the schema
 - they should be treated as migration-era compatibility, not proof that hard reserved buffers remain the preferred model
 
+### Special overflow authorization
+
+When capacity is available, special bookings follow normal special booking behavior.
+
+When capacity is exhausted:
+
+- special booking may continue only through explicit overflow authorization
+- overflow authorization is backend-owned, not a frontend-only convention
+- overflow requires:
+  - authorized role
+  - reason
+  - source
+- overflow is recorded explicitly on `Queue Entry` instead of silently changing capacity
+
+Backend shape:
+
+- `priority = special`
+- `is_overflow = 1` only when capacity was bypassed
+- overflow audit fields are persisted on `Queue Entry`
+- phone overflow keeps `channel = phone`
+- live walk-in overflow can mark entry `Arrived` at booking time
+- special entries are doctor-callable only after becoming `Ready Near Doctor`
+
+Lifecycle boundary remains: `booking/arrival -> reception completion -> Ready Near Doctor -> doctor consultation`.
+
 ---
 
 ## 7. Emergency Policy
