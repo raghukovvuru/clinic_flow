@@ -59,6 +59,13 @@ Coverage includes:
 - doctor eligibility boundary for `call_next_special`
 - string boolean coercion regression tests
 
+## Core Docs Updated
+
+- `ARCHITECTURE.md`: updated in this docs slice
+- `docs/receptionist-backend-policy.md`: updated in this docs slice
+- `AGENTS.md`: updated in this docs slice
+- `docs/notes/README.md`: updated in this docs slice
+
 ## Verification Completed
 
 - `bench --site site1.localhost run-tests --app clinic_flow --module clinic_flow.tests.test_special_overflow_admission` (16 tests, pass)
@@ -71,7 +78,7 @@ Coverage includes:
 
 Note: in this worktree setup, test/migrate commands were run with a `PYTHONPATH` prefix pointing at this worktree app path so bench resolved the in-worktree code.
 
-## Out of Scope (Not Changed)
+## Out of Scope
 
 - no frontend changes (`receptionist_dashboard`, arrival UI, doctor UI)
 - no doctor dequeue algorithm changes
