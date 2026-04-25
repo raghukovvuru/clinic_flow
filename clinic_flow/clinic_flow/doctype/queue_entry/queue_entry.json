@@ -22,6 +22,12 @@
   "marked_special_by",
   "marked_special_at",
   "special_reason",
+  "overflow_section",
+  "is_overflow",
+  "overflow_reason",
+  "overflow_authorized_by",
+  "overflow_authorized_at",
+  "overflow_source",
   "special_override_by",
   "special_override_at",
   "status",
@@ -176,6 +182,46 @@
    "fieldname": "special_reason",
    "fieldtype": "Small Text",
    "label": "Special Reason",
+   "read_only": 1
+  },
+  {
+   "fieldname": "overflow_section",
+   "fieldtype": "Section Break",
+   "label": "Overflow Audit"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_overflow",
+   "fieldtype": "Check",
+   "in_standard_filter": 1,
+   "label": "Is Overflow",
+   "read_only": 1,
+   "description": "True when this booking bypassed normal/stretch capacity through explicit authorization."
+  },
+  {
+   "fieldname": "overflow_reason",
+   "fieldtype": "Small Text",
+   "label": "Overflow Reason",
+   "read_only": 1
+  },
+  {
+   "fieldname": "overflow_authorized_by",
+   "fieldtype": "Link",
+   "label": "Overflow Authorized By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "overflow_authorized_at",
+   "fieldtype": "Datetime",
+   "label": "Overflow Authorized At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "overflow_source",
+   "fieldtype": "Select",
+   "label": "Overflow Source",
+   "options": "\ndoctor instructed\nmanagement approval\nclose circle\nreturning special case\nother",
    "read_only": 1
   },
   {
