@@ -153,6 +153,31 @@ Backend shape:
 
 Lifecycle boundary remains: `booking/arrival -> reception completion -> Ready Near Doctor -> doctor consultation`.
 
+### Special reception SLA
+
+Special reception handling starts only after physical arrival:
+
+- `Queue Entry.status = "Arrived"`
+- `Queue Entry.priority = "special"`
+
+Backend owns:
+
+- SLA thresholds from `Slot Partition Config`
+- arrived-special eligibility
+- gap-opportunity detection over the next configured normal-token lookahead window
+- max-consecutive-special reception guardrail
+- `special_reception_alerts` and `recommended_reception_call` in `get_live_session_state()`
+
+Frontend owns:
+
+- rendering alerts and recommendations
+- collecting public/private call mode and private reason
+- refreshing the live session state after a receptionist action
+
+Frontend must not recalculate SLA thresholds, gap opportunity, or consecutive-call guardrails.
+
+Private reception calls still set `Queue Entry.status = "Called"`, but public displays should suppress private calls and must not expose special status.
+
 ---
 
 ## 7. Emergency Policy

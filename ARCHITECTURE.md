@@ -99,6 +99,15 @@ Overflow-audit fields are now active for authorized special-capacity exceptions:
 - `overflow_authorized_at`
 - `overflow_source`
 
+Reception-call audit fields are active for the v2 reception boundary:
+
+- `called_to_reception_by`
+- `reception_call_mode`
+- `private_reception_call_reason`
+- `reception_recommendation_reason`
+
+These fields are reception-stage audit fields. They are separate from special-overflow audit fields and do not change doctor dequeue behavior.
+
 - arrival and timing fields used by the newer flows
 
 The important rule is that new behavior increasingly keys off `channel`, `load_class`, and `priority`, while old behavior still reads `queue_type`.
@@ -250,12 +259,13 @@ Current behavior is transitional:
 - some paths still derive legacy queue type from the newer model for compatibility
 - some dequeue and UI behavior already use canonical `priority`
 
-Special handling is now a doctor-side queue behavior, not just a token-position trick.
-
-Special behavior now has two distinct concerns:
+Special behavior now has three distinct concerns:
 
 - admission-side overflow authorization at capacity boundary
+- reception-side SLA recommendation for arrived special patients
 - doctor-side explicit pull (`Call Next Special`) for eligible ready patients
+
+Reception-side special handling is backend-owned recommendation state. It starts only after `Queue Entry.status = "Arrived"` and `Queue Entry.priority = "special"`, and it never moves a patient to `Called` automatically. The receptionist remains the actor who calls the patient to reception.
 
 This does not create a separate persisted special queue and does not reuse emergency semantics.
 

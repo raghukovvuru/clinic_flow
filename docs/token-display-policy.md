@@ -138,6 +138,17 @@ Emergency tokens use the **same queue prefix as their session**, not a separate 
 
 Urgency is conveyed via status and UX, not by the token prefix. When no queue code can be resolved at all, the final fallback is `GEN`, not `EMR`.
 
+## Reception Call Display Policy
+
+Special status is not part of public token display.
+
+For reception calls:
+
+- `reception_call_mode = "Public"` may display or announce the token normally.
+- `reception_call_mode = "Private"` is operational state only and should be suppressed on public displays.
+
+Private calls do not hide the patient from operational dashboards. They only prevent public display/announcement of that reception call.
+
 ## Future Cleanup
 
 - Drop the `dept_abbr` cache once enough time has passed that all live sessions carry `service_point`
