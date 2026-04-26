@@ -50,6 +50,10 @@
   "predicted_doctor_time",
   "reception_stage_section",
   "called_to_reception_at",
+  "called_to_reception_by",
+  "reception_call_mode",
+  "private_reception_call_reason",
+  "reception_recommendation_reason",
   "no_response_at",
   "hold_patients_count",
   "reception_done_at",
@@ -361,6 +365,36 @@
    "fieldtype": "Datetime",
    "label": "Called to Reception At",
    "read_only": 1
+  },
+  {
+   "fieldname": "called_to_reception_by",
+   "fieldtype": "Link",
+   "label": "Called to Reception By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "default": "Public",
+   "fieldname": "reception_call_mode",
+   "fieldtype": "Select",
+   "label": "Reception Call Mode",
+   "options": "\nPublic\nPrivate",
+   "read_only": 1,
+   "description": "Public calls may be announced; private calls are operational only and should be suppressed on public displays."
+  },
+  {
+   "fieldname": "private_reception_call_reason",
+   "fieldtype": "Small Text",
+   "label": "Private Reception Call Reason",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reception_recommendation_reason",
+   "fieldtype": "Select",
+   "label": "Reception Recommendation Reason",
+   "options": "\ngap\nwarning\nescalation\ntarget_breach\nmanual",
+   "read_only": 1,
+   "description": "Backend recommendation reason snapshot captured when the patient was called to reception."
   },
   {
    "fieldname": "no_response_at",

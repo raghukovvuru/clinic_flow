@@ -31,7 +31,12 @@
   "rolling_avg_window_days",
   "min_samples_for_live_avg",
   "live_queue_section",
-  "no_response_hold_count"
+  "no_response_hold_count",
+  "special_reception_warning_minutes",
+  "special_reception_escalation_minutes",
+  "special_reception_target_minutes",
+  "special_gap_lookahead_tokens",
+  "max_consecutive_special_reception_calls"
  ],
  "fields": [
   {
@@ -206,6 +211,41 @@
    "fieldtype": "Int",
    "label": "No-Response Grace Count",
    "description": "Number of later patients that must complete reception before a No Response token is auto-pushed to end."
+  },
+  {
+   "default": "10",
+   "fieldname": "special_reception_warning_minutes",
+   "fieldtype": "Int",
+   "label": "Special Reception Warning (minutes)",
+   "description": "Elapsed arrival time before an arrived special patient enters warning state."
+  },
+  {
+   "default": "12",
+   "fieldname": "special_reception_escalation_minutes",
+   "fieldtype": "Int",
+   "label": "Special Reception Escalation (minutes)",
+   "description": "Elapsed arrival time before an arrived special patient enters escalation state."
+  },
+  {
+   "default": "15",
+   "fieldname": "special_reception_target_minutes",
+   "fieldtype": "Int",
+   "label": "Special Reception Target (minutes)",
+   "description": "Target maximum elapsed arrival time for special reception handling."
+  },
+  {
+   "default": "3",
+   "fieldname": "special_gap_lookahead_tokens",
+   "fieldtype": "Int",
+   "label": "Special Gap Lookahead Tokens",
+   "description": "How many upcoming normal tokens to inspect for one non-arrival gap."
+  },
+  {
+   "default": "2",
+   "fieldname": "max_consecutive_special_reception_calls",
+   "fieldtype": "Int",
+   "label": "Max Consecutive Special Reception Calls",
+   "description": "Maximum special reception calls in a row while normal arrived patients are waiting."
   }
  ],
  "issingle": 1,
