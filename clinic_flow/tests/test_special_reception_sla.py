@@ -143,6 +143,78 @@ class TestSpecialReceptionSLA(IntegrationTestCase):
         self.assertFalse(alert["guardrail_blocked"])
         self.assertEqual(payload["recommended_reception_call"]["queue_entry"], candidate.name)
 
+    def test_public_call_persists_public_mode(self):
+        session = self.make_queue_session()
+        entry = self.make_entry(session, token_number=1, status="Arrived", priority="normal", arrived_minutes_ago=1)
+
+        result = frappe.get_attr("clinic_flow.api.queue.call_to_reception")(
+            queue_entry=entry.name,
+            call_mode="Public",
+            recommendation_reason="manual",
+        )
+
+        refreshed = frappe.get_doc("Queue Entry", entry.name)
+        self.assertEqual(result["status"], "Called")
+        self.assertEqual(result["call_mode"], "Public")
+        self.assertFalse(result["suppress_public_display"])
+        self.assertEqual(refreshed.status, "Called")
+        self.assertEqual(refreshed.reception_call_mode, "Public")
+        self.assertEqual(refreshed.called_to_reception_by, frappe.session.user)
+        self.assertEqual(refreshed.reception_recommendation_reason, "manual")
+        self.assertFalse(refreshed.private_reception_call_reason)
+
+    def test_private_call_requires_reason(self):
+        session = self.make_queue_session()
+        entry = self.make_entry(session, token_number=1, status="Arrived", priority="special", arrived_minutes_ago=11)
+
+        with self.assertRaises(frappe.ValidationError):
+            frappe.get_attr("clinic_flow.api.queue.call_to_reception")(
+                queue_entry=entry.name,
+                call_mode="Private",
+            )
+
+    def test_private_call_persists_reason_and_still_sets_called_status(self):
+        session = self.make_queue_session()
+        entry = self.make_entry(session, token_number=1, status="Arrived", priority="special", arrived_minutes_ago=11)
+
+        result = frappe.get_attr("clinic_flow.api.queue.call_to_reception")(
+            queue_entry=entry.name,
+            call_mode="Private",
+            private_reason="parent contacted by phone",
+            recommendation_reason="warning",
+        )
+
+        refreshed = frappe.get_doc("Queue Entry", entry.name)
+        self.assertEqual(result["status"], "Called")
+        self.assertEqual(result["call_mode"], "Private")
+        self.assertTrue(result["suppress_public_display"])
+        self.assertEqual(refreshed.status, "Called")
+        self.assertEqual(refreshed.reception_call_mode, "Private")
+        self.assertEqual(refreshed.private_reception_call_reason, "parent contacted by phone")
+        self.assertEqual(refreshed.reception_recommendation_reason, "warning")
+        self.assertIsNotNone(refreshed.called_to_reception_at)
+        self.assertEqual(refreshed.called_to_reception_by, frappe.session.user)
+
+    def test_invalid_call_mode_is_rejected(self):
+        session = self.make_queue_session()
+        entry = self.make_entry(session, token_number=1, status="Arrived", priority="normal", arrived_minutes_ago=1)
+
+        with self.assertRaises(frappe.ValidationError):
+            frappe.get_attr("clinic_flow.api.queue.call_to_reception")(
+                queue_entry=entry.name,
+                call_mode="Silent",
+            )
+
+    def test_invalid_recommendation_reason_is_rejected(self):
+        session = self.make_queue_session()
+        entry = self.make_entry(session, token_number=1, status="Arrived", priority="normal", arrived_minutes_ago=1)
+
+        with self.assertRaises(frappe.ValidationError):
+            frappe.get_attr("clinic_flow.api.queue.call_to_reception")(
+                queue_entry=entry.name,
+                recommendation_reason="vip",
+            )
+
     def _ensure_gender(self, gender_name: str) -> str:
         if frappe.db.exists("Gender", gender_name):
             return gender_name

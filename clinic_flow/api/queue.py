@@ -990,13 +990,29 @@ def get_queue_state_for_display(dept: str = "all") -> dict:
 # ---------------------------------------------------------------------------
 
 @frappe.whitelist()
-def call_to_reception(queue_entry: str) -> dict:
+def call_to_reception(
+	queue_entry: str,
+	call_mode: str = "Public",
+	private_reason: str = "",
+	recommendation_reason: str = "",
+) -> dict:
 	"""
 	Receptionist calls a patient to the desk.
-	Valid from: Waiting, Booked, Pushed to End.
-	Sets status → Called, records called_to_reception_at.
+	Valid from: Waiting, Booked, Arrived, Pushed to End.
+	Sets status -> Called and records reception-call audit fields.
 	"""
 	frappe.only_for(["Queue Manager", "System Manager"])
+
+	call_mode = (call_mode or "Public").strip().title()
+	private_reason = (private_reason or "").strip()
+	recommendation_reason = (recommendation_reason or "manual").strip().lower()
+
+	if call_mode not in ("Public", "Private"):
+		frappe.throw(_("call_mode must be Public or Private."), frappe.ValidationError)
+	if call_mode == "Private" and not private_reason:
+		frappe.throw(_("private_reason is required for private reception calls."), frappe.ValidationError)
+	if recommendation_reason not in ("gap", "warning", "escalation", "target_breach", "manual"):
+		frappe.throw(_("Invalid reception recommendation reason."), frappe.ValidationError)
 
 	entry = frappe.db.get_value(
 		"Queue Entry", queue_entry,
@@ -1017,6 +1033,10 @@ def call_to_reception(queue_entry: str) -> dict:
 	frappe.db.set_value("Queue Entry", queue_entry, {
 		"status": "Called",
 		"called_to_reception_at": now_datetime(),
+		"called_to_reception_by": frappe.session.user,
+		"reception_call_mode": call_mode,
+		"private_reception_call_reason": private_reason if call_mode == "Private" else "",
+		"reception_recommendation_reason": recommendation_reason,
 	})
 
 	from clinic_flow.api.eta import recalculate_downstream_etas
@@ -1024,7 +1044,14 @@ def call_to_reception(queue_entry: str) -> dict:
 
 	_broadcast_queue_update(entry.queue_session)
 
-	return {"status": "Called", "token": entry.token, "patient_name": entry.patient_name}
+	return {
+		"status": "Called",
+		"token": entry.token,
+		"patient_name": entry.patient_name,
+		"call_mode": call_mode,
+		"suppress_public_display": call_mode == "Private",
+		"recommendation_reason": recommendation_reason,
+	}
 
 
 @frappe.whitelist()
@@ -1385,7 +1412,9 @@ def get_live_session_state(queue_session: str) -> dict:
 	_ENTRY_FIELDS = [
 		"name", "token_number", "token", "patient", "patient_name",
 		"load_class", "queue_type", "status", "queue_position",
-		"arrived_at", "called_to_reception_at", "no_response_at", "hold_patients_count",
+		"arrived_at", "called_to_reception_at", "called_to_reception_by",
+		"reception_call_mode", "private_reception_call_reason",
+		"reception_recommendation_reason", "no_response_at", "hold_patients_count",
 		"reception_done_at", "weight_recorded",
 		"report_by_time", "predicted_doctor_time",
 		"seen_at", "creation",
