@@ -215,6 +215,26 @@ class TestSpecialReceptionSLA(IntegrationTestCase):
                 recommendation_reason="vip",
             )
 
+    def test_doctor_call_next_special_remains_unaffected_by_reception_recommendation(self):
+        session = self.make_queue_session()
+        self.make_entry(session, token_number=1, status="Booked", priority="normal")
+        self.make_entry(session, token_number=89, status="Arrived", priority="special", arrived_minutes_ago=16)
+
+        live_state = frappe.get_attr("clinic_flow.api.queue.get_live_session_state")(session.name)
+        result = frappe.get_attr("clinic_flow.api.queue.call_next_special")(session.name)
+
+        self.assertIsNotNone(live_state["recommended_reception_call"])
+        self.assertEqual(result["status"], "empty")
+
+    def test_emergency_patient_is_excluded_from_special_reception_sla(self):
+        session = self.make_queue_session()
+        self.make_entry(session, token_number=1, status="Arrived", priority="emergency", arrived_minutes_ago=16)
+
+        payload = frappe.get_attr("clinic_flow.api.queue.get_live_session_state")(session.name)
+
+        self.assertEqual(payload["special_reception_alerts"], [])
+        self.assertIsNone(payload["recommended_reception_call"])
+
     def _ensure_gender(self, gender_name: str) -> str:
         if frappe.db.exists("Gender", gender_name):
             return gender_name
