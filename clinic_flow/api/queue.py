@@ -35,6 +35,160 @@ def _emergency_count(queue_session: str, statuses: list[str]) -> int:
 	)
 
 
+def _special_reception_policy() -> dict:
+	config = frappe.get_single("Slot Partition Config")
+	return {
+		"warning_minutes": int(config.special_reception_warning_minutes or 10),
+		"escalation_minutes": int(config.special_reception_escalation_minutes or 12),
+		"target_minutes": int(config.special_reception_target_minutes or 15),
+		"gap_lookahead_tokens": int(config.special_gap_lookahead_tokens or 3),
+		"max_consecutive_special_calls": int(config.max_consecutive_special_reception_calls or 2),
+	}
+
+
+def _special_reception_sla_state(elapsed_minutes: int, policy: dict) -> str:
+	if elapsed_minutes >= policy["target_minutes"]:
+		return "target_breach"
+	if elapsed_minutes >= policy["escalation_minutes"]:
+		return "escalation"
+	if elapsed_minutes >= policy["warning_minutes"]:
+		return "warning"
+	return "normal"
+
+
+def _special_reception_gap(queue_session: str, lookahead_tokens: int) -> dict | None:
+	rows = frappe.get_all(
+		"Queue Entry",
+		filters={
+			"queue_session": queue_session,
+			"priority": ["in", ["", "normal"]],
+			"status": ["in", ["Booked", "Waiting", "Arrived"]],
+		},
+		fields=["name", "token", "token_number", "status"],
+		order_by="token_number asc",
+		limit=max(1, int(lookahead_tokens or 3)),
+	)
+	for row in rows:
+		if row.status != "Arrived":
+			return dict(row)
+	return None
+
+
+def _normal_arrived_patient_available(queue_session: str) -> bool:
+	return bool(
+		frappe.db.count(
+			"Queue Entry",
+			{
+				"queue_session": queue_session,
+				"priority": ["in", ["", "normal"]],
+				"status": "Arrived",
+			},
+		)
+	)
+
+
+def _consecutive_special_reception_calls(queue_session: str) -> int:
+	rows = frappe.get_all(
+		"Queue Entry",
+		filters={
+			"queue_session": queue_session,
+			"called_to_reception_at": ["is", "set"],
+		},
+		fields=["name", "priority", "called_to_reception_at"],
+		order_by="called_to_reception_at desc",
+		limit=20,
+	)
+	count = 0
+	for row in rows:
+		if row.priority == "special":
+			count += 1
+		else:
+			break
+	return count
+
+
+def _special_reception_state(queue_session: str) -> dict:
+	policy = _special_reception_policy()
+	gap = _special_reception_gap(queue_session, policy["gap_lookahead_tokens"])
+	guardrail_blocked = (
+		_consecutive_special_reception_calls(queue_session) >= policy["max_consecutive_special_calls"]
+		and _normal_arrived_patient_available(queue_session)
+	)
+
+	rows = frappe.get_all(
+		"Queue Entry",
+		filters={
+			"queue_session": queue_session,
+			"priority": "special",
+			"status": "Arrived",
+		},
+		fields=[
+			"name", "token", "token_number", "patient", "patient_name",
+			"arrived_at", "creation",
+		],
+		order_by="arrived_at asc, creation asc",
+	)
+
+	now = now_datetime()
+	alerts = []
+	for row in rows:
+		arrived_at = get_datetime(row.arrived_at) if row.arrived_at else get_datetime(row.creation)
+		elapsed = max(0, int((now - arrived_at).total_seconds() // 60))
+		sla_state = _special_reception_sla_state(elapsed, policy)
+		reason = "manual"
+		if gap:
+			reason = "gap"
+		elif sla_state != "normal":
+			reason = sla_state
+
+		alerts.append({
+			"queue_entry": row.name,
+			"token": row.token,
+			"token_number": row.token_number,
+			"patient": row.patient,
+			"patient_name": row.patient_name,
+			"arrived_at": str(row.arrived_at) if row.arrived_at else None,
+			"elapsed_minutes": elapsed,
+			"sla_state": sla_state,
+			"recommendation_reason": reason,
+			"can_call_now": not guardrail_blocked,
+			"guardrail_blocked": guardrail_blocked,
+		})
+
+	recommended = None
+	callable_alerts = [row for row in alerts if row["can_call_now"]]
+	if callable_alerts:
+		candidate = callable_alerts[0]
+		if candidate["recommendation_reason"] != "manual":
+			message = _special_reception_recommendation_message(candidate, gap)
+			recommended = {
+				"queue_entry": candidate["queue_entry"],
+				"kind": "special",
+				"reason": candidate["recommendation_reason"],
+				"message": message,
+			}
+
+	return {
+		"special_reception_policy": policy,
+		"special_reception_alerts": alerts,
+		"recommended_reception_call": recommended,
+	}
+
+
+def _special_reception_recommendation_message(candidate: dict, gap: dict | None) -> str:
+	if candidate["recommendation_reason"] == "gap" and gap:
+		return _("Special patient can fill a non-arrival gap at token {0}.").format(
+			gap.get("token_number") or gap.get("token")
+		)
+	if candidate["recommendation_reason"] == "target_breach":
+		return _("Special patient has breached the reception target time.")
+	if candidate["recommendation_reason"] == "escalation":
+		return _("Special patient has reached reception escalation time.")
+	if candidate["recommendation_reason"] == "warning":
+		return _("Special patient has reached reception warning time.")
+	return _("Special patient is waiting at reception.")
+
+
 @frappe.whitelist()
 def get_today_schedules() -> dict:
 	"""
@@ -1256,6 +1410,7 @@ def get_live_session_state(queue_session: str) -> dict:
 	pushed_to_end = _fetch(["Pushed to End"],      "queue_position asc")
 	from clinic_flow.api.emergency import get_open_emergency_intakes
 	emergency_pending = get_open_emergency_intakes(queue_session)
+	special_reception = _special_reception_state(queue_session)
 
 	total_booked    = frappe.db.count(
 		"Queue Entry",
@@ -1282,6 +1437,9 @@ def get_live_session_state(queue_session: str) -> dict:
 		"pushed_to_end":   pushed_to_end,
 		"emergency_pending": emergency_pending,
 		"emergency_active": emergency_active,
+		"special_reception_policy": special_reception["special_reception_policy"],
+		"special_reception_alerts": special_reception["special_reception_alerts"],
+		"recommended_reception_call": special_reception["recommended_reception_call"],
 		"counts": {
 			"total_booked":    total_booked,
 			"completed_today": completed_today,
