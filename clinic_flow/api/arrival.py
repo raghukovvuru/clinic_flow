@@ -55,6 +55,43 @@ def resolve_arrival_sessions(dept_abbr: str = "") -> list:
 	return sessions
 
 
+def _session_summary(row: dict) -> dict:
+	return {
+		"name": row.get("name"),
+		"session_name": row.get("session_name"),
+		"dept_abbr": row.get("dept_abbr"),
+		"practitioner": row.get("practitioner"),
+		"status": row.get("status"),
+		"start_time": str(row.get("start_time") or ""),
+	}
+
+
+def _candidate_summary(row: dict) -> dict:
+	display_token = row.get("token") or row.get("name")
+	state_label = "Already Arrived" if row.get("status") == "Arrived" else "Ready to Confirm"
+	visit_label = "Review Patient" if row.get("load_class") == "review_load" else "New Patient"
+
+	from clinic_flow.utils import get_token_qr_svg
+
+	qr_svg = get_token_qr_svg(row.get("name"))
+
+	print_context = {
+		"queue_entry": row.get("name"),
+		"display_token": display_token,
+		"patient_name": row.get("patient_name"),
+		"qr_svg": qr_svg,
+	}
+
+	return {
+		**dict(row),
+		"queue_entry": row.get("name"),
+		"display_token": display_token,
+		"state_label": state_label,
+		"visit_label": visit_label,
+		"print_context": print_context,
+	}
+
+
 @frappe.whitelist()
 def lookup_arrival_candidate(
 	qr_code: str = "",
@@ -139,7 +176,7 @@ def lookup_arrival_candidate(
 		return {"candidates": [], "error": "no_search_criteria"}
 
 	return {
-		"candidates": [dict(c) for c in candidates],
+		"candidates": [_candidate_summary(c) for c in candidates],
 		"sessions": sessions,
 	}
 
@@ -155,7 +192,9 @@ def mark_arrived(queue_entry: str, queue_session: str = "") -> dict:
 
 	entry = frappe.db.get_value(
 		"Queue Entry", queue_entry,
-		["name", "status", "queue_session", "token", "patient_name", "token_number"],
+		["name", "status", "queue_session", "token", "token_number",
+		 "patient_name", "patient", "dept_abbr", "load_class",
+		 "channel", "priority", "queue_position", "arrived_at"],
 		as_dict=True,
 	)
 	if not entry:
@@ -173,6 +212,8 @@ def mark_arrived(queue_entry: str, queue_session: str = "") -> dict:
 			"already_arrived": True,
 			"token": entry.token,
 			"patient_name": entry.patient_name,
+			"queue_entry": entry.name,
+			"result_card": _candidate_summary(dict(entry)),
 		}
 
 	if entry.status not in ("Booked", "Waiting"):
@@ -190,6 +231,10 @@ def mark_arrived(queue_entry: str, queue_session: str = "") -> dict:
 
 	_broadcast_queue_update(entry.queue_session)
 
+	entry_dict = dict(entry)
+	entry_dict["status"] = "Arrived"
+	entry_dict["arrived_at"] = now_datetime()
+
 	return {
 		"status": "Arrived",
 		"already_arrived": False,
@@ -197,6 +242,7 @@ def mark_arrived(queue_entry: str, queue_session: str = "") -> dict:
 		"token_number": entry.token_number,
 		"patient_name": entry.patient_name,
 		"queue_entry": entry.name,
+		"result_card": _candidate_summary(entry_dict),
 	}
 
 
@@ -215,7 +261,13 @@ def get_arrival_session_context(dept_abbr: str = "") -> dict:
 	"""Summary payload for the arrival counter page header."""
 	sessions = resolve_arrival_sessions(dept_abbr)
 	if not sessions:
-		return {"sessions": [], "has_active": False, "arrived_count": 0, "waiting_count": 0}
+		return {
+			"sessions": [], "has_active": False,
+			"arrived_count": 0, "waiting_count": 0,
+			"stats": {"arrived": 0, "awaiting_arrival": 0},
+			"current_session": None, "next_session": None,
+			"recent_arrivals": [],
+		}
 
 	session_names = [s["name"] for s in sessions]
 
@@ -228,9 +280,37 @@ def get_arrival_session_context(dept_abbr: str = "") -> dict:
 		{"queue_session": ["in", session_names], "status": ["in", ["Booked", "Waiting"]]},
 	)
 
+	current_session = None
+	next_session = None
+	for s in sessions:
+		if not current_session and s["status"] in ("Active", "Paused"):
+			current_session = _session_summary(s)
+		if not next_session and s["status"] == "Scheduled":
+			next_session = _session_summary(s)
+		if current_session and next_session:
+			break
+
+	recent_arrivals = frappe.db.sql(
+		"""
+		SELECT name AS queue_entry, token AS display_token,
+		       patient_name, arrived_at, status
+		FROM `tabQueue Entry`
+		WHERE queue_session IN %(sessions)s
+		  AND status = 'Arrived'
+		ORDER BY arrived_at DESC
+		LIMIT 8
+		""",
+		{"sessions": tuple(session_names)},
+		as_dict=True,
+	)
+
 	return {
 		"sessions": sessions,
 		"has_active": True,
 		"arrived_count": arrived_count,
 		"waiting_count": waiting_count,
+		"stats": {"arrived": arrived_count, "awaiting_arrival": waiting_count},
+		"current_session": current_session,
+		"next_session": next_session,
+		"recent_arrivals": recent_arrivals,
 	}
