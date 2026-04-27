@@ -390,3 +390,13 @@ Use these as focused companion docs:
 - `CONTEXT_INDEX.md`
 
 If any of them drift from the code, update the docs rather than preserving stale narratives.
+
+---
+
+## 13. Arrival Counter V1 Head-App Slice
+
+- `arrival-counter-v1` is the first head-app frontend migration slice.
+- The active backend authority remains `clinic_flow.api.arrival`.
+- The legacy `arrival_counter` Desk page remains available during coexistence.
+- The new slice uses a thin Frappe iframe host surface and keeps operational UI logic in the dedicated frontend workspace under `frontend/head-app`.
+- Arrival lookup, arrival confirmation, token slip content, and live context remain backend-owned.
