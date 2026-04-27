@@ -28,7 +28,8 @@ jinja = {
 	],
 }
 
-# ── Static assets injected into desk ────────────────────────────────────────
+# The head-app bundles are loaded lazily by thin page hosts such as
+# `arrival_counter_v1.js`; do not inject them globally into Desk.
 app_include_css = []
 app_include_js = []
 
