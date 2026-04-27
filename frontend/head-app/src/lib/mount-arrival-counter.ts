@@ -1,7 +1,7 @@
 import ArrivalCounterPage from "../routes/arrival-counter/+page.svelte";
 
-export function mount({ target }: { target: HTMLElement }) {
-  return new ArrivalCounterPage({ target });
+export function mount({ target, props = {} }: { target: HTMLElement; props?: Record<string, unknown> }) {
+  return new ArrivalCounterPage({ target, props: props as any });
 }
 
 declare global {
