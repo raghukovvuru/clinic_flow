@@ -1,6 +1,6 @@
 export function attachArrivalTransport(
   invalidate: () => void,
-  realtime?: { on?: (event: string, cb: (payload: unknown) => void) => () => void },
+  realtime?: { on?: (event: string, cb: (payload: unknown) => void) => unknown },
 ) {
   const cleanups: Array<() => void> = [];
 
