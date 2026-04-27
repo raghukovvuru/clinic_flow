@@ -1,3 +1,21 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  color: #10211f;
+  background: #f6f5f1;
+}
+
+html, body {
+  min-height: 100%;
+  font-family: "Source Sans 3", sans-serif;
+  background:
+    radial-gradient(circle at top right, rgba(13, 111, 105, 0.05), transparent 28%),
+    radial-gradient(circle at left center, rgba(220, 235, 230, 0.85), transparent 32%),
+    #f6f5f1;
+}
+
+body {
+  margin: 0;
+}
