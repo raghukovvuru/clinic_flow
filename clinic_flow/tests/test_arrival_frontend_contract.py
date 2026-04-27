@@ -1,0 +1,138 @@
+"""
+Frontend contract tests for the arrival counter page API.
+
+Tests the enriched response shape expected by the arrival_counter desk page.
+"""
+import frappe
+from frappe.tests import IntegrationTestCase
+from frappe.utils import today
+
+
+class TestArrivalFrontendContract(IntegrationTestCase):
+    def setUp(self):
+        super().setUp()
+        self._ensure_gender("Male")
+
+    # ── contract tests ────────────────────────────────────────────────────
+
+    def test_session_context_includes_current_next_stats_and_recent_arrivals(self):
+        sp = self.make_service_point()
+        session = self.make_queue_session(
+            status="Active", start_time="09:00:00", service_point=sp
+        )
+        next_session = self.make_queue_session(
+            status="Scheduled", start_time="13:00:00", service_point=sp
+        )
+        arrived = self.make_queue_entry(session, status="Arrived", token_number=1)
+        self.make_queue_entry(session, status="Booked", token_number=2)
+
+        result = frappe.get_attr("clinic_flow.api.arrival.get_arrival_session_context")(
+            dept_abbr=sp.queue_code
+        )
+
+        self.assertTrue(result["has_active"])
+        self.assertEqual(result["stats"]["arrived"], 1)
+        self.assertEqual(result["stats"]["awaiting_arrival"], 1)
+        self.assertEqual(result["current_session"]["name"], session.name)
+        self.assertEqual(result["next_session"]["name"], next_session.name)
+        self.assertEqual(result["recent_arrivals"][0]["queue_entry"], arrived.name)
+
+    def test_lookup_arrival_candidate_keeps_legacy_candidates_and_adds_ui_fields(self):
+        session = self.make_queue_session(status="Active")
+        entry = self.make_queue_entry(session, status="Booked", token_number=7)
+
+        result = frappe.get_attr("clinic_flow.api.arrival.lookup_arrival_candidate")(
+            qr_code=entry.name
+        )
+
+        self.assertEqual(result["candidates"][0]["name"], entry.name)
+        self.assertEqual(result["candidates"][0]["display_token"], entry.token)
+        self.assertIn("print_context", result["candidates"][0])
+        self.assertIn("state_label", result["candidates"][0])
+
+    def test_mark_arrived_returns_success_card_payload(self):
+        session = self.make_queue_session(status="Active")
+        entry = self.make_queue_entry(session, status="Booked", token_number=3)
+
+        result = frappe.get_attr("clinic_flow.api.arrival.mark_arrived")(
+            queue_entry=entry.name
+        )
+
+        self.assertEqual(result["status"], "Arrived")
+        self.assertFalse(result["already_arrived"])
+        self.assertEqual(result["result_card"]["display_token"], entry.token)
+        self.assertIn("print_context", result["result_card"])
+
+    # ── test helpers ──────────────────────────────────────────────────────
+
+    def _ensure_gender(self, gender_name: str) -> str:
+        if frappe.db.exists("Gender", gender_name):
+            return gender_name
+        return frappe.get_doc({"doctype": "Gender", "gender": gender_name}).insert().name
+
+    def make_service_point(self, queue_code=None):
+        code = queue_code or f"AF{frappe.generate_hash(length=5).upper()}"
+        return frappe.get_doc({
+            "doctype": "Service Point",
+            "queue_code": code,
+            "display_label": f"ArrivalFront {code}",
+            "category": "consult",
+            "is_active": 1,
+        }).insert(ignore_permissions=True)
+
+    def make_practitioner(self):
+        return frappe.get_doc({
+            "doctype": "Healthcare Practitioner",
+            "first_name": f"Prac {frappe.generate_hash(length=4)}",
+            "gender": "Male",
+        }).insert(ignore_permissions=True)
+
+    def make_patient(self):
+        return frappe.get_doc({
+            "doctype": "Patient",
+            "first_name": "Arrival",
+            "last_name": f"Front {frappe.generate_hash(length=4)}",
+            "sex": "Male",
+            "status": "Active",
+        }).insert(ignore_permissions=True)
+
+    def make_queue_session(self, status="Active", start_time="09:00:00", end_time=None, service_point=None):
+        sp = service_point or self.make_service_point()
+        practitioner = self.make_practitioner()
+        if end_time is None:
+            end_time = "12:00:00" if start_time <= "10:00:00" else "17:00:00"
+        return frappe.get_doc({
+            "doctype": "Queue Session",
+            "session_name": f"AF Session {frappe.generate_hash(length=4)}",
+            "practitioner": practitioner.name,
+            "session_date": today(),
+            "start_time": start_time,
+            "end_time": end_time,
+            "service_point": sp.name,
+            "dept_abbr": sp.queue_code,
+            "session_capacity": 20,
+            "planned_capacity": 20,
+            "status": status,
+        }).insert(ignore_permissions=True)
+
+    def make_queue_entry(self, session, status="Booked", token_number=1):
+        patient = self.make_patient()
+        token = f"{session.dept_abbr}-{token_number:03d}"
+        entry = frappe.get_doc({
+            "doctype": "Queue Entry",
+            "queue_session": session.name,
+            "patient": patient.name,
+            "practitioner": session.practitioner,
+            "dept_abbr": session.dept_abbr,
+            "token_number": token_number,
+            "token": token,
+            "queue_position": token_number,
+            "channel": "walkin",
+            "load_class": "non_review_load",
+            "priority": "normal",
+            "status": status,
+            "issued_by": frappe.session.user,
+            "issued_by_role": "Queue Manager",
+        })
+        entry.insert(ignore_permissions=True)
+        return entry
