@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, renameSync } from "fs";
+import { cpSync, existsSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -16,14 +16,5 @@ if (!existsSync(destDir)) {
 }
 
 cpSync(buildDir, destDir, { recursive: true });
-
-const flatHtml = join(destDir, "arrival-counter.html");
-const arrivalDir = join(destDir, "arrival-counter");
-if (existsSync(flatHtml)) {
-  if (!existsSync(arrivalDir)) {
-    mkdirSync(arrivalDir, { recursive: true });
-  }
-  renameSync(flatHtml, join(arrivalDir, "index.html"));
-}
 
 console.log(`Copied build output to ${destDir}`);

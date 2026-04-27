@@ -8,7 +8,7 @@ frappe.pages["arrival-counter-v1"].on_page_load = function (wrapper) {
   page.main.empty();
 
   const iframe = document.createElement("iframe");
-  iframe.src = "/assets/clinic_flow/head-app/arrival-counter/index.html";
+  iframe.src = "/assets/clinic_flow/head-app/arrival-counter.html";
   iframe.style.width = "100%";
   iframe.style.height = "100vh";
   iframe.style.border = "none";
