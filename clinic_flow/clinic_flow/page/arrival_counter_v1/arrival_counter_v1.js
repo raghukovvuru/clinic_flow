@@ -13,6 +13,7 @@ frappe.pages["arrival-counter-v1"].on_page_load = function (wrapper) {
   iframe.style.height = "100vh";
   iframe.style.border = "none";
   iframe.style.background = "#f6f5f1";
+  iframe.title = "Arrival Counter";
   iframe.setAttribute("allow", "clipboard-read; clipboard-write");
   page.main.append(iframe);
 };
