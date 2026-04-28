@@ -75,6 +75,24 @@ test("keeps input, result card, and recent arrivals in one vertical working colu
   await expect(regions.nth(2)).toContainText("Recent Arrivals");
 });
 
+test("renders a quiet header with current/next session chips and exact stat labels", async ({ page }) => {
+  await page.route("/api/method/clinic_flow.api.arrival.get_arrival_session_context", async (route) => {
+    await route.fulfill({ json: { message: {
+      has_active: true,
+      stats: { arrived: 4, awaiting_arrival: 7 },
+      current_session: { name: "QS-1", session_name: "Morning Clinic", status: "Active", start_time: "09:00:00" },
+      next_session: { name: "QS-2", session_name: "Afternoon Clinic", status: "Scheduled", start_time: "13:00:00" },
+      recent_arrivals: []
+    } } });
+  });
+
+  await page.goto("/arrival-counter");
+  await expect(page.getByText("Active: Morning Clinic")).toBeVisible();
+  await expect(page.getByText("Next: Afternoon Clinic")).toBeVisible();
+  await expect(page.getByText("Arrived")).toBeVisible();
+  await expect(page.getByText("Awaiting Arrival")).toBeVisible();
+});
+
 test.describe("permission denied", () => {
   test.beforeEach(async ({ page }) => {
     await page.unrouteAll({ behavior: "ignoreErrors" });
