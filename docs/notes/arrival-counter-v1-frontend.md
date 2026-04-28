@@ -65,3 +65,11 @@ Ship the first head-app frontend slice for Arrival Counter while preserving back
 ### Next Integration Step
 
 - Run staff acceptance on desktop counters at `/clinic/arrival-counter`, then decide whether the older `arrival_counter_v1` Desk bridge should redirect automatically or remain as an explicit link during coexistence.
+
+## UI Stabilization Follow-Up - 2026-04-28
+
+- Aligned the standalone shell UI with the stabilized Arrival Counter UI/product spec.
+- Kept architecture, permissions, and backend authority unchanged.
+- Verified the scan-first layout, shared result-card shell, and quiet support surfaces through frontend tests.
+- Spec: `docs/superpowers/specs/2026-04-27-arrival-counter-v1-frontend-design.md`
+- Implementation: `docs/superpowers/plans/2026-04-28-arrival-counter-ui-stabilization.md`
