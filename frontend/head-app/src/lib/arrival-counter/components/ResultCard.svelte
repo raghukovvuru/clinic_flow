@@ -33,7 +33,7 @@
         <div class="mt-3 text-base text-slate-600">Check the QR code, patient name, child name, or mobile number and try again.</div>
       </div>
       <div class="flex flex-wrap gap-3">
-        <button class="rounded-2xl border border-[#d9ddd8] px-5 py-3 text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={() => onReset()}>Start over</button>
+        <button class="cursor-pointer rounded-2xl border border-[#d9ddd8] px-5 py-3 text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={() => onReset()}>Start over</button>
       </div>
     </div>
   {:else if state === "multiple"}

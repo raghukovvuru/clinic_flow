@@ -167,3 +167,50 @@ test("keeps multiple matches inside the shared result-card shell and hides print
   await expect(resultCard.getByText("Select patient")).toBeVisible();
   await expect(resultCard.getByText("Print Token Slip")).toHaveCount(0);
 });
+
+test.describe("success state rendering", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.route("/api/method/clinic_flow.api.arrival.get_arrival_session_context", async (route) => {
+      await route.fulfill({ json: { message: { has_active: true, stats: { arrived: 1, awaiting_arrival: 0 }, current_session: null, next_session: null, recent_arrivals: [] } } });
+    });
+    await page.route("/api/method/clinic_flow.api.arrival.lookup_arrival_candidate", async (route) => {
+      await route.fulfill({ json: { message: { candidates: [
+        { name: "QE-3", queue_entry: "QE-3", display_token: "OPD-003", patient_name: "Success Test", queue_session: "QS-1", status: "Booked", state_label: "Ready to Confirm", visit_label: "New Patient" },
+      ] } } });
+    });
+    const mockMarkResult = {
+      message: {
+        status: "Arrived",
+        already_arrived: false,
+        queue_entry: "QE-3",
+        patient_name: "Success Test",
+        result_card: {
+          name: "QE-3",
+          queue_entry: "QE-3",
+          display_token: "OPD-003",
+          patient_name: "Success Test",
+          queue_session: "QS-1",
+          status: "Arrived",
+          state_label: "Checked In",
+          visit_label: "New Patient",
+          print_context: { queue_entry: "QE-3", display_token: "OPD-003", patient_name: "Success Test", qr_svg: "<svg></svg>" },
+        },
+      },
+    };
+    await page.route("/api/method/clinic_flow.api.arrival.mark_arrived", async (route) => {
+      await route.fulfill({ json: mockMarkResult });
+    });
+  });
+
+  test("shows token, patient name, Print Token Slip after arrival confirmation", async ({ page }) => {
+    await page.goto("/arrival-counter");
+    await page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number").fill("Success");
+    await page.keyboard.press("Enter");
+    await page.getByRole("button", { name: "Confirm Arrival" }).click();
+
+    const resultCard = page.getByTestId("arrival-result-card");
+    await expect(resultCard.getByText("OPD-003")).toBeVisible();
+    await expect(resultCard.getByText("Success Test")).toBeVisible();
+    await expect(resultCard.getByText("Print Token Slip")).toBeVisible();
+  });
+});
