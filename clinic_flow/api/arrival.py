@@ -2,9 +2,13 @@ import frappe
 from frappe import _
 from frappe.utils import now_datetime, today, add_to_date
 
+from clinic_flow.api.arrival_permissions import enforce_arrival_counter_access
+
 
 @frappe.whitelist()
 def resolve_arrival_sessions(dept_abbr: str = "") -> list:
+	enforce_arrival_counter_access()
+
 	"""
 	Sessions that can accept patient arrivals right now:
 	  - Active and Paused sessions always qualify.
@@ -104,6 +108,7 @@ def lookup_arrival_candidate(
 	Lookup priority: QR scan (exact docname) > phone number > patient name.
 	Returns up to 10 candidates from today's arrival-eligible sessions.
 	"""
+	enforce_arrival_counter_access()
 	sessions = resolve_arrival_sessions(dept_abbr)
 	if not sessions:
 		return {"candidates": [], "error": "no_active_session"}
@@ -188,6 +193,7 @@ def mark_arrived(queue_entry: str, queue_session: str = "") -> dict:
 	Valid from: Booked, Waiting.
 	Idempotent: calling again when status is already Arrived returns without error.
 	"""
+	enforce_arrival_counter_access()
 	from clinic_flow.queue.engine import _broadcast_queue_update
 
 	entry = frappe.db.get_value(
@@ -252,6 +258,7 @@ def get_token_qr(queue_entry: str) -> str:
 	Returns the QR code SVG for a Queue Entry, for inline embedding in print slips.
 	The QR encodes the docname so the arrival counter scanner can identify the patient.
 	"""
+	enforce_arrival_counter_access()
 	from clinic_flow.utils import get_token_qr_svg
 	return get_token_qr_svg(queue_entry)
 
@@ -259,6 +266,7 @@ def get_token_qr(queue_entry: str) -> str:
 @frappe.whitelist()
 def get_arrival_session_context(dept_abbr: str = "") -> dict:
 	"""Summary payload for the arrival counter page header."""
+	enforce_arrival_counter_access()
 	sessions = resolve_arrival_sessions(dept_abbr)
 	if not sessions:
 		return {

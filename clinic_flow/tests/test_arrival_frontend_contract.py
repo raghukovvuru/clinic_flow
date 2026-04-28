@@ -63,6 +63,64 @@ class TestArrivalFrontendContract(IntegrationTestCase):
         self.assertEqual(result["result_card"]["display_token"], entry.token)
         self.assertIn("print_context", result["result_card"])
 
+    # ── permission tests ─────────────────────────────────────────────────
+
+    def test_arrival_api_methods_reject_non_staff_user(self):
+        session = self.make_queue_session(status="Active")
+        entry = self.make_queue_entry(session, status="Booked", token_number=11)
+        user = self.make_queue_viewer_user()
+
+        protected_calls = [
+            lambda: frappe.get_attr("clinic_flow.api.arrival.resolve_arrival_sessions")(),
+            lambda: frappe.get_attr("clinic_flow.api.arrival.get_arrival_session_context")(),
+            lambda: frappe.get_attr("clinic_flow.api.arrival.lookup_arrival_candidate")(qr_code=entry.name),
+            lambda: frappe.get_attr("clinic_flow.api.arrival.mark_arrived")(queue_entry=entry.name),
+            lambda: frappe.get_attr("clinic_flow.api.arrival.get_token_qr")(queue_entry=entry.name),
+        ]
+
+        try:
+            frappe.set_user(user.name)
+            for call in protected_calls:
+                with self.assertRaises(frappe.PermissionError):
+                    call()
+        finally:
+            frappe.set_user("Administrator")
+
+    def test_arrival_api_methods_allow_queue_manager_user(self):
+        session = self.make_queue_session(status="Active")
+        entry = self.make_queue_entry(session, status="Booked", token_number=12)
+        user = self.make_arrival_staff_user("Queue Manager")
+
+        try:
+            frappe.set_user(user.name)
+            context = frappe.get_attr("clinic_flow.api.arrival.get_arrival_session_context")()
+            lookup = frappe.get_attr("clinic_flow.api.arrival.lookup_arrival_candidate")(qr_code=entry.name)
+            result = frappe.get_attr("clinic_flow.api.arrival.mark_arrived")(queue_entry=entry.name)
+            qr = frappe.get_attr("clinic_flow.api.arrival.get_token_qr")(queue_entry=entry.name)
+
+            self.assertIn("stats", context)
+            self.assertEqual(lookup["candidates"][0]["queue_entry"], entry.name)
+            self.assertEqual(result["status"], "Arrived")
+            self.assertIn("<svg", qr)
+        finally:
+            frappe.set_user("Administrator")
+
+    def make_queue_viewer_user(self):
+        return self.make_arrival_staff_user("Queue Viewer")
+
+    def make_arrival_staff_user(self, role: str):
+        email = f"arrival-{role.lower().replace(' ', '-')}-{frappe.generate_hash(length=8)}@example.com"
+        return frappe.get_doc({
+            "doctype": "User",
+            "email": email,
+            "first_name": "Arrival",
+            "last_name": role.replace(" ", ""),
+            "user_type": "System User",
+            "enabled": 1,
+            "send_welcome_email": 0,
+            "roles": [{"role": role}],
+        }).insert(ignore_permissions=True)
+
     # ── test helpers ──────────────────────────────────────────────────────
 
     def _ensure_gender(self, gender_name: str) -> str:
