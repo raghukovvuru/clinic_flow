@@ -393,10 +393,13 @@ If any of them drift from the code, update the docs rather than preserving stale
 
 ---
 
-## 13. Arrival Counter V1 Head-App Slice
+## 13. Arrival Counter V1 Standalone Head-App Slice
 
-- `arrival-counter-v1` is the first head-app frontend migration slice.
+- `/clinic/arrival-counter` is the canonical operator route for Arrival Counter v1.
+- The route is a Frappe-served standalone shell outside Desk chrome.
+- The shell injects `window.clinicFlowBoot` with user, roles, CSRF token, realtime mode, and Arrival Counter permission flags.
+- The shell is no-cache and staff-only for `Healthcare Administrator`, `Queue Manager`, and `System Manager`.
 - The active backend authority remains `clinic_flow.api.arrival`.
-- The legacy `arrival_counter` Desk page remains available during coexistence.
-- The new slice uses a thin Frappe iframe host surface and keeps operational UI logic in the dedicated frontend workspace under `frontend/head-app`.
 - Arrival lookup, arrival confirmation, token slip content, and live context remain backend-owned.
+- The legacy `arrival_counter` and `arrival_counter_v1` Desk pages remain available during coexistence, but they are not the canonical operator route.
+- The previous static iframe host at `/assets/clinic_flow/head-app/arrival-counter.html` is compatibility debt and must not be treated as an authenticated operational shell.

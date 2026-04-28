@@ -1,0 +1,36 @@
+# Arrival Counter Standalone Shell
+
+Date: 2026-04-28
+Spec: `docs/superpowers/specs/2026-04-28-head-app-standalone-shell-architecture-design.md`
+Spec: `docs/superpowers/specs/2026-04-28-arrival-counter-standalone-shell-design.md`
+Plan: `docs/superpowers/plans/2026-04-28-arrival-counter-standalone-shell.md`
+
+## What Changed
+
+- Arrival Counter is served canonically at `/clinic/arrival-counter` through a Frappe website shell.
+- The shell injects typed boot context and does not use Desk chrome or an iframe.
+- Frontend API, transport, and print helpers were adapted for the standalone shell contract.
+- Backend Arrival Counter APIs enforce staff permissions directly.
+
+## What Was Verified
+
+- `bench --site site1.localhost run-tests --app clinic_flow --module clinic_flow.tests.test_arrival_frontend_contract`
+- `bench --site site1.localhost run-tests --app clinic_flow --module clinic_flow.tests.test_arrival_counter_shell`
+- `bench --site site1.localhost run-tests --app clinic_flow --module clinic_flow.tests.test_slice3_checkin_boundary`
+- `npm run check`
+- `npm run test`
+- `npm run build`
+- `npm run test:e2e`
+- Optional real shell smoke: `FRAPPE_BASE_URL=http://site1.localhost:8000 FRAPPE_STORAGE_STATE=/tmp/clinic-flow-staff-storage.json npm run test:e2e -- tests/arrival-counter-frappe-shell.spec.ts`
+
+## What Stayed Out Of Scope
+
+- No Healthcare base app edits.
+- No full-headless OAuth work.
+- No custom realtime service.
+- No queue authority or token allocation changes.
+- No removal of legacy Desk compatibility pages.
+
+## Next Integration Step
+
+- Validate `/clinic/arrival-counter` with real counter staff and then choose the final legacy Desk bridge behavior.

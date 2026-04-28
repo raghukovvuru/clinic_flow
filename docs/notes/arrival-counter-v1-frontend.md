@@ -34,6 +34,34 @@ Ship the first head-app frontend slice for Arrival Counter while preserving back
 - No removal of the legacy `arrival_counter` page.
 - No Frappe realtime bridge for the iframe (polling fallback used).
 
-## Next Integration Step
+## Standalone Shell Correction - 2026-04-28
 
-Validate the mounted page with real staff operators on desktop counters, then use the same `frontend/head-app` workspace to implement `Reception Shell + Live Queue Rail`.
+### What Changed
+
+- Replaced the canonical iframe/static asset host with a Frappe-served shell at `/clinic/arrival-counter`.
+- Added typed boot data with user, roles, CSRF token, realtime mode, and Arrival Counter permissions.
+- Switched frontend API calls from `window.frappe?.csrf_token` to the boot-provided CSRF token.
+- Added backend staff permission enforcement to all Arrival Counter whitelisted methods.
+- Kept the legacy Desk page as a coexistence bridge only.
+- Hardened print-slip rendering so patient-controlled text is escaped.
+- Corrected multiple-match rendering to stay inside the shared result-card shell.
+
+### What Was Verified
+
+- Backend permission and contract tests for `clinic_flow.api.arrival`.
+- Shell context tests for boot data, no-cache behavior, and non-staff denial.
+- Frontend boot, API, response validation, transport, state, print-slip, and e2e tests.
+- SvelteKit build copied assets into `clinic_flow/public/head-app`.
+- Real Frappe-route shell smoke when authenticated staff storage state was available.
+
+### What Stayed Out of Scope
+
+- No changes inside `apps/healthcare/`.
+- No full-headless OAuth or separate frontend deployment.
+- No queue authority rewrite.
+- No Patient Appointment lifecycle routing for arrival authority.
+- No removal of legacy Desk pages.
+
+### Next Integration Step
+
+- Run staff acceptance on desktop counters at `/clinic/arrival-counter`, then decide whether the older `arrival_counter_v1` Desk bridge should redirect automatically or remain as an explicit link during coexistence.
