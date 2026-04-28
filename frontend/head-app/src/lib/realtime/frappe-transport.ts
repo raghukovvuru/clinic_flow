@@ -1,22 +1,52 @@
-export function attachArrivalTransport(
-  invalidate: () => void,
-  realtime?: { on?: (event: string, cb: (payload: unknown) => void) => unknown },
-) {
-  const cleanups: Array<() => void> = [];
+import type { ArrivalRealtimeClient, ArrivalRealtimeMode, ArrivalTransportState } from "$arrival/types";
 
-  if (realtime?.on) {
-    const offQueue = realtime.on("queue_update", () => invalidate());
-    cleanups.push(() => { if (typeof offQueue === "function") offQueue(); });
-    const offSession = realtime.on("session_status", () => invalidate());
-    cleanups.push(() => { if (typeof offSession === "function") offSession(); });
-  } else {
-    console.info("ArrivalCounter: Frappe realtime unavailable, using interval polling.");
+export function attachArrivalTransport({
+  mode,
+  invalidate,
+  realtime,
+  intervalMs = 30000,
+}: {
+  mode: ArrivalRealtimeMode;
+  invalidate: () => void | Promise<void>;
+  realtime?: ArrivalRealtimeClient;
+  intervalMs?: number;
+}) {
+  const cleanups: Array<() => void> = [];
+  const state: ArrivalTransportState = {
+    mode,
+    lastRefreshAt: null,
+    stale: false,
+    failureCount: 0,
+  };
+
+  async function safeInvalidate() {
+    try {
+      await invalidate();
+      state.lastRefreshAt = Date.now();
+      state.stale = false;
+      state.failureCount = 0;
+    } catch {
+      state.failureCount += 1;
+      state.stale = true;
+    }
   }
 
-  const interval = window.setInterval(invalidate, 30000);
-  cleanups.push(() => window.clearInterval(interval));
+  if (mode === "frappe" && realtime?.on) {
+    for (const event of ["queue_update", "session_status"] as const) {
+      const cleanup = realtime.on(event, () => void safeInvalidate());
+      if (typeof cleanup === "function") cleanups.push(cleanup as () => void);
+    }
+  }
 
-  return () => {
-    for (const fn of cleanups) fn();
+  if (mode === "polling" || mode === "frappe") {
+    const interval = window.setInterval(() => void safeInvalidate(), intervalMs);
+    cleanups.push(() => window.clearInterval(interval));
+  }
+
+  return {
+    state,
+    detach() {
+      for (const cleanup of cleanups) cleanup();
+    },
   };
 }

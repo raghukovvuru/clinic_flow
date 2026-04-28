@@ -54,6 +54,17 @@ export interface ArrivalClientErrorShape {
 
 export type ArrivalRealtimeMode = "frappe" | "polling" | "disabled";
 
+export interface ArrivalTransportState {
+  mode: ArrivalRealtimeMode;
+  lastRefreshAt: number | null;
+  stale: boolean;
+  failureCount: number;
+}
+
+export interface ArrivalRealtimeClient {
+  on?: (event: string, cb: (payload: unknown) => void) => unknown;
+}
+
 export interface ArrivalCounterBoot {
   app: "clinic_flow";
   slice: "arrival-counter";
