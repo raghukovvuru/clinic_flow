@@ -36,3 +36,24 @@ export interface ArrivalMarkResult {
   already_arrived: boolean;
   result_card: ArrivalCardRecord;
 }
+
+export type ArrivalRealtimeMode = "frappe" | "polling" | "disabled";
+
+export interface ArrivalCounterBoot {
+  app: "clinic_flow";
+  slice: "arrival-counter";
+  route: "/clinic/arrival-counter";
+  siteName: string;
+  user: string;
+  roles: string[];
+  csrfToken: string;
+  realtime: {
+    enabled: boolean;
+    mode: ArrivalRealtimeMode;
+  };
+  permissions: {
+    canUseArrivalCounter: boolean;
+    canConfirmArrival: boolean;
+    canPrintTokenSlip: boolean;
+  };
+}
