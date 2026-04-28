@@ -42,7 +42,7 @@ export class ArrivalCounterState {
     this.inputValue = raw;
     const classified = classifyInput(raw);
     if (!classified) {
-      this.resultState = "error";
+      this.resultState = "idle";
       this.message = "Scan a QR code, enter 6+ phone digits, or type at least 3 letters.";
       return;
     }
@@ -54,7 +54,7 @@ export class ArrivalCounterState {
       this.candidates = response.candidates;
       this.focusedCandidateIndex = 0;
     } catch (error) {
-      this.resultState = "error";
+      this.resultState = "idle";
       this.message = error instanceof Error ? error.message : "Lookup failed. Try again.";
       return;
     } finally {
@@ -84,7 +84,6 @@ export class ArrivalCounterState {
       this.resultState = result.already_arrived ? "already-arrived" : "success";
       await this.refreshContext();
     } catch (error) {
-      this.resultState = "error";
       this.message = error instanceof Error ? error.message : "Could not confirm arrival. Try again.";
     } finally {
       this.isConfirmPending = false;

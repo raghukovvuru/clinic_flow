@@ -84,7 +84,7 @@
   <main class="grid gap-6">
     <InputSurface bind:value={pageState.inputValue} focusSignal={pageState.shouldFocusInput} onSubmit={handleSubmit} disabled={pageState.resultState === "loading"} />
 
-    <StatusBanner state={pageState.resultState} message={pageState.message} />
+    <StatusBanner message={pageState.message} />
 
     <ResultCard
       card={pageState.selected}

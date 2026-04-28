@@ -27,7 +27,7 @@
     <div class="flex h-full flex-col items-center justify-center gap-3 text-center">
       <div class="text-lg font-semibold text-slate-600">No match found</div>
       <div class="text-sm text-slate-500">Check the barcode or try searching by phone or name.</div>
-      <button class="rounded-xl border border-[#d9ddd8] px-4 py-2 text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={onReset}>Start over</button>
+      <button class="rounded-xl border border-[#d9ddd8] px-4 py-2 text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={() => onReset()}>Start over</button>
     </div>
   {:else if state === "multiple"}
     <MultipleMatchesList {candidates} {focusedCandidateIndex} onChoose={onChoose} onMoveFocus={onMoveCandidateFocus} />
@@ -41,14 +41,20 @@
       </div>
       <div class="flex flex-wrap gap-3">
         {#if state === "pre-confirm"}
-          <button class="rounded-2xl bg-[#0d6f69] px-5 py-3 font-semibold text-white focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={onConfirm}>Confirm Arrival</button>
-          <button class="rounded-2xl px-5 py-3 text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={onReset}>Not this patient</button>
+          <button class="rounded-2xl bg-[#0d6f69] px-5 py-3 font-semibold text-white focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={() => onConfirm()}>Confirm Arrival</button>
+          <button class="rounded-2xl px-5 py-3 text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={() => onReset()}>Not this patient</button>
         {:else if state === "success" || state === "already-arrived"}
           {#if state === "already-arrived"}<div class="rounded-2xl bg-mint px-5 py-3 font-semibold text-[#10211f]">Already checked in</div>{/if}
-          <button class="rounded-2xl bg-[#0d6f69] px-5 py-3 font-semibold text-white focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={onPrint}>Print Token Slip</button>
-          <button class="rounded-2xl px-5 py-3 text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={onReset}>Next patient</button>
+          <button class="rounded-2xl bg-[#0d6f69] px-5 py-3 font-semibold text-white focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={() => onPrint()}>Print Token Slip</button>
+          <button class="rounded-2xl px-5 py-3 text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={() => onReset()}>Next patient</button>
         {/if}
       </div>
+    </div>
+  {:else}
+    <div class="flex h-full flex-col items-center justify-center gap-3 text-center">
+      <div class="text-lg font-semibold text-slate-600">Something went wrong</div>
+      <div class="text-sm text-slate-500">Please refresh or try again.</div>
+      <button class="rounded-xl border border-[#d9ddd8] px-4 py-2 text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={() => onReset()}>Start over</button>
     </div>
   {/if}
 </section>

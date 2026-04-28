@@ -1,5 +1,5 @@
 export type SearchMode = "qr_code" | "phone" | "name_query";
-export type ResultState = "idle" | "loading" | "no-match" | "multiple" | "pre-confirm" | "already-arrived" | "success" | "error";
+export type ResultState = "idle" | "loading" | "no-match" | "multiple" | "pre-confirm" | "already-arrived" | "success";
 
 export interface ArrivalCardRecord {
   name: string;

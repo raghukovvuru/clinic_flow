@@ -48,10 +48,10 @@ describe("ArrivalCounterState", () => {
     expect(state.resultState).toBe("no-match");
   });
 
-  it("moves to error for short input", async () => {
+  it("returns to idle with message for invalid input", async () => {
     const state = new ArrivalCounterState();
     await state.lookup("x");
-    expect(state.resultState).toBe("error");
+    expect(state.resultState).toBe("idle");
     expect(state.message).toBeTruthy();
   });
 
@@ -71,11 +71,11 @@ describe("ArrivalCounterState", () => {
     expect(state.candidates).toHaveLength(2);
   });
 
-  it("shows error state when lookup throws", async () => {
+  it("returns to idle with message when lookup throws", async () => {
     vi.mocked(lookupArrivalCandidate).mockRejectedValueOnce(new Error("Network error"));
     const state = new ArrivalCounterState();
     await state.lookup("Mimi");
-    expect(state.resultState).toBe("error");
+    expect(state.resultState).toBe("idle");
     expect(state.message).toBe("Network error");
   });
 
