@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: "ignoreErrors" });
   await page.addInitScript(() => {
     window.clinicFlowBoot = {
       app: "clinic_flow",
@@ -28,6 +29,7 @@ test("renders multiple matches inside the shared result-card shell", async ({ pa
   });
 
   await page.goto("/arrival-counter");
+  await page.waitForLoadState("networkidle");
   await page.getByPlaceholder("Scan barcode or enter patient ID").fill("Mimi");
   await page.keyboard.press("Enter");
 
