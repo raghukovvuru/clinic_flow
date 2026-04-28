@@ -31,6 +31,32 @@ Plan: `docs/superpowers/plans/2026-04-28-arrival-counter-standalone-shell.md`
 - No queue authority or token allocation changes.
 - No removal of legacy Desk compatibility pages.
 
+## Plan Deviation
+
+### F7.3 — `paths.assets` Not Set In Svelte Config
+
+The frontend plan Step F7.3 specifies:
+```js
+paths: {
+  assets: "/assets/clinic_flow/head-app",
+},
+```
+
+**Not applied.** Reason: SvelteKit v2.58 validates `paths.assets` must be a full URL
+(matching `/^[a-z]+:\/\//`). A root-relative path like `/assets/clinic_flow/head-app`
+fails `svelte-kit sync` with "option must be an absolute path, if specified."
+
+**Compensating control:** The Frappe shell controller at
+`clinic_flow/www/clinic/arrival_counter.py` — `_load_head_app_shell()` — rewrites
+relative `./_app/` paths to `/assets/clinic_flow/head-app/_app/` at serve time.
+The asset delivery contract is fulfilled server-side.
+
+**Verification:** `npm run build` output copied to `clinic_flow/public/head-app/`
+resolves correctly through `/clinic/arrival-counter` shell route. Local e2e tests
+and backend shell tests confirm asset loading.
+
+---
+
 ## Next Integration Step
 
 - Validate `/clinic/arrival-counter` with real counter staff and then choose the final legacy Desk bridge behavior.

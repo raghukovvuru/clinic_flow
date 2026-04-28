@@ -1527,3 +1527,23 @@ None of the frontend tasks import backend Python code or depend on the Frappe sh
 
 ### Integration Handoff
 After both plans complete: `npm run build` drops `arrival-counter.html` and `_app/` assets into `clinic_flow/public/head-app/`. The backend shell route at `/clinic/arrival-counter` reads and serves them. Run `bench migrate` and access the route at `http://site1.localhost:8000/clinic/arrival-counter` with staff credentials.
+
+---
+
+## Implementation Addendum — 2026-04-28
+
+### F7.3 Deviation
+
+Plan Step F7.3 specifies `paths: { assets: "/assets/clinic_flow/head-app" }`
+in `svelte.config.js`. This literal step was not applied because SvelteKit v2.58
+validates `paths.assets` against `/^[a-z]+:\/\//` — it requires a full URL with
+protocol, not a root-relative path.
+
+**Compensating control:** Asset path rewriting is performed by the Frappe shell
+controller (`_load_head_app_shell()` in `clinic_flow/www/clinic/arrival_counter.py`)
+at serve time. This approach is actually more correct since the deployment base URL
+is known only at runtime, not at static build time.
+
+**Verification:** Built HTML resolves assets correctly through
+`/assets/clinic_flow/head-app/_app/...` when served via `/clinic/arrival-counter`.
+Backend shell tests (`test_arrival_counter_shell`) and frontend e2e tests confirm.
