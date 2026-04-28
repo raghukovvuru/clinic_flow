@@ -56,5 +56,6 @@ jspm_packages/
 
 # Local AI/worktree artifacts
 .claude/
+.opencode/
 .worktrees/
 graphify-out/
