@@ -76,7 +76,7 @@ describe("ArrivalCounterState", () => {
     const state = new ArrivalCounterState();
     await state.lookup("Mimi");
     expect(state.resultState).toBe("error");
-    expect(state.message).toBe("Lookup failed. Try again.");
+    expect(state.message).toBe("Network error");
   });
 
   it("sets inputValue before classifier call", () => {
@@ -93,5 +93,34 @@ describe("ArrivalCounterState", () => {
     expect(state.resultState).toBe("idle");
     expect(state.selected).toBeNull();
     expect(state.inputValue).toBe("");
+  });
+
+  it("tracks focused candidate for keyboard selection", async () => {
+    // Set up mock with two candidates
+    const mockCard = { name: "QE-0001", queue_entry: "QE-0001", display_token: "OPD-001", patient_name: "Mimi One", queue_session: "QS-1", status: "Booked", state_label: "Ready", visit_label: "New", print_context: { queue_entry: "QE-0001", display_token: "OPD-001", patient_name: "Mimi One", qr_svg: "<svg/>" } };
+    vi.mocked(lookupArrivalCandidate).mockResolvedValueOnce({ candidates: [mockCard, { ...mockCard, queue_entry: "QE-0002", name: "QE-0002" }] });
+    const state = new ArrivalCounterState();
+    await state.lookup("Mimi");
+
+    expect(state.resultState).toBe("multiple");
+    expect(state.focusedCandidateIndex).toBe(0);
+
+    state.moveCandidateFocus(1);
+    expect(state.focusedCandidateIndex).toBe(1);
+
+    state.selectFocusedCandidate();
+    expect(state.selected?.queue_entry).toBe("QE-0002");
+    expect(state.resultState).toBe("pre-confirm");
+  });
+
+  it("does not overwrite an active decision during context refresh", async () => {
+    const mockCard = { name: "QE-0001", queue_entry: "QE-0001", display_token: "OPD-001", patient_name: "Mimi One", queue_session: "QS-1", status: "Booked", state_label: "Ready", visit_label: "New", print_context: { queue_entry: "QE-0001", display_token: "OPD-001", patient_name: "Mimi One", qr_svg: "<svg/>" } };
+    vi.mocked(lookupArrivalCandidate).mockResolvedValueOnce({ candidates: [mockCard] });
+    const state = new ArrivalCounterState();
+    await state.lookup("Mimi");
+    await state.refreshContext();
+
+    expect(state.selected?.queue_entry).toBe("QE-0001");
+    expect(state.resultState).toBe("pre-confirm");
   });
 });

@@ -9,6 +9,26 @@ export class ArrivalCounterState {
   message = $state("");
   selected = $state<ArrivalCardRecord | null>(null);
   candidates = $state<ArrivalCardRecord[]>([]);
+  focusedCandidateIndex = $state(0);
+  isLookupPending = $state(false);
+  isConfirmPending = $state(false);
+  shouldFocusInput = $state(0);
+
+  moveCandidateFocus(delta: number) {
+    if (!this.candidates.length) return;
+    this.focusedCandidateIndex = (this.focusedCandidateIndex + delta + this.candidates.length) % this.candidates.length;
+  }
+
+  selectFocusedCandidate() {
+    const card = this.candidates[this.focusedCandidateIndex];
+    if (!card) return;
+    this.selected = card;
+    this.resultState = card.status === "Arrived" ? "already-arrived" : "pre-confirm";
+  }
+
+  requestInputFocus() {
+    this.shouldFocusInput += 1;
+  }
 
   async refreshContext() {
     try {
@@ -27,14 +47,18 @@ export class ArrivalCounterState {
       return;
     }
 
+    this.isLookupPending = true;
     this.resultState = "loading";
     try {
       const response = await lookupArrivalCandidate({ [classified.mode]: classified.value });
       this.candidates = response.candidates;
-    } catch {
+      this.focusedCandidateIndex = 0;
+    } catch (error) {
       this.resultState = "error";
-      this.message = "Lookup failed. Try again.";
+      this.message = error instanceof Error ? error.message : "Lookup failed. Try again.";
       return;
+    } finally {
+      this.isLookupPending = false;
     }
 
     if (!this.candidates.length) {
@@ -52,15 +76,18 @@ export class ArrivalCounterState {
   }
 
   async confirmArrival() {
-    if (!this.selected) return;
+    if (!this.selected || this.isConfirmPending) return;
+    this.isConfirmPending = true;
     try {
       const result = await markArrived(this.selected.queue_entry, this.selected.queue_session);
       this.selected = result.result_card;
       this.resultState = result.already_arrived ? "already-arrived" : "success";
       await this.refreshContext();
-    } catch {
+    } catch (error) {
       this.resultState = "error";
-      this.message = "Could not confirm arrival. Try again.";
+      this.message = error instanceof Error ? error.message : "Could not confirm arrival. Try again.";
+    } finally {
+      this.isConfirmPending = false;
     }
   }
 
@@ -69,6 +96,8 @@ export class ArrivalCounterState {
     this.message = "";
     this.selected = null;
     this.candidates = [];
+    this.focusedCandidateIndex = 0;
     this.resultState = "idle";
+    this.requestInputFocus();
   }
 }
