@@ -28,11 +28,11 @@ describe("attachArrivalTransport", () => {
 
   it("uses injected realtime without reading window.frappe", () => {
     const invalidate = vi.fn();
-    const callbacks: Record<string, () => void> = {};
-    const realtime = { on: vi.fn((event: string, cb: () => void) => { callbacks[event] = cb; return () => {}; }) };
+    const callbacks: Record<string, (payload: unknown) => void> = {};
+    const realtime = { on: vi.fn((event: string, cb: (payload: unknown) => void) => { callbacks[event] = cb; return () => {}; }) };
 
     const transport = attachArrivalTransport({ mode: "frappe", invalidate, realtime, intervalMs: 30000 });
-    callbacks.queue_update();
+    callbacks.queue_update({});
 
     expect(invalidate).toHaveBeenCalledTimes(1);
     expect(realtime.on).toHaveBeenCalledWith("queue_update", expect.any(Function));

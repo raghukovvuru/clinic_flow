@@ -52,6 +52,7 @@ test("supports keyboard candidate selection and reset", async ({ page }) => {
   await page.goto("/arrival-counter");
   await page.getByPlaceholder("Scan barcode or enter patient ID").fill("Mimi");
   await page.keyboard.press("Enter");
+  await page.waitForSelector('[data-testid="arrival-result-card"]');
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
 
