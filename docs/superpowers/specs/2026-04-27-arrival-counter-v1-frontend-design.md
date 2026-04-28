@@ -4,16 +4,9 @@ Date: 2026-04-27
 App: `clinic_flow`
 Status: Hardened Draft
 
-Related context:
-
-- Canonical product context: `PRODUCT.md`
-- Canonical design system context: `DESIGN.md`
-- Canonical head-app architecture: `docs/superpowers/specs/2026-04-28-head-app-standalone-shell-architecture-design.md`
-- Slice technical application: `docs/superpowers/specs/2026-04-28-arrival-counter-standalone-shell-design.md`
-
 ## Goal
 
-Design the first standalone head-app frontend slice for `Arrival Counter` as a desktop-first, staff-only, focused check-in console.
+Design the standalone head-app frontend slice for `Arrival Counter` as a desktop-first, staff-only, focused check-in console.
 
 The page must optimize for one repeated loop:
 
@@ -22,7 +15,7 @@ The page must optimize for one repeated loop:
 - optionally reprint token slip when appropriate
 - return immediately to a ready state for the next patient
 
-The page should feel like a calm clinical station with a slight operational edge. It must not become another dense receptionist console or a generic product-template dashboard.
+The page should feel like a calm clinical station with a slight operational edge. It must not become a dense receptionist console, a queue-control surface, or a generic product-template dashboard.
 
 ## Scope
 
@@ -37,6 +30,7 @@ In scope:
 - recent arrivals content
 - typography and palette direction
 - state consistency rules for implementation
+- visual acceptance criteria for implementation quality
 
 Out of scope:
 
@@ -46,31 +40,81 @@ Out of scope:
 - walk-in admission
 - token board
 - backend data model changes unrelated to arrival flow
+- shell/auth/CSRF/build/API architecture decisions
+
+## Related Context And Authority
+
+This document is the Arrival Counter UI/product spec.
+
+Canonical related documents:
+
+- `PRODUCT.md` — product purpose, operator environment, and overall frontend direction
+- `DESIGN.md` — shared head-app design system, tokens, typography rules, spacing rhythm, focus behavior, and visual governance
+- `docs/superpowers/specs/2026-04-28-head-app-standalone-shell-architecture-design.md` — canonical platform architecture for head-app slices
+- `docs/superpowers/specs/2026-04-28-arrival-counter-standalone-shell-design.md` — Arrival Counter slice technical application of the platform
+
+Authority order for this slice:
+
+1. The canonical head-app architecture spec owns platform decisions:
+   - shell model
+   - route model
+   - auth/session/CSRF strategy
+   - build and asset delivery direction
+   - API boundary rules
+   - transport and refresh architecture
+2. The Arrival Counter standalone-shell technical spec owns slice mechanics:
+   - boot contract
+   - allowed roles
+   - backend API usage
+   - permission enforcement expectations
+   - mutation authority
+   - refresh behavior
+   - coexistence and migration mechanics
+3. This document owns Arrival Counter UI/product intent:
+   - operator workflow feel
+   - information hierarchy
+   - visual structure
+   - state presentation
+   - copy tone
+   - action emphasis
+   - visual acceptance criteria
+4. `DESIGN.md` provides the canonical shared design-system context for implementation:
+   - semantic tokens
+   - typography system
+   - spacing rhythm
+   - focus behavior
+   - component styling principles
+5. Stitch references are supporting visual calibration only:
+   - they are state references, not separate page layouts
+   - they do not override the canonical layout rules in this spec
+   - they do not override `DESIGN.md` token and typography decisions
 
 ## Product Intent
 
-`Arrival Counter` is a focused staff check-in console, not a queue-control surface.
+`Arrival Counter` is a focused staff check-in console, not a queue-control surface and not a mini operational dashboard.
 
 This UI/product spec owns the operator workflow, visual hierarchy, state presentation, tone, layout, and interaction intent. It does not own hosting, shell, CSRF, backend permission, build, or API architecture decisions.
 
 Primary usage:
 
-- QR scan for walk-in patients carrying printed slips
+- QR scan for patients carrying printed slips
 
 Fallback usage:
 
-- phone lookup for phone bookings without slips
-- name lookup when the slip is lost or damaged
+- patient name lookup
+- child name lookup
+- mobile number lookup
 
 Required product boundary:
 
 - the page may show compact operational context
-- the page must not require queue triage or receptionist-style operational reasoning before confirming an arrival
+- the page must not require queue triage or receptionist-style reasoning before confirming an arrival
 - the page must not expose queue-control actions
+- the page must not read like a receptionist dashboard with a smaller check-in widget embedded inside it
 
 ## Concrete Design Vocabulary
 
-Earlier direction used terms like `calm clinical`, `modern`, `sleek`, `premium`, and `slight operational edge`. For implementation, interpret them concretely:
+Interpret the direction language concretely:
 
 - `Calm clinical`: off-white canvas, low visual noise, no celebratory motion, no saturated background fields, and no decorative patient imagery.
 - `Modern`: clear type scale, intentional whitespace, responsive structure, precise focus states, and no Frappe Desk visual inheritance.
@@ -78,13 +122,13 @@ Earlier direction used terms like `calm clinical`, `modern`, `sleek`, `premium`,
 - `Premium`: high-quality spacing rhythm, strong token hierarchy, polished input surface, and clear primary action styling.
 - `Slight operational edge`: decisive mineral-teal primary actions, compact state labels, visible keyboard focus, and token-first decision cards.
 
-These terms must not be implemented as glassmorphism, generic SaaS dashboard patterns, gradient text, neon accents, or decorative illustrations.
+These terms must not be implemented as glassmorphism, generic SaaS dashboard patterns, gradient text, neon accents, decorative illustrations, or playful kiosk styling.
 
 ## Users And Access
 
 - staff-only page
 - primary environment: desktop monitor at the counter
-- current role boundary remains aligned with the existing page permissions:
+- role boundary remains aligned with the technical slice spec:
   - `Healthcare Administrator`
   - `Queue Manager`
   - `System Manager`
@@ -96,13 +140,13 @@ These terms must not be implemented as glassmorphism, generic SaaS dashboard pat
 1. Staff scans QR code.
 2. The page resolves the patient.
 3. Staff sees a single pre-confirm card.
-4. Staff clicks `Confirm Arrival`.
+4. Staff confirms arrival.
 5. The page shows success.
 6. The page returns to a ready state after a short delay.
 
 ### Fallback path
 
-1. Staff types phone number or patient name.
+1. Staff types patient name, child name, or mobile number.
 2. The page resolves zero, one, or multiple matches.
 3. Staff chooses the intended patient if needed.
 4. Staff confirms arrival.
@@ -141,12 +185,16 @@ Focus rules:
 
 The hierarchy must remain stable across all states.
 
-1. Primary: unified scan/search input
-2. Immediate response: result state card
-3. Compact context: current session, next session, arrival stats
-4. Quiet support: recent arrivals
+Visual priority order:
 
-The page should visually communicate that the input and result card are the reason the page exists, while the surrounding context is only there to orient the staff member.
+1. unified scan/search input
+2. result-state card
+3. compact context: current session, next session, arrival stats
+4. quiet support: recent arrivals
+
+The page must visually communicate that the input and result card are the reason the page exists, while the surrounding context is only there to orient the staff member.
+
+Header context must stay informational. Recent arrivals must stay reassuring. Neither may visually compete with the working surface.
 
 ## Canonical Layout
 
@@ -161,7 +209,7 @@ The implementation must use one canonical page layout.
   - `Arrived`
   - `Awaiting Arrival`
 
-The top bar is informational only in v1. It must not include generic utility buttons like `Session Info` or `Check-in Status` unless a later approved requirement adds them.
+The top bar is informational only in v1. It must not include generic utility buttons, queue controls, or secondary workflow actions.
 
 ### Main working column
 
@@ -176,89 +224,307 @@ The top bar is informational only in v1. It must not include generic utility but
 - no app-shell navigation
 - no footer links
 - no chrome that suggests this page is part of a broader product marketing surface
-- no permanent second column unless later required by implementation constraints
+- no permanent second operational column
+- no visually equal supporting panels competing with the input and result card
 
 ### Responsive rules
 
-- Primary target: desktop counter screens from 1024px wide upward.
-- Supported minimum width: 768px for tablet or narrow desktop fallback.
-- Below 1024px, header stats may wrap below session chips, but input remains before result card.
-- Below 768px, the page may stack vertically, but no state may require horizontal scrolling.
-- Recent arrivals must remain below the result card, never above the input or decision surface.
+- primary target: desktop counter screens from 1024px wide upward
+- supported minimum width: 768px for tablet or narrow desktop fallback
+- below 1024px, header stats may wrap below session chips, but input remains before result card
+- below 768px, the page may stack vertically, but no state may require horizontal scrolling
+- recent arrivals must remain below the result card, never above the input or decision surface
 
 ## State Consistency Rules
 
-This is a critical implementation rule.
+This is a hard implementation rule.
 
-All user-visible states must share the same page structure and the same result-card shell.
+Arrival Counter v1 uses one canonical page structure and one canonical result-card shell across all visible states.
 
-Allowed to change by state:
+The purpose of this rule is to keep the page mentally stable under repeated staff use. Operators should feel that the page is changing state inside one familiar working surface, not jumping between different mini-designs.
 
-- card accent or resolved-state tint
-- state label
-- state icon
+### Locked Page Structure
+
+The following structural elements must remain in the same order and role across all states:
+
+1. top bar with compact session context and arrival stats
+2. unified scan/search input surface
+3. single result-card area
+4. quiet recent-arrivals section
+
+This order must not change by state.
+
+### Locked Result-Card Shell
+
+The result area must keep one stable shell across:
+
+- idle
+- loading
+- no-match
+- multiple
+- pre-confirm
+- already-arrived
+- success
+
+The shell should preserve:
+
+- the same overall footprint
+- the same border radius family
+- the same padding logic
+- the same visual anchoring zone for token-first content
+- the same lower action zone
+- the same relationship to the input above and recent arrivals below
+
+A state may feel lighter or more resolved, but it must still read as the same decision surface.
+
+### Allowed State Variation
+
+The following may change by state:
+
+- state label text
+- state-supporting copy
+- state iconography
+- metadata content
 - button set
-- supporting copy
+- subtle surface tint or resolved-state emphasis
+- loading indicator treatment
+- candidate-list content inside the result-card footprint
 
-Not allowed to change by state:
+### Forbidden State Variation
+
+The following must not change by state:
 
 - page layout
-- header layout
-- input layout
-- result card footprint
-- token placement
-- recent arrivals section position
+- top-bar placement
+- input placement
+- result-card footprint category
+- token anchor position in resolved states
+- recent-arrivals placement
 - typography system
+- overall visual language
+- action-row location within the card
+- introduction of extra competing cards above or beside the result card
 
-The Stitch-generated screens should be treated as state references, not separate page designs.
+### Multiple-Match Rule
+
+Multiple-match state must remain inside the shared result-card shell or an equivalent result-card footprint.
+
+It must not introduce:
+
+- a second competing card above the result area
+- a table-like dashboard block
+- a separate page mode with different composition
+- a visually stronger candidate surface than the normal decision card family
+
+Candidate rows may replace the resolved patient body content, but they must still feel like the same working surface.
+
+### Resolved-State Rule
+
+Pre-confirm, already-arrived, and success are all resolved patient states and must share the same core composition:
+
+- token as primary anchor
+- patient name as secondary anchor
+- compact metadata band
+- action row in a stable position
+
+These states may differ in action set and emotional tone, but not in structural identity.
+
+### Degraded-State Rule
+
+Error and degraded conditions must not create a separate page design.
+
+Examples:
+
+- forbidden
+- session expired
+- CSRF refresh needed
+- stale context
+- temporary network failure
+
+These should appear through low-disruption banners, inline state copy, or other restrained feedback within the same page structure.
+
+### Acceptance Checks
+
+The implementation passes this rule only when:
+
+- staff can move from idle to lookup to confirm to success without perceiving a page redesign
+- multiple matches feel like a variant of the same result surface, not a new module
+- recent arrivals never jump above the result area
+- no state introduces a second dominant card competing with the result card
+- resolved states share the same token-first visual logic
+- degraded states do not break the canonical page structure
 
 ## Input Surface
 
-The input is the visual center of the page.
+The unified scan/search input is the visual and operational anchor of the page.
 
-Requirements:
+In the idle state, it must be the strongest element on the screen. It should communicate immediate readiness for the next patient without relying on motion, gimmicks, or heavy decoration.
 
-- one unified input for QR, phone, and name
-- QR-first by behavior, not by creating separate visible modes
-- polished and scan-focused appearance
-- high readability at a glance from a standing or seated counter posture
+### Purpose
 
-Suggested input copy:
+The input exists to support one repeated action loop:
 
-`Scan barcode or enter patient ID`
+1. scan QR code
+2. resolve patient
+3. confirm arrival
+4. return to ready state
 
-Alternative copy can mention phone/name during implementation, but the input should still read as a scan-first control.
+The input must therefore feel:
 
-The input should feel premium and intentional, not like a plain form field.
+- scan-first
+- immediately available
+- calm but decisive
+- more important than header context
+- more important than recent arrivals
+
+It should not feel like a generic form field or a search bar borrowed from a dashboard.
+
+### Structural Rules
+
+The page uses one unified input only.
+
+The input must:
+
+- support QR scan, patient name, child name, and mobile number through the same field
+- visually read as a scan-first control even though fallback text entry is supported
+- remain above the result card in every state
+- remain visible in loading, no-match, multiple, pre-confirm, already-arrived, and success states
+- keep its footprint stable enough that state changes below it do not feel like layout churn
+
+The input must not split into visible tabs, chips, or mode selectors for QR, name, child name, and mobile lookup in v1.
+
+### Visual Priority
+
+Idle-state priority must read in this order:
+
+1. input surface
+2. page title and compact session context
+3. recent arrivals
+
+When a patient is resolved, the result card may become the strongest decision surface, but the input must still remain visually ready for the next loop.
+
+### Visual Character
+
+The input should feel premium and purpose-built.
+
+Required qualities:
+
+- generous horizontal space
+- strong legibility from a counter-working distance
+- crisp border definition
+- restrained surface warmth or tinting
+- visible focus readiness
+- enough scale to feel like the main tool on the page
+
+Avoid:
+
+- thin low-contrast borders
+- small generic form proportions
+- decorative icon clutter
+- exaggerated gradients
+- glassy transparency effects
+- dashboard-search styling
+- multi-control filter bar aesthetics
+
+### Copy
+
+Default field label should clearly support the scan-first workflow.
+
+Preferred placeholder copy:
+
+`Scan QR code or enter patient name, child name, or mobile number`
+
+Implementation may add concise supporting helper text if needed, but the field must still read first as a scan/search control, not as a form workflow.
+
+Helper copy must stay short, low-drama, and non-repetitive.
+
+### Focus And Readiness
+
+The input must visibly communicate readiness.
+
+Rules:
+
+- the field must receive focus on page load
+- the field must regain focus after success auto-reset
+- background refresh must not steal focus
+- focus treatment must be clearly visible without overpowering the page
+- disabled or pending states must remain readable and structured, not washed out or collapsed
+
+### Action Relationship
+
+A supporting submit action may exist beside the field, but it must remain secondary to the field itself.
+
+If a button is present:
+
+- it should support the scan/search action clearly
+- it must not visually compete with `Confirm Arrival`
+- it must feel like part of the input surface, not a separate workflow action
+
+### Acceptance Checks
+
+The implementation passes this section only when:
+
+- in idle state, the input is the strongest element on the page without animation
+- the input feels scan-first even though patient name, child name, and mobile lookup are supported
+- the field remains visible and stable across all page states
+- the input does not visually degrade into a generic dashboard search bar
+- the field regains focus after reset and remains reliable during background refresh
+- the supporting action, if present, does not compete with resolved-state actions
 
 ## Result Card
 
 The result card is the operational decision surface.
 
-### Shared structure
+It must feel deliberate, calm, and token-first. It must not look like a generic content card, a dashboard widget, or an alert box with buttons attached below it.
 
-- token number as the strongest visual anchor
+### Shared Structure
+
+The shared result-card shell should preserve:
+
+- token as the strongest visual anchor in resolved states
 - patient name as the second anchor
-- metadata row:
-  - expected time when available
-  - practitioner when available
-  - visit/appointment context when available
-- primary and secondary actions aligned clearly
+- compact metadata band
+- stable action row zone
+- one clear body area for state-specific content
 
-### Content rules
+The card footprint must remain stable enough that transitions between no-match, multiple, pre-confirm, already-arrived, and success feel like state changes, not layout swaps.
 
-- no patient photo
-- no generic patient avatar
-- no decorative illustrations inside the card
-- metadata must stay compact and readable
+### Token Hierarchy
 
-### Action hierarchy
+Token presentation rules:
 
-Primary action:
+- token is the largest and boldest text in resolved states
+- token should visually outrank page title and stat numerals
+- token should remain clean, uncluttered, and easy to read from a working distance
+- token must not compete with decorative icons or oversized labels
+
+### Patient And Metadata Hierarchy
+
+Patient and metadata rules:
+
+- patient name is the second anchor below the token
+- metadata must stay compact, readable, and low-drama
+- metadata may include practitioner, visit context, expected time, or other operationally useful details when available
+- metadata must never push the card toward a table or dashboard feel
+
+### Content Rules
+
+Do not include:
+
+- patient photo
+- generic patient avatar
+- decorative illustration
+- queue-control tools
+- chart-like summary blocks
+- noisy icon clusters
+
+### Action Hierarchy
+
+Primary action in pre-confirm state:
 
 - `Confirm Arrival`
 
-Secondary action:
+Secondary action in pre-confirm state:
 
 - `Not this patient`
 
@@ -266,76 +532,108 @@ Conditional secondary action:
 
 - `Print Token Slip`
 
-`Print Token Slip` must not appear in the pre-confirm state.
+Rules:
 
-## Required States
+- `Confirm Arrival` must be the only high-emphasis action in pre-confirm state
+- `Not this patient` must remain visibly secondary
+- `Print Token Slip` must never appear in pre-confirm state
+- when present in already-arrived or success, `Print Token Slip` must remain lower emphasis than the primary confirm action would have been in pre-confirm
 
-### 1. Idle ready state
+### Required States
+
+#### 1. Idle ready state
 
 - input focused or visually ready
 - no resolved patient card yet
 - compact context visible
 - recent arrivals visible
 
-### 2. Loading state
+The result-card shell remains present and calm, signaling readiness without feeling empty or broken.
+
+#### 2. Loading state
 
 - input remains visible
 - a small loading treatment appears in the result area
 - no layout jump
 
-### 3. No-match state
+Loading should feel lightweight and operational, not dramatic.
+
+#### 3. No-match state
 
 - clear but low-drama message
 - no dense troubleshooting copy
 - keep staff moving
 
-### 4. Multiple-matches state
+This state should occupy the same shell without becoming an error page.
+
+#### 4. Multiple-matches state
 
 - compact candidate list
 - not table-like
-- each candidate row should remain quick to scan
+- each candidate row remains quick to scan
 - candidate list must live inside the shared result-card shell or an equivalent result-card footprint
 - multiple-match state must not introduce a separate competing card above the result card
 
-### 5. Pre-confirm state
+#### 5. Pre-confirm state
 
 - token dominant
-- patient name
-- metadata
+- patient name second
+- metadata compact
 - `Confirm Arrival` primary
 - `Not this patient` secondary
 - no `Print Token Slip`
 
-### 6. Already-arrived state
+#### 6. Already-arrived state
 
 - same card shell as pre-confirm
 - calm resolved treatment
 - `Print Token Slip` available
 - no `Confirm Arrival`
 
-### 7. Success state
+#### 7. Success state
 
 - same card shell as pre-confirm
 - reassuring success treatment
 - `Print Token Slip` available
 - return-to-ready behavior after a short delay
 
+### Candidate Rows
+
+Candidate rows in multiple-match state must:
+
+- feel like options inside the same decision surface
+- remain compact and quick to scan
+- support visible keyboard focus
+- expose accessible names including token and patient name
+- avoid table-heavy or admin-list styling
+
+### Acceptance Checks
+
+The implementation passes this section only when:
+
+- resolved token number is the largest text on the page
+- patient name clearly reads as the second anchor
+- `Confirm Arrival` is the only visually dominant action in pre-confirm state
+- multiple matches appear inside the same result-card footprint as other states
+- no state turns the result area into a table, dashboard panel, or alert stack
+- already-arrived and success states feel calm and resolved, not celebratory or warning-heavy
+
 ## Session Context
 
-The header must provide more useful context than the current page without becoming dense.
+The header must provide useful context without becoming dense.
 
-### Required content
+### Required Content
 
 - active current session
 - immediate next scheduled session
 - `Arrived` count
 - `Awaiting Arrival` count
 
-### Content intent
+### Content Intent
 
-`Arrived` should represent patients already physically checked in.
+`Arrived` represents patients already physically checked in.
 
-`Awaiting Arrival` should represent patients expected but not yet physically arrived. This is a better arrival-operations phrase than generic wording such as `Expected`.
+`Awaiting Arrival` represents patients expected but not yet physically arrived.
 
 The session copy should be operationally informative, for example:
 
@@ -344,7 +642,19 @@ The session copy should be operationally informative, for example:
 
 The implementation may map exact copy to available backend payloads, but the design intent must remain current-session plus immediate-next-session clarity.
 
-Formatting rules:
+### Quietness Rules
+
+The top bar must be visually quieter than the input and result card.
+
+That means:
+
+- lower contrast than the primary decision surface
+- compact chip-like summaries rather than big dashboard tiles
+- restrained stat styling even when numbers are large
+- no dominant action buttons in the header
+- no visual treatment that makes the header feel like a second main module
+
+### Formatting Rules
 
 - show at most two session chips in the top bar: current and next
 - use `No active session` and `No next session` when absent
@@ -355,28 +665,43 @@ Formatting rules:
 
 `Recent Arrivals` should remain visible but visually quiet.
 
-Requirements:
+### Purpose
+
+This section exists to reassure staff that recent activity is being captured.
+
+It does not exist to become a second dashboard, reporting module, or queue review surface.
+
+### Required Behavior
 
 - lower emphasis than the result card
 - lighter than a dense activity table
 - sufficient information to reassure staff that recent activity is being captured
+- visually calm in both empty and populated states
 
-Recommended row content:
+### Recommended Row Content
 
 - token
 - patient name
 - arrival time
 - optional lightweight status chip such as `Arrived`
 
-Do not let this section become a secondary dashboard.
-
-Implementation limits:
+### Presentation Rules
 
 - show up to 8 recent rows
 - use local-readable time, not raw database datetime strings
 - truncate long patient names on one line with a full value available to assistive tech
 - empty state copy: `No arrivals captured yet for the current session.`
 - stale state should be shown as a small low-emphasis status, not as an alert unless actions are blocked
+
+### Quietness Rules
+
+Recent arrivals must not:
+
+- become a table-heavy panel
+- visually outrank the header
+- visually approach the emphasis of the result card
+- move above the result area
+- introduce a second dashboard rhythm on the page
 
 ## Visual Tone
 
@@ -426,21 +751,23 @@ Lock this type system for v1:
 - headings, token emphasis, key stats: `Lexend`
 - body text, metadata, helper text, buttons: `Source Sans 3`
 
-This supersedes the earlier Stitch project metadata that listed Plus Jakarta Sans and Inter. Stitch screens remain visual references, but `Lexend` and `Source Sans 3` are the implementation fonts for Arrival Counter v1.
+This supersedes earlier Stitch project metadata that listed Plus Jakarta Sans and Inter. Stitch screens remain visual references, but `Lexend` and `Source Sans 3` are the implementation fonts for Arrival Counter v1.
 
 ### Rationale
 
 - more healthcare-trustworthy than decorative or fashion-forward pairs
-- more professional than the earlier generic drafts
+- more professional than earlier generic drafts
 - readable at operational distances and sizes
 - modern without feeling trendy
 
-### Usage rules
+### Usage Rules
 
 - token number: largest and boldest text on the page
-- page title and stat numerals: strong but secondary to token in resolved states
+- page title: strong but secondary to token in resolved states
+- stat numerals: strong but quieter than token
 - metadata: compact, calm, and low drama
 - helper text: small but still accessible
+- button text: short, crisp, and operational
 
 ## Color Direction
 
@@ -448,7 +775,7 @@ Primary direction:
 
 - deep mineral teal for the primary action
 - refined off-white background
-- cool-soft green/neutral support tones
+- cool-soft green and neutral support tones
 - slight warmth in supporting surfaces is acceptable
 
 Recommended semantic intent:
@@ -464,7 +791,7 @@ Avoid:
 - AI-product purple/pink gradients
 - over-pastel softness that weakens action clarity
 
-### Token mapping
+### Token Mapping
 
 Use `DESIGN.md` semantic tokens for implementation:
 
@@ -500,21 +827,6 @@ Avoid raw one-off color values in components unless the implementation note docu
 - available only in `Already Arrived` and `Success`
 
 Buttons must feel purpose-built, not generic SaaS defaults.
-
-## Visual Acceptance Criteria
-
-The v1 implementation is acceptable only when these checks pass:
-
-- The scan/search input is the strongest idle-state element without relying on animation.
-- Resolved token number is the largest text on the page.
-- `Confirm Arrival` is the only high-emphasis action in pre-confirm state.
-- `Print Token Slip` is absent before arrival confirmation and present in already-arrived and success states.
-- Multiple matches appear in the same result-card footprint as other states.
-- Top-bar session context remains visually quieter than the input and result card.
-- Recent arrivals never read as a second dashboard or dense table.
-- Keyboard focus is visible on input, candidate rows, primary actions, secondary actions, and print action.
-- No state introduces side navigation, footer navigation, a permanent second column, patient photos, decorative illustrations, gradient text, glassmorphism, or colored side-stripe accents.
-- The page still fits the primary workflow on a 1024px-wide desktop viewport without horizontal scrolling.
 
 ## Accessibility And Interaction Rules
 
@@ -583,6 +895,28 @@ The current arrival APIs already provide the right foundation:
 
 The frontend should continue treating backend responses as authoritative.
 
+## Stitch Reference Policy
+
+Stitch references for Arrival Counter are visual examples and calibration material only.
+
+Use Stitch for:
+
+- comparing state mood and visual tone
+- checking result-card emphasis
+- checking calm clinical styling direction
+- validating whether implementation still resembles the intended product posture
+
+Do not use Stitch to:
+
+- redefine the page structure
+- introduce different layouts per state
+- override canonical typography decisions
+- override semantic token choices from `DESIGN.md`
+- add UI elements not justified by this spec
+
+If Stitch screens and this spec disagree, this spec wins.
+If this spec is visually ambiguous, refine the spec rather than treating Stitch as silent authority.
+
 ## Stitch References
 
 Stitch project:
@@ -612,9 +946,34 @@ These references are state examples only. Implementation must unify them under o
 
 These details may vary during implementation without changing the design contract:
 
-- Idle-state helper copy may be adjusted if it remains scan-first and concise.
-- Success auto-reset timing may be tuned between 3 and 8 seconds, and must pause or cancel while printing is active.
-- Icon choice may vary, but icons must be consistent, non-decorative, and paired with text for state meaning.
+- idle-state helper copy may be adjusted if it remains scan-first and concise
+- success auto-reset timing may be tuned between 3 and 8 seconds, and must pause or cancel while printing is active
+- icon choice may vary, but icons must be consistent, non-decorative, and paired with text for state meaning
+
+## Visual Acceptance Criteria
+
+The v1 implementation is acceptable only when these checks pass:
+
+- the scan/search input is the strongest idle-state element without relying on animation
+- the input still reads scan-first while accurately supporting QR code, patient name, child name, and mobile lookup
+- resolved token number is the largest text on the page
+- `Confirm Arrival` is the only high-emphasis action in pre-confirm state
+- `Print Token Slip` is absent before arrival confirmation and present in already-arrived and success states
+- multiple matches appear in the same result-card footprint as other states
+- top-bar session context remains visually quieter than the input and result card
+- recent arrivals never read as a second dashboard or dense table
+- keyboard focus is visible on input, candidate rows, primary actions, secondary actions, and print action
+- no state introduces side navigation, footer navigation, a permanent second column, patient photos, decorative illustrations, gradient text, glassmorphism, or colored side-stripe accents
+- the page still fits the primary workflow on a 1024px-wide desktop viewport without horizontal scrolling
+- staff can move through the primary workflow without perceiving a page redesign between states
+
+## Stabilization Note
+
+This revision is a stabilization pass.
+
+It updates the UI/product spec so it stays aligned with the standalone-shell architecture and Arrival Counter technical slice spec while keeping the core workflow, one-page structure, and backend authority assumptions intact.
+
+It is a quality-tightening pass, not a redesign.
 
 ## Design Decision Summary
 
