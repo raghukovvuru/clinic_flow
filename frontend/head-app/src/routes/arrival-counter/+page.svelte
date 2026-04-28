@@ -80,9 +80,9 @@
   <title>Arrival Counter</title>
 </svelte:head>
 
-<div class="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-6 py-8 lg:px-10">
+<div class="mx-auto flex min-h-screen w-full max-w-[72rem] flex-col gap-5 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
   <HeaderBar context={pageState.context} />
-  <main class="grid gap-6">
+  <main class="flex flex-col gap-5">
     <InputSurface bind:value={pageState.inputValue} focusSignal={pageState.shouldFocusInput} onSubmit={handleSubmit} disabled={pageState.resultState === "loading"} />
 
     <StatusBanner message={pageState.message} />

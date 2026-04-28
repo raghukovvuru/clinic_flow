@@ -62,6 +62,19 @@ test("supports keyboard candidate selection and reset", async ({ page }) => {
   await expect(page.getByPlaceholder("Scan barcode or enter patient ID")).toBeFocused();
 });
 
+test("keeps input, result card, and recent arrivals in one vertical working column", async ({ page }) => {
+  await page.route("/api/method/clinic_flow.api.arrival.get_arrival_session_context", async (route) => {
+    await route.fulfill({ json: { message: { has_active: true, stats: { arrived: 3, awaiting_arrival: 5 }, current_session: null, next_session: null, recent_arrivals: [] } } });
+  });
+
+  await page.goto("/arrival-counter");
+
+  const regions = page.locator("main > *");
+  await expect(regions.nth(0)).toContainText("Scan or Search");
+  await expect(regions.nth(1)).toHaveAttribute("data-testid", "arrival-result-card");
+  await expect(regions.nth(2)).toContainText("Recent Arrivals");
+});
+
 test.describe("permission denied", () => {
   test.beforeEach(async ({ page }) => {
     await page.unrouteAll({ behavior: "ignoreErrors" });
