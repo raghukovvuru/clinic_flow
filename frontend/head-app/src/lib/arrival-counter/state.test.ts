@@ -117,4 +117,20 @@ describe("ArrivalCounterState", () => {
     expect(state.selected?.queue_entry).toBe("QE-0001");
     expect(state.resultState).toBe("pre-confirm");
   });
+
+  it("keeps current context when refresh fails and preserves the visible decision state", async () => {
+    const state = new ArrivalCounterState();
+    state.context = {
+      has_active: true,
+      stats: { arrived: 1, awaiting_arrival: 2 },
+      current_session: null,
+      next_session: null,
+      recent_arrivals: [],
+    };
+    vi.mocked(getArrivalSessionContext).mockRejectedValueOnce(new Error("Network connection failed. Retry when the connection is stable."));
+
+    await state.refreshContext();
+
+    expect(state.context?.stats.arrived).toBe(1);
+  });
 });

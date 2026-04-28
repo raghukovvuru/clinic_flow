@@ -3,7 +3,7 @@
 </script>
 
 {#if message}
-  <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+  <div class="rounded-xl border border-[#eadfca] bg-[#f8f4ec] px-4 py-3 text-sm text-[#6e5a3c]" role="alert">
     {message}
   </div>
 {/if}
