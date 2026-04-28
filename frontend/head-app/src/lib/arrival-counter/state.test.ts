@@ -23,12 +23,6 @@ const mockCard = {
   status: "Waiting",
   state_label: "Waiting",
   visit_label: "OPD",
-  print_context: {
-    queue_entry: "QE-0001",
-    display_token: "OPD-001",
-    patient_name: "Mimi Test",
-    qr_svg: "<svg></svg>",
-  },
 };
 
 describe("ArrivalCounterState", () => {
@@ -97,7 +91,7 @@ describe("ArrivalCounterState", () => {
 
   it("tracks focused candidate for keyboard selection", async () => {
     // Set up mock with two candidates
-    const mockCard = { name: "QE-0001", queue_entry: "QE-0001", display_token: "OPD-001", patient_name: "Mimi One", queue_session: "QS-1", status: "Booked", state_label: "Ready", visit_label: "New", print_context: { queue_entry: "QE-0001", display_token: "OPD-001", patient_name: "Mimi One", qr_svg: "<svg/>" } };
+    const mockCard = { name: "QE-0001", queue_entry: "QE-0001", display_token: "OPD-001", patient_name: "Mimi One", queue_session: "QS-1", status: "Booked", state_label: "Ready", visit_label: "New" };
     vi.mocked(lookupArrivalCandidate).mockResolvedValueOnce({ candidates: [mockCard, { ...mockCard, queue_entry: "QE-0002", name: "QE-0002" }] });
     const state = new ArrivalCounterState();
     await state.lookup("Mimi");
@@ -114,7 +108,7 @@ describe("ArrivalCounterState", () => {
   });
 
   it("does not overwrite an active decision during context refresh", async () => {
-    const mockCard = { name: "QE-0001", queue_entry: "QE-0001", display_token: "OPD-001", patient_name: "Mimi One", queue_session: "QS-1", status: "Booked", state_label: "Ready", visit_label: "New", print_context: { queue_entry: "QE-0001", display_token: "OPD-001", patient_name: "Mimi One", qr_svg: "<svg/>" } };
+    const mockCard = { name: "QE-0001", queue_entry: "QE-0001", display_token: "OPD-001", patient_name: "Mimi One", queue_session: "QS-1", status: "Booked", state_label: "Ready", visit_label: "New" };
     vi.mocked(lookupArrivalCandidate).mockResolvedValueOnce({ candidates: [mockCard] });
     const state = new ArrivalCounterState();
     await state.lookup("Mimi");

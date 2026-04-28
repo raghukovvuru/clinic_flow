@@ -22,6 +22,7 @@ function trustedQrContainer(doc: Document, qrSvg: string) {
 }
 
 export function buildTokenSlipDocument(doc: Document, record: ArrivalCardRecord) {
+  if (!record.print_context) return;
   doc.title = record.print_context.display_token;
   const style = doc.createElement("style");
   style.textContent = "body{font-family:'Source Sans 3',sans-serif;padding:20px;color:#10211f}.token{font-family:'Lexend',sans-serif;font-size:40px;font-weight:800}.name{margin-top:12px;font-size:22px;font-weight:600}.qr{margin-top:20px}";
@@ -34,6 +35,7 @@ export function buildTokenSlipDocument(doc: Document, record: ArrivalCardRecord)
 }
 
 export function printTokenSlip(record: ArrivalCardRecord): PrintSlipResult {
+  if (!record.print_context) return { ok: false, reason: "popup-blocked" };
   const win = window.open("", "_blank", "width=420,height=640");
   if (!win) return { ok: false, reason: "popup-blocked" };
 

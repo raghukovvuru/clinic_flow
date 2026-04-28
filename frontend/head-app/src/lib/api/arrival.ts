@@ -23,10 +23,12 @@ function isCardRecord(value: unknown): value is ArrivalCardRecord {
     && typeof value.status === "string"
     && typeof value.state_label === "string"
     && typeof value.visit_label === "string"
-    && isRecord(value.print_context)
-    && typeof value.print_context.display_token === "string"
-    && typeof value.print_context.patient_name === "string"
-    && typeof value.print_context.qr_svg === "string";
+    && (value.print_context === undefined || (
+      isRecord(value.print_context)
+      && typeof value.print_context.display_token === "string"
+      && typeof value.print_context.patient_name === "string"
+      && typeof value.print_context.qr_svg === "string"
+    ));
 }
 
 function isCandidateResponse(value: unknown): value is ArrivalCandidateResponse {

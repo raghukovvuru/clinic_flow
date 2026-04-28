@@ -1,3 +1,14 @@
+/**
+ * Frappe-served shell integration test.
+ *
+ * REQUIRED MANUAL VERIFICATION before merge:
+ *   FRAPPE_BASE_URL=http://site1.localhost:8000 \
+ *   FRAPPE_STORAGE_STATE=/tmp/clinic-flow-staff-storage.json \
+ *   npx playwright test tests/arrival-counter-frappe-shell.spec.ts
+ *
+ * This test is skipped in CI because it requires a running Frappe instance
+ * with authenticated session storage state.
+ */
 // @ts-nocheck
 import { expect, test } from "@playwright/test";
 

@@ -60,3 +60,23 @@ and backend shell tests confirm asset loading.
 ## Next Integration Step
 
 - Validate `/clinic/arrival-counter` with real counter staff and then choose the final legacy Desk bridge behavior.
+
+---
+
+## Drift Fixes — 2026-04-28
+
+### `has_active` Semantics
+- `get_arrival_session_context.has_active` now reflects only Active/Paused sessions,
+  not Scheduled-only ones. Scheduled-only sessions within the 30-min window still
+  appear in `sessions` and `next_session`, but `has_active` is `False`.
+
+### Conditional `print_context`
+- `_candidate_summary` now includes `print_context` only when `status === "Arrived"`.
+  Booked/Waiting candidates no longer carry a print context. `mark_arrived` responses
+  always include it (all results are Arrived).
+- Frontend `ArrivalCardRecord.print_context` is now optional; `printTokenSlip` guards
+  against missing context.
+
+### Shell Smoke Test Documentation
+- `arrival-counter-frappe-shell.spec.ts` now documents the required manual run command
+  explicitly in a header JSDoc comment.

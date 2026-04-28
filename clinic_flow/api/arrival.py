@@ -75,25 +75,25 @@ def _candidate_summary(row: dict) -> dict:
 	state_label = "Already Arrived" if row.get("status") == "Arrived" else "Ready to Confirm"
 	visit_label = "Review Patient" if row.get("load_class") == "review_load" else "New Patient"
 
-	from clinic_flow.utils import get_token_qr_svg
-
-	qr_svg = get_token_qr_svg(row.get("name"))
-
-	print_context = {
-		"queue_entry": row.get("name"),
-		"display_token": display_token,
-		"patient_name": row.get("patient_name"),
-		"qr_svg": qr_svg,
-	}
-
-	return {
+	result = {
 		**dict(row),
 		"queue_entry": row.get("name"),
 		"display_token": display_token,
 		"state_label": state_label,
 		"visit_label": visit_label,
-		"print_context": print_context,
 	}
+
+	if row.get("status") == "Arrived":
+		from clinic_flow.utils import get_token_qr_svg
+
+		result["print_context"] = {
+			"queue_entry": row.get("name"),
+			"display_token": display_token,
+			"patient_name": row.get("patient_name"),
+			"qr_svg": get_token_qr_svg(row.get("name")),
+		}
+
+	return result
 
 
 @frappe.whitelist()
@@ -268,6 +268,7 @@ def get_arrival_session_context(dept_abbr: str = "") -> dict:
 	"""Summary payload for the arrival counter page header."""
 	enforce_arrival_counter_access()
 	sessions = resolve_arrival_sessions(dept_abbr)
+	has_active = any(s["status"] in ("Active", "Paused") for s in sessions)
 	if not sessions:
 		return {
 			"sessions": [], "has_active": False,
@@ -314,7 +315,7 @@ def get_arrival_session_context(dept_abbr: str = "") -> dict:
 
 	return {
 		"sessions": sessions,
-		"has_active": True,
+		"has_active": has_active,
 		"arrived_count": arrived_count,
 		"waiting_count": waiting_count,
 		"stats": {"arrived": arrived_count, "awaiting_arrival": waiting_count},

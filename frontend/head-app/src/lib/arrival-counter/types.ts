@@ -10,7 +10,7 @@ export interface ArrivalCardRecord {
   status: string;
   state_label: string;
   visit_label: string;
-  print_context: {
+  print_context?: {
     queue_entry: string;
     display_token: string;
     patient_name: string;

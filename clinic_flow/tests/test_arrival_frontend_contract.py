@@ -47,7 +47,6 @@ class TestArrivalFrontendContract(IntegrationTestCase):
 
         self.assertEqual(result["candidates"][0]["name"], entry.name)
         self.assertEqual(result["candidates"][0]["display_token"], entry.token)
-        self.assertIn("print_context", result["candidates"][0])
         self.assertIn("state_label", result["candidates"][0])
 
     def test_mark_arrived_returns_success_card_payload(self):
@@ -104,6 +103,49 @@ class TestArrivalFrontendContract(IntegrationTestCase):
             self.assertIn("<svg", qr)
         finally:
             frappe.set_user("Administrator")
+
+    def test_has_active_false_when_only_scheduled_sessions_exist(self):
+        """has_active must be False when no Active/Paused session exists."""
+        from frappe.utils import now_datetime, add_to_date
+
+        sp = self.make_service_point()
+        now = now_datetime()
+        current_time = now.strftime("%H:%M:%S")
+        end_time = add_to_date(now, hours=3).strftime("%H:%M:%S")
+        self.make_queue_session(status="Scheduled", start_time=current_time, end_time=end_time, service_point=sp)
+
+        result = frappe.get_attr("clinic_flow.api.arrival.get_arrival_session_context")(
+            dept_abbr=sp.queue_code
+        )
+
+        self.assertFalse(result["has_active"], "has_active should be False for Scheduled-only sessions")
+        self.assertIsNone(result["current_session"])
+        self.assertIsNotNone(result["next_session"])
+
+    def test_print_context_absent_for_non_arrived_candidates(self):
+        """print_context must not be included for Booked/Waiting candidates."""
+        session = self.make_queue_session(status="Active")
+        entry = self.make_queue_entry(session, status="Booked", token_number=8)
+
+        result = frappe.get_attr("clinic_flow.api.arrival.lookup_arrival_candidate")(
+            qr_code=entry.name
+        )
+
+        self.assertEqual(len(result["candidates"]), 1)
+        self.assertNotIn("print_context", result["candidates"][0])
+
+    def test_print_context_present_for_arrived_candidates(self):
+        """print_context must be included for Arrived candidates (reprint support)."""
+        session = self.make_queue_session(status="Active")
+        entry = self.make_queue_entry(session, status="Arrived", token_number=9)
+
+        result = frappe.get_attr("clinic_flow.api.arrival.lookup_arrival_candidate")(
+            qr_code=entry.name
+        )
+
+        self.assertEqual(len(result["candidates"]), 1)
+        self.assertIn("print_context", result["candidates"][0])
+        self.assertIn("qr_svg", result["candidates"][0]["print_context"])
 
     def make_queue_viewer_user(self):
         return self.make_arrival_staff_user("Queue Viewer")
