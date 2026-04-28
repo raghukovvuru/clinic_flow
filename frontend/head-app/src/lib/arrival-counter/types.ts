@@ -37,6 +37,21 @@ export interface ArrivalMarkResult {
   result_card: ArrivalCardRecord;
 }
 
+export type ArrivalErrorCategory =
+  | "unauthenticated"
+  | "forbidden"
+  | "csrf"
+  | "validation"
+  | "network"
+  | "stale"
+  | "unknown";
+
+export interface ArrivalClientErrorShape {
+  category: ArrivalErrorCategory;
+  status: number;
+  message: string;
+}
+
 export type ArrivalRealtimeMode = "frappe" | "polling" | "disabled";
 
 export interface ArrivalCounterBoot {
