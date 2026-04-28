@@ -30,7 +30,7 @@ test("renders multiple matches inside the shared result-card shell", async ({ pa
 
   await page.goto("/arrival-counter");
   await page.waitForLoadState("networkidle");
-  await page.getByPlaceholder("Scan barcode or enter patient ID").fill("Mimi");
+  await page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number").fill("Mimi");
   await page.keyboard.press("Enter");
 
   const resultCard = page.getByTestId("arrival-result-card");
@@ -50,7 +50,7 @@ test("supports keyboard candidate selection and reset", async ({ page }) => {
   });
 
   await page.goto("/arrival-counter");
-  await page.getByPlaceholder("Scan barcode or enter patient ID").fill("Mimi");
+  await page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number").fill("Mimi");
   await page.keyboard.press("Enter");
   await page.waitForSelector('[data-testid="arrival-result-card"]');
   await page.keyboard.press("ArrowDown");
@@ -59,7 +59,7 @@ test("supports keyboard candidate selection and reset", async ({ page }) => {
   await expect(page.getByText("OPD-002")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByText("Scan a token slip or search for a patient to begin.")).toBeVisible();
-  await expect(page.getByPlaceholder("Scan barcode or enter patient ID")).toBeFocused();
+  await expect(page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number")).toBeFocused();
 });
 
 test("keeps input, result card, and recent arrivals in one vertical working column", async ({ page }) => {
@@ -126,7 +126,7 @@ test.describe("permission denied", () => {
 
     await page.goto("/arrival-counter");
     await page.waitForLoadState("networkidle");
-    await page.getByPlaceholder("Scan barcode or enter patient ID").fill("Mimi");
+    await page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number").fill("Mimi");
     await page.keyboard.press("Enter");
 
     await expect(page.getByText("Confirm Arrival")).not.toBeVisible();
@@ -136,4 +136,14 @@ test.describe("permission denied", () => {
     await page.evaluate(() => window.dispatchEvent(new MessageEvent("message", { data: { type: "clinic_flow:arrival:confirmed", payload: { queue_entry: "QE-1", display_token: "OPD-001" } } })));
     await expect(page.getByText("Print Token Slip")).not.toBeVisible();
   });
+});
+
+test("uses the stabilized scan-first placeholder copy and restores input focus after reset", async ({ page }) => {
+  await page.route("/api/method/clinic_flow.api.arrival.get_arrival_session_context", async (route) => {
+    await route.fulfill({ json: { message: { has_active: true, stats: { arrived: 0, awaiting_arrival: 0 }, current_session: null, next_session: null, recent_arrivals: [] } } });
+  });
+
+  await page.goto("/arrival-counter");
+  const input = page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number");
+  await expect(input).toBeFocused();
 });
