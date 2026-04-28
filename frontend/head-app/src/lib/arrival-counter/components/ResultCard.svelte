@@ -7,6 +7,8 @@
     state = "idle",
     candidates = [] as ArrivalCardRecord[],
     focusedCandidateIndex = 0,
+    canConfirm = true,
+    canPrint = true,
     onConfirm = () => {},
     onReset = () => {},
     onPrint = () => {},
@@ -41,11 +43,15 @@
       </div>
       <div class="flex flex-wrap gap-3">
         {#if state === "pre-confirm"}
-          <button class="rounded-2xl bg-[#0d6f69] px-5 py-3 font-semibold text-white focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={() => onConfirm()}>Confirm Arrival</button>
+          {#if canConfirm}
+            <button class="rounded-2xl bg-[#0d6f69] px-5 py-3 font-semibold text-white focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={() => onConfirm()}>Confirm Arrival</button>
+          {/if}
           <button class="rounded-2xl px-5 py-3 text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={() => onReset()}>Not this patient</button>
         {:else if state === "success" || state === "already-arrived"}
           {#if state === "already-arrived"}<div class="rounded-2xl bg-mint px-5 py-3 font-semibold text-[#10211f]">Already checked in</div>{/if}
-          <button class="rounded-2xl bg-[#0d6f69] px-5 py-3 font-semibold text-white focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={() => onPrint()}>Print Token Slip</button>
+          {#if canPrint}
+            <button class="rounded-2xl bg-[#0d6f69] px-5 py-3 font-semibold text-white focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={() => onPrint()}>Print Token Slip</button>
+          {/if}
           <button class="rounded-2xl px-5 py-3 text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={() => onReset()}>Next patient</button>
         {/if}
       </div>

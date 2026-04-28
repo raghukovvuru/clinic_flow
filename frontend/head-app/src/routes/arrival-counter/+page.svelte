@@ -26,6 +26,7 @@
   }
 
   async function handleConfirm() {
+    if (!boot?.permissions.canConfirmArrival) return;
     await pageState.confirmArrival();
     if (pageState.resultState === "success") {
       resetTimer = window.setTimeout(() => pageState.reset(), 5000);
@@ -91,6 +92,8 @@
       state={pageState.resultState}
       candidates={pageState.candidates}
       focusedCandidateIndex={pageState.focusedCandidateIndex}
+      canConfirm={boot?.permissions.canConfirmArrival ?? false}
+      canPrint={boot?.permissions.canPrintTokenSlip ?? false}
       onConfirm={handleConfirm}
       onReset={() => pageState.reset()}
       onPrint={() => pageState.selected && boot?.permissions.canPrintTokenSlip && printTokenSlip(pageState.selected)}
