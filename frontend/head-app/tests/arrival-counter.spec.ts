@@ -58,7 +58,7 @@ test("supports keyboard candidate selection and reset", async ({ page }) => {
 
   await expect(page.getByText("OPD-002")).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(page.getByText("Scan a token slip or search for a patient to begin.")).toBeVisible();
+  await expect(page.getByText("Scan a QR code or search for a patient to begin.")).toBeVisible();
   await expect(page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number")).toBeFocused();
 });
 
@@ -146,4 +146,24 @@ test("uses the stabilized scan-first placeholder copy and restores input focus a
   await page.goto("/arrival-counter");
   const input = page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number");
   await expect(input).toBeFocused();
+});
+
+test("keeps multiple matches inside the shared result-card shell and hides print in pre-confirm", async ({ page }) => {
+  await page.route("/api/method/clinic_flow.api.arrival.get_arrival_session_context", async (route) => {
+    await route.fulfill({ json: { message: { has_active: true, stats: { arrived: 0, awaiting_arrival: 2 }, current_session: null, next_session: null, recent_arrivals: [] } } });
+  });
+  await page.route("/api/method/clinic_flow.api.arrival.lookup_arrival_candidate", async (route) => {
+    await route.fulfill({ json: { message: { candidates: [
+      { name: "QE-1", queue_entry: "QE-1", display_token: "OPD-001", patient_name: "Mimi One", queue_session: "QS-1", status: "Booked", state_label: "Ready to Confirm", visit_label: "New Patient" },
+      { name: "QE-2", queue_entry: "QE-2", display_token: "OPD-002", patient_name: "Mimi Two", queue_session: "QS-1", status: "Booked", state_label: "Ready to Confirm", visit_label: "Review Patient" }
+    ] } } });
+  });
+
+  await page.goto("/arrival-counter");
+  await page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number").fill("Mimi");
+  await page.keyboard.press("Enter");
+
+  const resultCard = page.getByTestId("arrival-result-card");
+  await expect(resultCard.getByText("Select patient")).toBeVisible();
+  await expect(resultCard.getByText("Print Token Slip")).toHaveCount(0);
 });
