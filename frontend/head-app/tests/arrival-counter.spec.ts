@@ -420,6 +420,24 @@ test.describe("success state rendering", () => {
   });
 });
 
+test("distinguishes newly confirmed arrival from already-arrived state", async ({ page }) => {
+  await page.route("/api/method/clinic_flow.api.arrival.get_arrival_session_context", async (route) => {
+    await route.fulfill({ json: { message: { has_active: true, stats: { arrived: 1, awaiting_arrival: 1 }, current_session: null, next_session: null, recent_arrivals: [] } } });
+  });
+  await page.route("/api/method/clinic_flow.api.arrival.lookup_arrival_candidate", async (route) => {
+    await route.fulfill({ json: { message: { candidates: [
+      { name: "QE-70", queue_entry: "QE-70", display_token: "OPD-070", patient_name: "Already Patient", queue_session: "QS-1", status: "Arrived", state_label: "Already Arrived", visit_label: "New Patient" }
+    ] } } });
+  });
+
+  await page.goto("/arrival-counter");
+  await page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number").fill("Already Patient");
+  await page.getByRole("button", { name: "Go" }).click();
+
+  await expect(page.getByText("This patient was already checked in earlier.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Ready for next patient" })).toBeVisible();
+});
+
 test("explains when confirm action is blocked by permissions", async ({ page }) => {
   await page.unrouteAll({ behavior: "ignoreErrors" });
   await page.addInitScript(() => {

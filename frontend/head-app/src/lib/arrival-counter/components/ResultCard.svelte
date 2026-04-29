@@ -45,6 +45,11 @@
         <div class="mt-3 font-display text-[3.75rem] font-extrabold leading-none text-[#10211f]">{card.display_token}</div>
         <div class="mt-4 text-[2rem] font-semibold leading-tight text-[#10211f]">{card.patient_name}</div>
         <div class="mt-3 text-base text-slate-600">{card.visit_label}</div>
+        {#if state === "success"}
+          <div class="mt-4 rounded-2xl bg-[#ddebe7] px-4 py-3 text-sm font-semibold text-[#10211f]">Arrival confirmed now.</div>
+        {:else if state === "already-arrived"}
+          <div class="mt-4 rounded-2xl bg-[#f1ece5] px-4 py-3 text-sm font-semibold text-[#6e5a3c]">This patient was already checked in earlier.</div>
+        {/if}
       </div>
       <div class="flex flex-wrap gap-3">
         {#if state === "pre-confirm"}
@@ -61,7 +66,7 @@
           {#if canPrint}
             <button class="cursor-pointer rounded-2xl border border-[#d9ddd8] bg-white px-5 py-3 font-semibold text-[#10211f] focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={() => onPrint()}>Print Token Slip</button>
           {/if}
-          <button class="cursor-pointer rounded-2xl px-5 py-3 text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={() => onReset()}>Next patient</button>
+          <button class="cursor-pointer rounded-2xl px-5 py-3 text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={() => onReset()}>Ready for next patient</button>
         {/if}
       </div>
     </div>
