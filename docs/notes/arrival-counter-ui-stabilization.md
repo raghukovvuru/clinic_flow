@@ -44,6 +44,19 @@ Plan: `docs/superpowers/plans/2026-04-28-arrival-counter-ui-stabilization.md`
 - Expanded multiple-match rows with session, visit label, and status for safer disambiguation.
 - Added e2e coverage for keyboard confirm boundaries, duplicate submit handling, disambiguation visibility, and already-arrived race outcomes.
 
+## P1/P2 Edge Hardening
+
+Date: 2026-04-29
+Spec: `docs/superpowers/specs/2026-04-29-arrival-counter-edge-hardening-p1-p2-design.md`
+Plan: `docs/superpowers/plans/2026-04-29-arrival-counter-edge-hardening-p1-p2.md`
+
+- Normalized phone and scanner payload input before lookup.
+- Preserved keyboard focus visibility in multiple-match selection.
+- Added permission and no-active-session guidance copy.
+- Clarified success vs already-arrived states.
+- Improved long-name/title handling and no-match recovery copy.
+- Added low-emphasis stale-context status handling.
+
 ## Next Integration Step
 
 - Run staff acceptance at `/clinic/arrival-counter` and collect any final polish feedback before broader head-app slice rollout.
