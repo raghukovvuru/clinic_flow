@@ -35,8 +35,10 @@ export class ArrivalCounterState {
     try {
       this.context = await getArrivalSessionContext();
       this.isContextStale = false;
+      return true;
     } catch {
       this.isContextStale = true;
+      return false;
     }
   }
 
@@ -51,6 +53,7 @@ export class ArrivalCounterState {
       return;
     }
 
+    this.message = "";
     this.isLookupPending = true;
     this.resultState = "loading";
     try {
@@ -85,7 +88,12 @@ export class ArrivalCounterState {
   async confirmArrival() {
     if (!this.selected || this.isConfirmPending) return;
 
-    await this.refreshContext();
+    const contextVerified = await this.refreshContext();
+    if (!contextVerified) {
+      this.message = "Could not verify the active arrival session. Check the connection and try again.";
+      return;
+    }
+
     if (this.context && !this.context.has_active) {
       this.message = "Arrival session is no longer active. Refresh the counter or contact the queue manager.";
       return;

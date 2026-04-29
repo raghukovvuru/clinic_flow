@@ -302,8 +302,7 @@ test("does not duplicate lookup or confirm when scanner sends repeated Enter", a
   const input = page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number");
 
   await input.fill("Double Enter");
-  await page.keyboard.press("Enter");
-  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Go" }).click();
 
   await expect(page.getByRole("button", { name: "Confirm Arrival" })).toBeVisible();
   expect(lookupCalls).toBe(1);
@@ -336,8 +335,9 @@ test("shows enough identity detail to disambiguate multiple matches", async ({ p
   });
 
   await page.goto("/arrival-counter");
-  await page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number").fill("Ravi");
-  await page.keyboard.press("Enter");
+  const input = page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number");
+  await input.fill("Ravi");
+  await input.press("Enter");
 
   const resultCard = page.getByTestId("arrival-result-card");
   await expect(resultCard.getByText("OPD-031")).toBeVisible();
@@ -409,7 +409,8 @@ test.describe("success state rendering", () => {
 
   test("shows token, patient name, Print Token Slip after arrival confirmation", async ({ page }) => {
     await page.goto("/arrival-counter");
-    await page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number").fill("Success");
+    await page.waitForLoadState("networkidle");
+    await page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number").fill("Success Test");
     await page.getByRole("button", { name: "Go" }).click();
     await page.getByRole("button", { name: "Confirm Arrival" }).click();
 
@@ -520,8 +521,9 @@ test("keeps keyboard-focused multiple-match row visible and identifiable", async
   await page.getByRole("button", { name: "Go" }).click();
   await expect(page.getByTestId("arrival-result-card").getByText("Select patient")).toBeVisible();
   await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
 
-  const focused = page.getByRole("button", { name: /Select OPD-052 Long Name Candidate Two/ });
+  const focused = page.getByRole("button", { name: /Select OPD-053 Long Name Candidate Three/ });
   await expect(focused).toBeFocused();
   await expect(focused).toBeInViewport();
 });

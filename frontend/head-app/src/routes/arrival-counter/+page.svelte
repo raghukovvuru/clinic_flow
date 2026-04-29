@@ -15,6 +15,7 @@
   let boot: ArrivalCounterBoot | null = null;
   const pageState = new ArrivalCounterState();
   let resetTimer = 0;
+  let confirmInFlight = false;
 
   if (browser) {
     boot = getClinicFlowBoot();
@@ -26,12 +27,18 @@
   }
 
   async function handleConfirm() {
+    if (confirmInFlight) return;
     if (!boot?.permissions.canConfirmArrival) return;
     const canConfirm = pageState.resultState === "pre-confirm";
     if (!canConfirm) return;
-    await pageState.confirmArrival();
-    if (pageState.resultState === "success") {
-      resetTimer = window.setTimeout(() => pageState.reset(), 5000);
+    confirmInFlight = true;
+    try {
+      await pageState.confirmArrival();
+      if (pageState.resultState === "success") {
+        resetTimer = window.setTimeout(() => pageState.reset(), 5000);
+      }
+    } finally {
+      confirmInFlight = false;
     }
   }
 
@@ -78,7 +85,7 @@
     if (!boot) boot = getClinicFlowBoot();
     pageState.requestInputFocus();
     void pageState.refreshContext();
-    const transport = attachArrivalTransport({ mode: boot.realtime.mode, invalidate: () => pageState.refreshContext() });
+    const transport = attachArrivalTransport({ mode: boot.realtime.mode, invalidate: () => { void pageState.refreshContext(); } });
     return () => {
       clearTimeout(resetTimer);
       transport.detach();

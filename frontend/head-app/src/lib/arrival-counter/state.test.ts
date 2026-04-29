@@ -229,4 +229,40 @@ describe("ArrivalCounterState", () => {
     expect(state.isContextStale).toBe(true);
     expect(state.context?.stats.arrived).toBe(1);
   });
+
+  it("returns false when context refresh fails", async () => {
+    const state = new ArrivalCounterState();
+    vi.mocked(getArrivalSessionContext).mockRejectedValueOnce(new Error("offline"));
+
+    await expect(state.refreshContext()).resolves.toBe(false);
+  });
+
+  it("blocks confirm when active session cannot be verified", async () => {
+    const state = new ArrivalCounterState();
+    state.selected = mockCard as any;
+    state.context = {
+      has_active: true,
+      stats: { arrived: 0, awaiting_arrival: 1 },
+      current_session: { name: "QS-1", session_name: "Morning Clinic", status: "Active", start_time: "09:00:00" },
+      next_session: null,
+      recent_arrivals: [],
+    };
+    vi.mocked(getArrivalSessionContext).mockRejectedValueOnce(new Error("offline"));
+
+    await state.confirmArrival();
+
+    expect(markArrived).not.toHaveBeenCalled();
+    expect(state.message).toBe("Could not verify the active arrival session. Check the connection and try again.");
+  });
+
+  it("clears previous warning when valid lookup starts", async () => {
+    vi.mocked(lookupArrivalCandidate).mockResolvedValueOnce({ candidates: [mockCard] });
+    const state = new ArrivalCounterState();
+    state.message = "No arrival session is active. Ask the queue manager to start or resume a session, then try again.";
+
+    await state.lookup("Mimi");
+
+    expect(state.message).toBe("");
+    expect(state.resultState).toBe("pre-confirm");
+  });
 });
