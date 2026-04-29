@@ -419,3 +419,27 @@ test.describe("success state rendering", () => {
     await expect(resultCard.getByText("Print Token Slip")).toBeVisible();
   });
 });
+
+test("keeps keyboard-focused multiple-match row visible and identifiable", async ({ page }) => {
+  await page.route("/api/method/clinic_flow.api.arrival.get_arrival_session_context", async (route) => {
+    await route.fulfill({ json: { message: { has_active: true, stats: { arrived: 0, awaiting_arrival: 4 }, current_session: null, next_session: null, recent_arrivals: [] } } });
+  });
+
+  await page.route("/api/method/clinic_flow.api.arrival.lookup_arrival_candidate", async (route) => {
+    await route.fulfill({ json: { message: { candidates: [
+      { name: "QE-51", queue_entry: "QE-51", display_token: "OPD-051", patient_name: "Long Name Candidate One", queue_session: "Morning Clinic", status: "Booked", state_label: "Ready to Confirm", visit_label: "New Patient" },
+      { name: "QE-52", queue_entry: "QE-52", display_token: "OPD-052", patient_name: "Long Name Candidate Two", queue_session: "Morning Clinic", status: "Booked", state_label: "Ready to Confirm", visit_label: "Review Patient" },
+      { name: "QE-53", queue_entry: "QE-53", display_token: "OPD-053", patient_name: "Long Name Candidate Three", queue_session: "Morning Clinic", status: "Booked", state_label: "Ready to Confirm", visit_label: "New Patient" }
+    ] } } });
+  });
+
+  await page.goto("/arrival-counter");
+  await page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number").fill("Long Name Candidate");
+  await page.getByRole("button", { name: "Go" }).click();
+  await expect(page.getByTestId("arrival-result-card").getByText("Select patient")).toBeVisible();
+  await page.keyboard.press("ArrowDown");
+
+  const focused = page.getByRole("button", { name: /Select OPD-052 Long Name Candidate Two/ });
+  await expect(focused).toBeFocused();
+  await expect(focused).toBeInViewport();
+});
