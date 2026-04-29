@@ -420,6 +420,23 @@ test.describe("success state rendering", () => {
   });
 });
 
+test("preserves identity title text and offers clear retry after no match", async ({ page }) => {
+  await page.route("/api/method/clinic_flow.api.arrival.get_arrival_session_context", async (route) => {
+    await route.fulfill({ json: { message: { has_active: true, stats: { arrived: 0, awaiting_arrival: 0 }, current_session: null, next_session: null, recent_arrivals: [] } } });
+  });
+  await page.route("/api/method/clinic_flow.api.arrival.lookup_arrival_candidate", async (route) => {
+    await route.fulfill({ json: { message: { candidates: [] } } });
+  });
+
+  await page.goto("/arrival-counter");
+  await page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number").fill("Unknown Patient");
+  await page.getByRole("button", { name: "Go" }).click();
+
+  await expect(page.getByRole("button", { name: "Clear and search again" })).toBeVisible();
+  await page.getByRole("button", { name: "Clear and search again" }).click();
+  await expect(page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number")).toBeFocused();
+});
+
 test("distinguishes newly confirmed arrival from already-arrived state", async ({ page }) => {
   await page.route("/api/method/clinic_flow.api.arrival.get_arrival_session_context", async (route) => {
     await route.fulfill({ json: { message: { has_active: true, stats: { arrived: 1, awaiting_arrival: 1 }, current_session: null, next_session: null, recent_arrivals: [] } } });

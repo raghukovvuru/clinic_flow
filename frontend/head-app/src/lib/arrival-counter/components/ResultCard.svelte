@@ -33,7 +33,7 @@
         <div class="mt-3 text-base text-slate-600">Check the QR code, patient name, child name, or mobile number and try again.</div>
       </div>
       <div class="flex flex-wrap gap-3">
-        <button class="cursor-pointer rounded-2xl border border-[#d9ddd8] px-5 py-3 text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={() => onReset()}>Start over</button>
+        <button class="cursor-pointer rounded-2xl border border-[#d9ddd8] px-5 py-3 text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={() => onReset()}>Clear and search again</button>
       </div>
     </div>
   {:else if state === "multiple"}
@@ -43,7 +43,7 @@
       <div>
         <div class="text-sm uppercase tracking-[0.18em] text-slate-500">{card.state_label}</div>
         <div class="mt-3 font-display text-[3.75rem] font-extrabold leading-none text-[#10211f]">{card.display_token}</div>
-        <div class="mt-4 text-[2rem] font-semibold leading-tight text-[#10211f]">{card.patient_name}</div>
+        <div class="mt-4 truncate text-[2rem] font-semibold leading-tight text-[#10211f]" title={card.patient_name}>{card.patient_name}</div>
         <div class="mt-3 text-base text-slate-600">{card.visit_label}</div>
         {#if state === "success"}
           <div class="mt-4 rounded-2xl bg-[#ddebe7] px-4 py-3 text-sm font-semibold text-[#10211f]">Arrival confirmed now.</div>
