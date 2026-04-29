@@ -420,6 +420,53 @@ test.describe("success state rendering", () => {
   });
 });
 
+test("explains when confirm action is blocked by permissions", async ({ page }) => {
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+  await page.addInitScript(() => {
+    window.clinicFlowBoot = {
+      app: "clinic_flow",
+      slice: "arrival-counter",
+      route: "/clinic/arrival-counter",
+      siteName: "site1.localhost",
+      user: "viewer@example.com",
+      roles: ["Queue Viewer"],
+      csrfToken: "csrf",
+      realtime: { enabled: false, mode: "polling" },
+      permissions: { canUseArrivalCounter: true, canConfirmArrival: false, canPrintTokenSlip: false },
+    };
+  });
+
+  await page.route("/api/method/clinic_flow.api.arrival.get_arrival_session_context", async (route) => {
+    await route.fulfill({ json: { message: { has_active: true, stats: { arrived: 0, awaiting_arrival: 1 }, current_session: null, next_session: null, recent_arrivals: [] } } });
+  });
+  await page.route("/api/method/clinic_flow.api.arrival.lookup_arrival_candidate", async (route) => {
+    await route.fulfill({ json: { message: { candidates: [
+      { name: "QE-60", queue_entry: "QE-60", display_token: "OPD-060", patient_name: "Permission Patient", queue_session: "QS-1", status: "Booked", state_label: "Ready to Confirm", visit_label: "New Patient" }
+    ] } } });
+  });
+
+  await page.goto("/arrival-counter");
+  await page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number").fill("Permission Patient");
+  await page.getByRole("button", { name: "Go" }).click();
+
+  await expect(page.getByText("You can view this arrival, but your role cannot confirm it.")).toBeVisible();
+});
+
+test("shows operational guidance when no arrival session is active", async ({ page }) => {
+  await page.route("/api/method/clinic_flow.api.arrival.get_arrival_session_context", async (route) => {
+    await route.fulfill({ json: { message: { has_active: false, stats: { arrived: 0, awaiting_arrival: 0 }, current_session: null, next_session: null, recent_arrivals: [] } } });
+  });
+  await page.route("/api/method/clinic_flow.api.arrival.lookup_arrival_candidate", async (route) => {
+    await route.fulfill({ json: { message: { candidates: [], error: "no_active_session" } } });
+  });
+
+  await page.goto("/arrival-counter");
+  await page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number").fill("No Session");
+  await page.getByRole("button", { name: "Go" }).click();
+
+  await expect(page.getByText("No arrival session is active. Ask the queue manager to start or resume a session, then try again.")).toBeVisible();
+});
+
 test("keeps keyboard-focused multiple-match row visible and identifiable", async ({ page }) => {
   await page.route("/api/method/clinic_flow.api.arrival.get_arrival_session_context", async (route) => {
     await route.fulfill({ json: { message: { has_active: true, stats: { arrived: 0, awaiting_arrival: 4 }, current_session: null, next_session: null, recent_arrivals: [] } } });

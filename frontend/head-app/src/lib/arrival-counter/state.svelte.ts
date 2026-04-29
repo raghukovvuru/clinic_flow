@@ -54,6 +54,9 @@ export class ArrivalCounterState {
     try {
       const response = await lookupArrivalCandidate({ [classified.mode]: classified.value });
       this.candidates = response.candidates;
+      if (response.error === "no_active_session") {
+        this.message = "No arrival session is active. Ask the queue manager to start or resume a session, then try again.";
+      }
       this.focusedCandidateIndex = 0;
     } catch (error) {
       this.resultState = "idle";

@@ -50,6 +50,8 @@
         {#if state === "pre-confirm"}
           {#if canConfirm}
             <button class="cursor-pointer rounded-2xl bg-[#0d6f69] px-5 py-3 font-semibold text-white focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={() => onConfirm()}>Confirm Arrival</button>
+          {:else}
+            <div class="rounded-2xl border border-[#eadfca] bg-[#f8f4ec] px-5 py-3 text-sm font-semibold text-[#6e5a3c]">You can view this arrival, but your role cannot confirm it.</div>
           {/if}
           <button class="cursor-pointer rounded-2xl px-5 py-3 text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#0d6f69] focus:ring-offset-2" onclick={() => onReset()}>Not this patient</button>
         {:else}
