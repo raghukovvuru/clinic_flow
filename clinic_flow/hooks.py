@@ -70,4 +70,5 @@ require_type_annotated_api_methods = 1
 website_route_rules = [
 	{"from_route": "/queue-dashboard", "to_route": "queue-dashboard"},
 	{"from_route": "/clinic/arrival-counter", "to_route": "clinic/arrival_counter"},
+	{"from_route": "/clinic/login", "to_route": "clinic/login"},
 ]

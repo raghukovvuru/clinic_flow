@@ -17,10 +17,12 @@ const config = {
       strict: true,
     }),
     prerender: {
-      entries: ["/", "/arrival-counter"],
+      entries: ["/", "/arrival-counter", "/login"],
+      handleHttpError: "warn",
     },
     alias: {
       "$arrival": "src/lib/arrival-counter",
+      "$login": "src/lib/login",
       "$api": "src/lib/api",
       "$realtime": "src/lib/realtime",
     },

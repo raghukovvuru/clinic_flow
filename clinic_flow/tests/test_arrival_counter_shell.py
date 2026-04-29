@@ -19,14 +19,32 @@ class TestArrivalCounterShell(IntegrationTestCase):
         self.assertTrue(context.boot["permissions"]["canUseArrivalCounter"])
         self.assertNotIn("iframe", context.shell_html.lower())
 
-    def test_shell_rejects_non_staff_user(self):
+    def test_shell_redirects_non_staff_user(self):
         from clinic_flow.www.clinic.arrival_counter import get_context
 
         user = self.make_queue_viewer_user()
         try:
             frappe.set_user(user.name)
-            with self.assertRaises(frappe.PermissionError):
-                get_context(frappe._dict())
+            context = frappe._dict()
+            with self.assertRaises(frappe.Redirect):
+                get_context(context)
+            redirect_location = frappe.local.flags.redirect_location
+            self.assertIn("/clinic/login", redirect_location)
+            self.assertIn("access-denied", redirect_location)
+        finally:
+            frappe.set_user("Administrator")
+
+    def test_shell_redirects_guest_user(self):
+        from clinic_flow.www.clinic.arrival_counter import get_context
+
+        frappe.set_user("Guest")
+        try:
+            context = frappe._dict()
+            with self.assertRaises(frappe.Redirect):
+                get_context(context)
+            redirect_location = frappe.local.flags.redirect_location
+            self.assertIn("/clinic/login", redirect_location)
+            self.assertIn("redirect-to=/clinic/arrival-counter", redirect_location)
         finally:
             frappe.set_user("Administrator")
 

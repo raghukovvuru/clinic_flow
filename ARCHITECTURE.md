@@ -403,3 +403,23 @@ If any of them drift from the code, update the docs rather than preserving stale
 - Arrival lookup, arrival confirmation, token slip content, and live context remain backend-owned.
 - The legacy `arrival_counter` and `arrival_counter_v1` Desk pages remain available during coexistence, but they are not the canonical operator route.
 - The previous static iframe host at `/assets/clinic_flow/head-app/arrival-counter.html` is compatibility debt and must not be treated as an authenticated operational shell.
+
+---
+
+## 14. Clinic Login Shared Shell
+
+- `/clinic/login` is the canonical auth entry surface for `/clinic/*` head-app routes.
+- Guest users are redirected to `/clinic/login?redirect-to=<target>` before any slice shell render.
+- Authenticated users without required roles are redirected to `/clinic/login?redirect-to=<target>&mode=access-denied`.
+- Authenticated users with Clinic Flow staff roles are redirected from `/clinic/login` to `redirect-to` (or `/clinic/arrival-counter`).
+- Login shell boot contract (`LoginBoot`) is injected into `window.clinicFlowBoot` with:
+  - `app`, `slice`, `route`, `siteName`, `csrfToken`
+  - `redirectUrl`, `mode`, `requiredRoles`, `currentUser`
+- Redirect sanitization is fail-closed:
+  - allow only same-origin absolute `http/https` URLs under `/clinic/`
+  - allow only relative paths starting with `/clinic/`
+  - reject protocol-relative, cross-domain, non-clinic, or unsafe schemes (for example `javascript:`)
+- Login UI is a single operational surface that supports:
+  - sign-in mode
+  - access-denied mode with sign-out path
+  - in-page forgot-password guidance to Frappe reset flow (`/login#forgot`)

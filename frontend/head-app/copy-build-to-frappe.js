@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const buildDir = join(__dirname, "build");
 const arrivalHtml = join(buildDir, "arrival-counter.html");
+const loginHtml = join(buildDir, "login.html");
 const destDir = join(__dirname, "..", "..", "clinic_flow", "public", "head-app");
 
 if (!existsSync(buildDir)) {
@@ -14,6 +15,11 @@ if (!existsSync(buildDir)) {
 
 if (!existsSync(arrivalHtml)) {
   console.error("Arrival Counter build output missing: build/arrival-counter.html");
+  process.exit(1);
+}
+
+if (!existsSync(loginHtml)) {
+  console.error("Login page build output missing: build/login.html");
   process.exit(1);
 }
 
