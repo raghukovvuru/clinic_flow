@@ -51,7 +51,7 @@ test("supports keyboard candidate selection and reset", async ({ page }) => {
 
   await page.goto("/arrival-counter");
   await page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number").fill("Mimi");
-  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Go" }).click();
   await page.waitForSelector('[data-testid="arrival-result-card"]');
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
@@ -201,6 +201,178 @@ test("does not confirm arrival on Enter when input keeps focus in pre-confirm", 
   expect(markArrivedCalls).toBe(0);
 });
 
+test("confirms arrival with Enter only when confirm action is focused", async ({ page }) => {
+  let markArrivedCalls = 0;
+
+  await page.route("/api/method/clinic_flow.api.arrival.get_arrival_session_context", async (route) => {
+    await route.fulfill({
+      json: {
+        message: {
+          has_active: true,
+          stats: { arrived: 0, awaiting_arrival: 1 },
+          current_session: null,
+          next_session: null,
+          recent_arrivals: [],
+        },
+      },
+    });
+  });
+
+  await page.route("/api/method/clinic_flow.api.arrival.lookup_arrival_candidate", async (route) => {
+    await route.fulfill({
+      json: {
+        message: {
+          candidates: [
+            {
+              name: "QE-10",
+              queue_entry: "QE-10",
+              display_token: "OPD-010",
+              patient_name: "Keyboard Confirm",
+              queue_session: "QS-1",
+              status: "Booked",
+              state_label: "Ready to Confirm",
+              visit_label: "New Patient",
+            },
+          ],
+        },
+      },
+    });
+  });
+
+  await page.route("/api/method/clinic_flow.api.arrival.mark_arrived", async (route) => {
+    markArrivedCalls += 1;
+    await route.fulfill({
+      json: {
+        message: {
+          status: "Arrived",
+          already_arrived: false,
+          queue_entry: "QE-10",
+          patient_name: "Keyboard Confirm",
+          result_card: {
+            name: "QE-10",
+            queue_entry: "QE-10",
+            display_token: "OPD-010",
+            patient_name: "Keyboard Confirm",
+            queue_session: "QS-1",
+            status: "Arrived",
+            state_label: "Checked In",
+            visit_label: "New Patient",
+          },
+        },
+      },
+    });
+  });
+
+  await page.goto("/arrival-counter");
+  await page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number").fill("Keyboard Confirm");
+  await page.getByRole("button", { name: "Go" }).click();
+
+  const confirmButton = page.getByRole("button", { name: "Confirm Arrival" });
+  await expect(confirmButton).toBeVisible();
+  await confirmButton.focus();
+  await expect(confirmButton).toBeFocused();
+
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByText("Print Token Slip")).toBeVisible();
+  expect(markArrivedCalls).toBe(1);
+});
+
+test("does not duplicate lookup or confirm when scanner sends repeated Enter", async ({ page }) => {
+  let lookupCalls = 0;
+  let markArrivedCalls = 0;
+
+  await page.route("/api/method/clinic_flow.api.arrival.get_arrival_session_context", async (route) => {
+    await route.fulfill({ json: { message: { has_active: true, stats: { arrived: 0, awaiting_arrival: 1 }, current_session: null, next_session: null, recent_arrivals: [] } } });
+  });
+
+  await page.route("/api/method/clinic_flow.api.arrival.lookup_arrival_candidate", async (route) => {
+    lookupCalls += 1;
+    await route.fulfill({ json: { message: { candidates: [
+      { name: "QE-20", queue_entry: "QE-20", display_token: "OPD-020", patient_name: "Double Enter", queue_session: "QS-1", status: "Booked", state_label: "Ready to Confirm", visit_label: "New Patient" }
+    ] } } });
+  });
+
+  await page.route("/api/method/clinic_flow.api.arrival.mark_arrived", async (route) => {
+    markArrivedCalls += 1;
+    await route.fulfill({ json: { message: { status: "Arrived", already_arrived: false, queue_entry: "QE-20", patient_name: "Double Enter", result_card: { name: "QE-20", queue_entry: "QE-20", display_token: "OPD-020", patient_name: "Double Enter", queue_session: "QS-1", status: "Arrived", state_label: "Checked In", visit_label: "New Patient" } } } });
+  });
+
+  await page.goto("/arrival-counter");
+  const input = page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number");
+
+  await input.fill("Double Enter");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByRole("button", { name: "Confirm Arrival" })).toBeVisible();
+  expect(lookupCalls).toBe(1);
+
+  const confirmButton = page.getByRole("button", { name: "Confirm Arrival" });
+  await confirmButton.focus();
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByText("Print Token Slip")).toBeVisible();
+  expect(markArrivedCalls).toBe(1);
+});
+
+test("shows enough identity detail to disambiguate multiple matches", async ({ page }) => {
+  await page.route("/api/method/clinic_flow.api.arrival.get_arrival_session_context", async (route) => {
+    await route.fulfill({ json: { message: { has_active: true, stats: { arrived: 0, awaiting_arrival: 2 }, current_session: null, next_session: null, recent_arrivals: [] } } });
+  });
+
+  await page.route("/api/method/clinic_flow.api.arrival.lookup_arrival_candidate", async (route) => {
+    await route.fulfill({
+      json: {
+        message: {
+          candidates: [
+            { name: "QE-31", queue_entry: "QE-31", display_token: "OPD-031", patient_name: "Ravi Kumar", queue_session: "Morning Clinic", status: "Booked", state_label: "Ready to Confirm", visit_label: "New Patient" },
+            { name: "QE-32", queue_entry: "QE-32", display_token: "OPD-032", patient_name: "Ravi Kumar", queue_session: "Afternoon Clinic", status: "Booked", state_label: "Ready to Confirm", visit_label: "Review Patient" },
+          ],
+        },
+      },
+    });
+  });
+
+  await page.goto("/arrival-counter");
+  await page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number").fill("Ravi");
+  await page.keyboard.press("Enter");
+
+  const resultCard = page.getByTestId("arrival-result-card");
+  await expect(resultCard.getByText("OPD-031")).toBeVisible();
+  await expect(resultCard.getByText("Morning Clinic")).toBeVisible();
+  await expect(resultCard.getByText("New Patient")).toBeVisible();
+  await expect(resultCard.getByText("OPD-032")).toBeVisible();
+  await expect(resultCard.getByText("Afternoon Clinic")).toBeVisible();
+  await expect(resultCard.getByText("Review Patient")).toBeVisible();
+});
+
+test("shows already arrived when another counter confirms first", async ({ page }) => {
+  await page.route("/api/method/clinic_flow.api.arrival.get_arrival_session_context", async (route) => {
+    await route.fulfill({ json: { message: { has_active: true, stats: { arrived: 1, awaiting_arrival: 0 }, current_session: null, next_session: null, recent_arrivals: [] } } });
+  });
+
+  await page.route("/api/method/clinic_flow.api.arrival.lookup_arrival_candidate", async (route) => {
+    await route.fulfill({ json: { message: { candidates: [
+      { name: "QE-40", queue_entry: "QE-40", display_token: "OPD-040", patient_name: "Race Patient", queue_session: "QS-1", status: "Booked", state_label: "Ready to Confirm", visit_label: "New Patient" }
+    ] } } });
+  });
+
+  await page.route("/api/method/clinic_flow.api.arrival.mark_arrived", async (route) => {
+    await route.fulfill({ json: { message: { status: "Arrived", already_arrived: true, queue_entry: "QE-40", patient_name: "Race Patient", result_card: { name: "QE-40", queue_entry: "QE-40", display_token: "OPD-040", patient_name: "Race Patient", queue_session: "QS-1", status: "Arrived", state_label: "Already Arrived", visit_label: "New Patient" } } } });
+  });
+
+  await page.goto("/arrival-counter");
+  await page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number").fill("Race Patient");
+  await page.getByRole("button", { name: "Go" }).click();
+  await page.getByRole("button", { name: "Confirm Arrival" }).click();
+
+  const resultCard = page.getByTestId("arrival-result-card");
+  await expect(resultCard.getByText("Already Arrived")).toBeVisible();
+  await expect(resultCard.getByText("Print Token Slip")).toBeVisible();
+});
+
 test.describe("success state rendering", () => {
   test.beforeEach(async ({ page }) => {
     await page.route("/api/method/clinic_flow.api.arrival.get_arrival_session_context", async (route) => {
@@ -238,7 +410,7 @@ test.describe("success state rendering", () => {
   test("shows token, patient name, Print Token Slip after arrival confirmation", async ({ page }) => {
     await page.goto("/arrival-counter");
     await page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number").fill("Success");
-    await page.keyboard.press("Enter");
+    await page.getByRole("button", { name: "Go" }).click();
     await page.getByRole("button", { name: "Confirm Arrival" }).click();
 
     const resultCard = page.getByTestId("arrival-result-card");

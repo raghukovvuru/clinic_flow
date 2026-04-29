@@ -37,11 +37,15 @@
         tabindex={index === focusedCandidateIndex ? 0 : -1}
         onkeydown={(event) => handleKeydown(event, candidate)}
         onclick={() => onChoose(candidate)}>
-        <div>
+        <div class="min-w-0">
           <div class="font-display font-semibold text-[#10211f]">{candidate.display_token}</div>
-          <div class="text-sm text-slate-600">{candidate.patient_name}</div>
+          <div class="truncate text-sm text-slate-700">{candidate.patient_name}</div>
+          <div class="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
+            <span>{candidate.queue_session}</span>
+            <span>{candidate.visit_label}</span>
+            <span>{candidate.status}</span>
+          </div>
         </div>
-        <div class="text-sm text-slate-500">{candidate.visit_label}</div>
       </button>
     {/each}
   </div>

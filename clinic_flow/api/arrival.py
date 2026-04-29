@@ -98,6 +98,7 @@ def _candidate_summary(row: dict) -> dict:
 
 @frappe.whitelist()
 def lookup_arrival_candidate(
+	queue_entry: str = "",
 	qr_code: str = "",
 	phone: str = "",
 	name_query: str = "",
@@ -105,7 +106,7 @@ def lookup_arrival_candidate(
 ) -> dict:
 	"""
 	Find Queue Entries eligible for arrival check-in.
-	Lookup priority: QR scan (exact docname) > phone number > patient name.
+	Lookup priority: queue entry (exact docname) > QR scan (exact docname) > phone number > patient name.
 	Returns up to 10 candidates from today's arrival-eligible sessions.
 	"""
 	enforce_arrival_counter_access()
@@ -123,7 +124,18 @@ def lookup_arrival_candidate(
 
 	candidates: list = []
 
-	if qr_code:
+	if queue_entry:
+		entry = frappe.db.get_value(
+			"Queue Entry",
+			{"name": queue_entry, "queue_session": ["in", session_names],
+			 "status": ["in", ELIGIBLE_STATUSES]},
+			CANDIDATE_FIELDS,
+			as_dict=True,
+		)
+		if entry:
+			candidates = [entry]
+
+	elif qr_code:
 		# QR code printed on the slip encodes the Queue Entry docname directly
 		entry = frappe.db.get_value(
 			"Queue Entry",

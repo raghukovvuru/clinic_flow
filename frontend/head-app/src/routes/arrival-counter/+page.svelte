@@ -27,6 +27,8 @@
 
   async function handleConfirm() {
     if (!boot?.permissions.canConfirmArrival) return;
+    const canConfirm = pageState.resultState === "pre-confirm";
+    if (!canConfirm) return;
     await pageState.confirmArrival();
     if (pageState.resultState === "success") {
       resetTimer = window.setTimeout(() => pageState.reset(), 5000);
@@ -37,6 +39,7 @@
     if (!browser) return false;
     const activeElement = document.activeElement;
     if (!(activeElement instanceof HTMLElement)) return false;
+    if (activeElement.tagName === "BUTTON") return false;
     const resultCard = document.querySelector('[data-testid="arrival-result-card"]');
     if (!(resultCard instanceof HTMLElement)) return false;
     return resultCard.contains(activeElement);

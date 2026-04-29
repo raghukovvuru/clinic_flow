@@ -5,7 +5,7 @@ Tests the enriched response shape expected by the arrival_counter desk page.
 """
 import frappe
 from frappe.tests import IntegrationTestCase
-from frappe.utils import today
+from frappe.utils import today, now_datetime, add_to_date
 
 
 class TestArrivalFrontendContract(IntegrationTestCase):
@@ -20,8 +20,9 @@ class TestArrivalFrontendContract(IntegrationTestCase):
         session = self.make_queue_session(
             status="Active", start_time="09:00:00", service_point=sp
         )
+        next_start = add_to_date(now_datetime(), minutes=20).strftime("%H:%M:%S")
         next_session = self.make_queue_session(
-            status="Scheduled", start_time="13:00:00", service_point=sp
+            status="Scheduled", start_time=next_start, service_point=sp
         )
         arrived = self.make_queue_entry(session, status="Arrived", token_number=1)
         self.make_queue_entry(session, status="Booked", token_number=2)
@@ -48,6 +49,18 @@ class TestArrivalFrontendContract(IntegrationTestCase):
         self.assertEqual(result["candidates"][0]["name"], entry.name)
         self.assertEqual(result["candidates"][0]["display_token"], entry.token)
         self.assertIn("state_label", result["candidates"][0])
+
+    def test_lookup_arrival_candidate_supports_queue_entry_reconciliation_lookup(self):
+        session = self.make_queue_session(status="Active")
+        entry = self.make_queue_entry(session, status="Arrived", token_number=13)
+
+        result = frappe.get_attr("clinic_flow.api.arrival.lookup_arrival_candidate")(
+            queue_entry=entry.name
+        )
+
+        self.assertEqual(len(result["candidates"]), 1)
+        self.assertEqual(result["candidates"][0]["queue_entry"], entry.name)
+        self.assertEqual(result["candidates"][0]["status"], "Arrived")
 
     def test_mark_arrived_returns_success_card_payload(self):
         session = self.make_queue_session(status="Active")

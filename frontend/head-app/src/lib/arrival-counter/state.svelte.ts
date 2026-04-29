@@ -39,6 +39,8 @@ export class ArrivalCounterState {
   }
 
   async lookup(raw: string) {
+    if (this.isLookupPending) return;
+
     this.inputValue = raw;
     const classified = classifyInput(raw);
     if (!classified) {
@@ -77,6 +79,13 @@ export class ArrivalCounterState {
 
   async confirmArrival() {
     if (!this.selected || this.isConfirmPending) return;
+
+    await this.refreshContext();
+    if (this.context && !this.context.has_active) {
+      this.message = "Arrival session is no longer active. Refresh the counter or contact the queue manager.";
+      return;
+    }
+
     this.isConfirmPending = true;
     try {
       const result = await markArrived(this.selected.queue_entry, this.selected.queue_session);
@@ -84,9 +93,31 @@ export class ArrivalCounterState {
       this.resultState = result.already_arrived ? "already-arrived" : "success";
       await this.refreshContext();
     } catch (error) {
+      const reconciled = await this.reconcileSelectedAfterConfirmFailure();
+      if (reconciled) {
+        this.message = "Arrival was already confirmed. Token slip can be printed if needed.";
+        return;
+      }
+
       this.message = error instanceof Error ? error.message : "Could not confirm arrival. Try again.";
     } finally {
       this.isConfirmPending = false;
+    }
+  }
+
+  async reconcileSelectedAfterConfirmFailure() {
+    if (!this.selected?.queue_entry) return false;
+
+    try {
+      const response = await lookupArrivalCandidate({ queue_entry: this.selected.queue_entry });
+      const reconciled = response.candidates[0];
+      if (!reconciled) return false;
+
+      this.selected = reconciled;
+      this.resultState = reconciled.status === "Arrived" ? "already-arrived" : "pre-confirm";
+      return reconciled.status === "Arrived";
+    } catch {
+      return false;
     }
   }
 

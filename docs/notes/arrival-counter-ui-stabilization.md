@@ -21,6 +21,12 @@ Plan: `docs/superpowers/plans/2026-04-28-arrival-counter-ui-stabilization.md`
 - `npm run test:e2e`: 8/8 e2e tests passed
 - `npm run build`: static build succeeds, copied to clinic_flow/public/head-app/
 
+### P0 Edge Hardening Verification
+
+- `npm run test -- src/lib/arrival-counter/state.test.ts src/lib/api/arrival.test.ts`: 19/19 tests passed
+- `npm run test:e2e -- tests/arrival-counter.spec.ts`: 13/13 e2e tests passed
+- `npm run check`: svelte-check found 0 errors and 0 warnings
+
 ## What Stayed Out Of Scope
 
 - No architecture changes
@@ -28,6 +34,15 @@ Plan: `docs/superpowers/plans/2026-04-28-arrival-counter-ui-stabilization.md`
 - No new receptionist or doctor surfaces
 - No queue authority changes
 - No Healthcare base app edits
+
+## P0 Edge Case Hardening
+
+- Blocked duplicate lookup submissions while lookup is pending.
+- Guarded Enter-confirm so keyboard confirm from the route handler only fires from decision context and avoids native button double-triggering.
+- Blocked confirm when session context refresh reports there is no active arrival session.
+- Added confirm-failure reconciliation to re-fetch selected queue entry and settle into `already-arrived` when backend already processed arrival.
+- Expanded multiple-match rows with session, visit label, and status for safer disambiguation.
+- Added e2e coverage for keyboard confirm boundaries, duplicate submit handling, disambiguation visibility, and already-arrived race outcomes.
 
 ## Next Integration Step
 

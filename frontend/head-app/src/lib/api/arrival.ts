@@ -48,7 +48,7 @@ export async function getArrivalSessionContext(deptAbbr = "") {
   return response;
 }
 
-export async function lookupArrivalCandidate(input: { qr_code?: string; phone?: string; name_query?: string; dept_abbr?: string }) {
+export async function lookupArrivalCandidate(input: { qr_code?: string; phone?: string; name_query?: string; queue_entry?: string; dept_abbr?: string }) {
   const response = await callFrappe<unknown>("clinic_flow.api.arrival.lookup_arrival_candidate", input);
   if (!isCandidateResponse(response)) throw new Error("Arrival candidate response is invalid");
   return response;

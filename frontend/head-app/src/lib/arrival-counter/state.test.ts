@@ -42,6 +42,27 @@ describe("ArrivalCounterState", () => {
     expect(state.resultState).toBe("no-match");
   });
 
+  it("ignores duplicate lookup while a lookup is pending", async () => {
+    let resolveLookup: (value: { candidates: typeof mockCard[] }) => void = () => {};
+    vi.mocked(lookupArrivalCandidate).mockImplementationOnce(
+      () => new Promise((resolve) => {
+        resolveLookup = resolve;
+      }),
+    );
+
+    const state = new ArrivalCounterState();
+    const first = state.lookup("Mimi Test");
+    const second = state.lookup("Mimi Test");
+
+    expect(lookupArrivalCandidate).toHaveBeenCalledTimes(1);
+
+    resolveLookup({ candidates: [mockCard] });
+    await first;
+    await second;
+
+    expect(state.resultState).toBe("pre-confirm");
+  });
+
   it("returns to idle with message for invalid input", async () => {
     const state = new ArrivalCounterState();
     await state.lookup("x");
@@ -116,6 +137,64 @@ describe("ArrivalCounterState", () => {
 
     expect(state.selected?.queue_entry).toBe("QE-0001");
     expect(state.resultState).toBe("pre-confirm");
+  });
+
+  it("shows already-arrived state when confirm response reports already arrived", async () => {
+    const state = new ArrivalCounterState();
+    state.selected = mockCard as any;
+
+    vi.mocked(markArrived).mockResolvedValueOnce({
+      status: "Arrived",
+      already_arrived: true,
+      result_card: { ...mockCard, status: "Arrived", state_label: "Already Arrived" },
+    });
+
+    await state.confirmArrival();
+
+    expect(state.resultState).toBe("already-arrived");
+    expect(state.selected?.state_label).toBe("Already Arrived");
+  });
+
+  it("blocks confirm when refreshed context reports no active session", async () => {
+    const state = new ArrivalCounterState();
+    state.selected = mockCard as any;
+    state.context = {
+      has_active: true,
+      stats: { arrived: 0, awaiting_arrival: 1 },
+      current_session: { name: "QS-1", session_name: "Morning Clinic", status: "Active", start_time: "09:00:00" },
+      next_session: null,
+      recent_arrivals: [],
+    };
+
+    vi.mocked(getArrivalSessionContext).mockResolvedValueOnce({
+      has_active: false,
+      stats: { arrived: 0, awaiting_arrival: 1 },
+      current_session: null,
+      next_session: null,
+      recent_arrivals: [],
+    });
+
+    await state.confirmArrival();
+
+    expect(markArrived).not.toHaveBeenCalled();
+    expect(state.resultState).toBe("idle");
+    expect(state.message).toBe("Arrival session is no longer active. Refresh the counter or contact the queue manager.");
+  });
+
+  it("reconciles selected candidate after confirm timeout before showing retry guidance", async () => {
+    const state = new ArrivalCounterState();
+    state.selected = mockCard as any;
+
+    vi.mocked(markArrived).mockRejectedValueOnce(new Error("Request timed out"));
+    vi.mocked(lookupArrivalCandidate).mockResolvedValueOnce({
+      candidates: [{ ...mockCard, status: "Arrived", state_label: "Already Arrived" } as any],
+    });
+
+    await state.confirmArrival();
+
+    expect(lookupArrivalCandidate).toHaveBeenCalledWith({ queue_entry: mockCard.queue_entry });
+    expect(state.resultState).toBe("already-arrived");
+    expect(state.selected?.status).toBe("Arrived");
   });
 
   it("keeps current context when refresh fails and preserves the visible decision state", async () => {
