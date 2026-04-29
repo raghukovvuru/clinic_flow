@@ -97,7 +97,7 @@
   <main class="flex flex-col gap-5">
     <InputSurface bind:value={pageState.inputValue} focusSignal={pageState.shouldFocusInput} onSubmit={handleSubmit} disabled={pageState.resultState === "loading"} />
 
-    <StatusBanner message={pageState.message} />
+    <StatusBanner message={pageState.message || (pageState.isContextStale ? "Connection is retrying. Current arrival details remain visible." : "")} tone={pageState.message ? "warning" : "status"} />
 
     <ResultCard
       card={pageState.selected}

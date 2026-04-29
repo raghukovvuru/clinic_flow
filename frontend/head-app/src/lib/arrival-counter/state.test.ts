@@ -212,4 +212,21 @@ describe("ArrivalCounterState", () => {
 
     expect(state.context?.stats.arrived).toBe(1);
   });
+
+  it("marks context stale when background refresh fails without clearing active context", async () => {
+    const state = new ArrivalCounterState();
+    state.context = {
+      has_active: true,
+      stats: { arrived: 1, awaiting_arrival: 2 },
+      current_session: null,
+      next_session: null,
+      recent_arrivals: [],
+    };
+    vi.mocked(getArrivalSessionContext).mockRejectedValueOnce(new Error("offline"));
+
+    await state.refreshContext();
+
+    expect(state.isContextStale).toBe(true);
+    expect(state.context?.stats.arrived).toBe(1);
+  });
 });

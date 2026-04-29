@@ -12,6 +12,7 @@ export class ArrivalCounterState {
   focusedCandidateIndex = $state(0);
   isLookupPending = $state(false);
   isConfirmPending = $state(false);
+  isContextStale = $state(false);
   shouldFocusInput = $state(0);
 
   moveCandidateFocus(delta: number) {
@@ -33,8 +34,9 @@ export class ArrivalCounterState {
   async refreshContext() {
     try {
       this.context = await getArrivalSessionContext();
+      this.isContextStale = false;
     } catch {
-      // stale-while-revalidate: keep current context on error
+      this.isContextStale = true;
     }
   }
 
