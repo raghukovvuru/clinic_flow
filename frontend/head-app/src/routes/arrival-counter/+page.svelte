@@ -33,6 +33,15 @@
     }
   }
 
+  function canConfirmFromKeyboardContext(): boolean {
+    if (!browser) return false;
+    const activeElement = document.activeElement;
+    if (!(activeElement instanceof HTMLElement)) return false;
+    const resultCard = document.querySelector('[data-testid="arrival-result-card"]');
+    if (!(resultCard instanceof HTMLElement)) return false;
+    return resultCard.contains(activeElement);
+  }
+
   function handleRouteKeydown(event: KeyboardEvent) {
     if (pageState.isLookupPending || pageState.isConfirmPending) return;
     if (event.key === "Escape" && pageState.resultState !== "idle") {
@@ -47,7 +56,7 @@
     } else if (pageState.resultState === "multiple" && event.key === "Enter") {
       event.preventDefault();
       pageState.selectFocusedCandidate();
-    } else if (pageState.resultState === "pre-confirm" && event.key === "Enter") {
+    } else if (pageState.resultState === "pre-confirm" && event.key === "Enter" && canConfirmFromKeyboardContext()) {
       event.preventDefault();
       void handleConfirm();
     }

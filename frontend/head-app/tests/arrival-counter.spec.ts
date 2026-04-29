@@ -168,6 +168,39 @@ test("keeps multiple matches inside the shared result-card shell and hides print
   await expect(resultCard.getByText("Print Token Slip")).toHaveCount(0);
 });
 
+test("does not confirm arrival on Enter when input keeps focus in pre-confirm", async ({ page }) => {
+  let markArrivedCalls = 0;
+
+  await page.route("/api/method/clinic_flow.api.arrival.get_arrival_session_context", async (route) => {
+    await route.fulfill({ json: { message: { has_active: true, stats: { arrived: 0, awaiting_arrival: 1 }, current_session: null, next_session: null, recent_arrivals: [] } } });
+  });
+
+  await page.route("/api/method/clinic_flow.api.arrival.lookup_arrival_candidate", async (route) => {
+    await route.fulfill({ json: { message: { candidates: [
+      { name: "QE-7", queue_entry: "QE-7", display_token: "OPD-007", patient_name: "Enter Guard", queue_session: "QS-1", status: "Booked", state_label: "Ready to Confirm", visit_label: "New Patient" }
+    ] } } });
+  });
+
+  await page.route("/api/method/clinic_flow.api.arrival.mark_arrived", async (route) => {
+    markArrivedCalls += 1;
+    await route.fulfill({ json: { message: { status: "Arrived", already_arrived: false, queue_entry: "QE-7", patient_name: "Enter Guard", result_card: { name: "QE-7", queue_entry: "QE-7", display_token: "OPD-007", patient_name: "Enter Guard", queue_session: "QS-1", status: "Arrived", state_label: "Checked In", visit_label: "New Patient" } } } });
+  });
+
+  await page.goto("/arrival-counter");
+  const input = page.getByPlaceholder("Scan QR code or enter patient name, child name, or mobile number");
+  await input.fill("Enter Guard");
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByRole("button", { name: "Confirm Arrival" })).toBeVisible();
+  await input.click();
+  await expect(input).toBeFocused();
+
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: "Confirm Arrival" })).toBeVisible();
+  await expect(page.getByText("Print Token Slip")).toHaveCount(0);
+  expect(markArrivedCalls).toBe(0);
+});
+
 test.describe("success state rendering", () => {
   test.beforeEach(async ({ page }) => {
     await page.route("/api/method/clinic_flow.api.arrival.get_arrival_session_context", async (route) => {
