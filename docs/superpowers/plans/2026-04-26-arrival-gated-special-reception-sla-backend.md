@@ -15,7 +15,7 @@
 - Spec: `docs/superpowers/specs/2026-04-26-arrival-gated-special-reception-sla-design.md`
 - Required context: `CLAUDE.md`, `AGENTS.md`, `ARCHITECTURE.md`, `CONTEXT_INDEX.md`
 - Focused policy docs: `docs/receptionist-backend-policy.md`, `docs/service-point-policy.md`, `docs/token-display-policy.md`, `docs/healthcare-compatibility-audit.md`
-- Process docs: `docs/git-workflow-guide.md`, `docs/notes/README.md`, `ONBOARDING.md`
+- Process docs: `docs/git-workflow-guide.md`, `docs/notes/README.md`, `docs/runbooks/local-setup-and-verification.md`
 - Graph context: `graphify-out/GRAPH_REPORT.md`
 - Runtime files inspected for this plan: `clinic_flow/api/queue.py`, `clinic_flow/api/admission.py`, `clinic_flow/queue/engine.py`, `clinic_flow/clinic_flow/doctype/queue_entry/queue_entry.json`, `clinic_flow/clinic_flow/doctype/slot_partition_config/slot_partition_config.json`, `clinic_flow/tests/test_slice3_checkin_boundary.py`, `clinic_flow/tests/test_special_overflow_admission.py`, `clinic_flow/tests/test_healthcare_compatibility.py`
 

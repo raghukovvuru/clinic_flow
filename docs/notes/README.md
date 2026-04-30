@@ -45,6 +45,8 @@ Before continuing a track in a new session:
 
 Notes are handoff aids, not ground truth. Live code still wins.
 
+When several notes exist for the same feature track, keep one canonical current note and archive superseded notes after durable facts are extracted.
+
 ## Required After Implementation
 
 After every implementation slice that changes system behavior:

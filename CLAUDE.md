@@ -1,8 +1,8 @@
 # CLAUDE.md
 
-Project memory for Claude/Codex work inside `apps/clinic_flow`.
+Compatibility memory for Claude-based work inside `apps/clinic_flow`.
 
-This file is intentionally short. It is a routing and session-discipline doc, not the full rulebook or architecture narrative.
+This file is intentionally short. It is a compatibility shim for Claude-based tools, not the full rulebook, architecture narrative, or canonical read-order source.
 
 ---
 
@@ -35,8 +35,8 @@ This file is intentionally short. It is a routing and session-discipline doc, no
   - appointment-driven queue/check-in path
   - `receptionist_workspace`
   - `doctor_workspace`
-- Queue identity is moving toward `Service Point`.
-- Queue semantics are moving toward canonical `channel` / `load_class` / `priority`, while legacy `queue_type` still exists for compatibility.
+- Queue identity uses `Service Point` as the preferred model.
+- Queue semantics use canonical `channel` / `load_class` / `priority`, while legacy `queue_type` still exists for compatibility.
 - When docs and code differ, trust live code and then fix the docs.
 
 ## Current Branch Reality
@@ -59,12 +59,13 @@ When making changes, classify the task first:
 
 ## Read Order
 
-Start here, in order:
+For canonical agent context, start with `CONTEXT_INDEX.md`, then follow its task-specific routing.
 
-1. `CLAUDE.md`
+The current agent-first authority path is:
+
+1. `CONTEXT_INDEX.md`
 2. `AGENTS.md`
 3. `ARCHITECTURE.md`
-4. `CONTEXT_INDEX.md`
 
 Then read only the runtime path and focused policy docs for the task at hand.
 

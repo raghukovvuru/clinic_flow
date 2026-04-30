@@ -50,10 +50,10 @@ Legacy code is still load-bearing in parts of the app. Do not delete or bypass i
 
 The active core doc set is:
 
-- `CLAUDE.md`
+- `CONTEXT_INDEX.md`
 - `AGENTS.md`
 - `ARCHITECTURE.md`
-- `CONTEXT_INDEX.md`
+- `CLAUDE.md` compatibility shim, when used by Claude-based tools
 
 These files are stable project infrastructure.
 
@@ -160,10 +160,9 @@ Confirm before changing these:
 
 For general work:
 
-1. `CLAUDE.md`
+1. `CONTEXT_INDEX.md`
 2. `AGENTS.md`
 3. `ARCHITECTURE.md`
-4. `docs/healthcare-compatibility-audit.md`
 
 For queue identity or token behavior:
 

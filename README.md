@@ -31,7 +31,7 @@ bench --site site1.localhost install-app clinic_flow
 bench --site site1.localhost migrate
 ```
 
-For project-specific setup and verification, read `ONBOARDING.md`.
+For project-specific setup and verification, read `docs/runbooks/local-setup-and-verification.md`.
 
 ### Contributing
 

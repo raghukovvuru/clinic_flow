@@ -22,30 +22,41 @@ This note audits how `clinic_flow` extends upstream `healthcare`, with focus on:
 
 The app is partly modernized:
 
-- backend recommendation and queue logic are increasingly owned by `clinic_flow`
+- backend recommendation and queue logic are owned by `clinic_flow`
+- `Patient Encounter.custom_chief_complaint` is actively patch-managed because current doctor workspace behavior still requires it
+- legacy queue-identity custom fields remain on existing sites as compatibility debt, not target architecture
 
-But compatibility is still weaker than it should be because:
+Compatibility still needs care because:
 
-1. required upstream custom fields are not properly version-controlled
-2. legacy appointment/queue paths still depend on old `custom_queue_type` semantics
-3. some site-level custom fields appear to be unused debt
-4. fixture configuration does not currently capture the live Healthcare custom fields
+1. legacy appointment/queue paths still read old queue-identity custom fields for compatibility
+2. some site-level custom fields appear to be unused debt
+3. fixture configuration does not own every live Healthcare custom field that may exist on older sites
+4. removed/deprecated fields must not be reintroduced as active queue authority
 
 ## Immediate Structural Risks
 
-### 1. Live custom fields are unmanaged
+### 1. Custom-field ownership is mixed
 
 `hooks.py` exports fixtures only for records with `module = "Clinic Flow"`:
 
 - [hooks.py](/home/raghu/frappe-bench/apps/clinic_flow/clinic_flow/hooks.py)
 
-But the live Healthcare custom fields currently present on the site have `module = null`.
+The current patch actively manages only the Healthcare-facing field still required by current runtime behavior:
+
+- `Patient Encounter.custom_chief_complaint`
+
+Legacy queue-identity fields may still be present on existing sites from previous patches or site history:
+
+- `Patient Appointment.custom_queue_type`
+- `Patient Appointment.custom_queue_token`
+- `Appointment Type.custom_queue_code`
+- `Medical Department.custom_dept_abbr`
 
 That means:
 
-- the app depends on them
-- but the repo does not reliably own them
-- a fresh site or upgrade can drift from working state
+- current runtime patch ownership is intentionally narrow
+- compatibility paths may still read legacy fields where they exist
+- a fresh site or upgraded site must not assume those legacy fields are active queue authority
 
 ### 2. Legacy appointment path is still load-bearing
 
@@ -249,12 +260,13 @@ Risk:
 - `clinic_flow` depends on how `Patient Appointment` behaves when saved/checked in
 - if upstream Healthcare changes check-in flow or validation order, queue integration can break
 
-### Unmanaged custom fields
+### Mixed custom-field ownership
 
 Risk:
 
-- new site setup or restore may miss required fields
-- upgrade patches may silently conflict with site-local state
+- new site setup or restore must include actively patch-managed fields required by current runtime behavior
+- older sites may still carry legacy queue-identity fields that compatibility paths read
+- upgrade patches may silently conflict with site-local state if legacy debt is mistaken for current authority
 
 ### Legacy scheduler behavior
 
@@ -281,14 +293,15 @@ Current dependency metadata says:
 
 ## What To Do Next
 
-### Priority 1: Make upstream customizations explicit
+### Priority 1: Keep the ownership map explicit
 
-Do one of these:
+For every upstream Healthcare custom field, classify it as one of:
 
-1. reassign required custom fields to module `Clinic Flow` and export them properly
-2. or manage them via patches/install code instead of relying on fixtures
+1. actively patch-managed for current runtime behavior
+2. legacy compatibility debt that may remain on existing sites
+3. removed/deprecated and should not be reintroduced
 
-Do not keep depending on site-local unmanaged fields.
+Do not promote legacy queue-identity fields back into active queue authority.
 
 ### Priority 2: Create a required-fields ownership map
 
@@ -363,12 +376,12 @@ Still pending review:
 
 ## Bottom Line
 
-`clinic_flow` is not currently unsafe to run, but it is still too dependent on unmanaged Healthcare customizations and legacy appointment semantics.
+`clinic_flow` is not currently unsafe to run, but it still carries Healthcare custom-field compatibility debt and legacy appointment semantics.
 
 The most important hardening move is not another feature change.
 
 It is:
 
-- owning the required upstream custom fields explicitly
+- keeping required upstream custom-field ownership explicit
 - separating truly required compatibility fields from dead custom-field debt
 - then progressively shrinking the legacy appointment-path surface

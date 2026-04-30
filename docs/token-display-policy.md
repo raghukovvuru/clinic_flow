@@ -55,7 +55,7 @@ Guidelines:
 
 Queue code should come from an explicit short code field, not from ad hoc string slicing.
 
-Primary source (vNext):
+Primary source:
 
 - `Service Point.queue_code`
 

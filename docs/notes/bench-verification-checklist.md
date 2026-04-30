@@ -93,7 +93,7 @@ A normal refresh is often not enough when:
 Check the active surfaces first:
 
 - `http://site1.localhost:8000/receptionist-dashboard`
-- `http://site1.localhost:8000/arrival-counter`
+- `http://site1.localhost:8000/clinic/arrival-counter`
 - `http://site1.localhost:8000/doctor-workspace-v2`
 
 Do not rely on legacy page behavior unless your change touched legacy paths.

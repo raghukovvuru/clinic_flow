@@ -54,7 +54,7 @@ Service Point (config, durable)
    └── optional → service_unit (free-form)
 
 Queue Session (one day of operation)
-   ├── service_point      (new, optional, will become preferred source)
+   ├── service_point      (canonical queue identity link for new queue-code reads)
    ├── practitioner       (still required)
    └── dept_abbr          (cached mirror of service_point.queue_code; kept as fallback)
 
@@ -63,6 +63,8 @@ Queue Entry
 ```
 
 ## Resolution order (hot path)
+
+`Service Point` is the canonical queue identity for new queue-code reads. It provides the durable queue code and display-token prefix independently of legacy `Medical Department.custom_dept_abbr` fallback behavior.
 
 All queue-code reads go through `clinic_flow.queue.service_point.resolve_queue_code(...)`:
 

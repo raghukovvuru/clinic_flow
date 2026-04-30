@@ -10,12 +10,11 @@ This file exists to stop agents from loading stale transition-phase context firs
 
 Read these first, in order:
 
-1. [CLAUDE.md](/home/raghu/frappe-bench/apps/clinic_flow/CLAUDE.md:1)
+1. [CONTEXT_INDEX.md](/home/raghu/frappe-bench/apps/clinic_flow/CONTEXT_INDEX.md:1)
 2. [AGENTS.md](/home/raghu/frappe-bench/apps/clinic_flow/AGENTS.md:1)
 3. [ARCHITECTURE.md](/home/raghu/frappe-bench/apps/clinic_flow/ARCHITECTURE.md:1)
-4. this file
 
-Those four define the active project context.
+`CONTEXT_INDEX.md` is the context router. `AGENTS.md` is the agent guardrail source. `ARCHITECTURE.md` is the current runtime architecture source.
 
 ---
 
@@ -29,7 +28,7 @@ Read these only if the task touches those areas:
 - [docs/healthcare-compatibility-audit.md](/home/raghu/frappe-bench/apps/clinic_flow/docs/healthcare-compatibility-audit.md:1)
 - [docs/git-workflow-guide.md](/home/raghu/frappe-bench/apps/clinic_flow/docs/git-workflow-guide.md:1)
 
-Use policy docs to refine decisions, not to replace the authority stack above.
+Focused policy docs refine the authority stack for a task-specific area; they do not replace it.
 
 ---
 
@@ -46,10 +45,9 @@ Use policy docs to refine decisions, not to replace the authority stack above.
 
 Any normal coding session:
 
-- `CLAUDE.md`
+- `CONTEXT_INDEX.md`
 - `AGENTS.md`
 - `ARCHITECTURE.md`
-- `CONTEXT_INDEX.md`
 
 Receptionist booking, token board, emergency reconciliation, or arrival-desk work:
 
@@ -99,6 +97,7 @@ These are not active source-of-truth docs:
 
 - [docs/archive/PLAN_ADMISSION_V2.md](/home/raghu/frappe-bench/apps/clinic_flow/docs/archive/PLAN_ADMISSION_V2.md:1)
 - anything under `docs/archive/`
+- plans, specs, archived notes, and branch handoff prompts unless a current authority doc explicitly promotes them
 
 Use them only for historical intent, migration background, or branch archaeology.
 
@@ -106,7 +105,8 @@ Use them only for historical intent, migration background, or branch archaeology
 
 ## Operator / Process Docs
 
-- [ONBOARDING.md](/home/raghu/frappe-bench/apps/clinic_flow/ONBOARDING.md:1) is the setup and verification guide
+- [ONBOARDING.md](/home/raghu/frappe-bench/apps/clinic_flow/ONBOARDING.md:1) is a deprecated compatibility pointer
 - [README.md](/home/raghu/frappe-bench/apps/clinic_flow/README.md:1) is the lightweight repo landing page
+- [docs/runbooks/local-setup-and-verification.md](/home/raghu/frappe-bench/apps/clinic_flow/docs/runbooks/local-setup-and-verification.md:1) is the human setup and verification runbook
 - [docs/git-workflow-guide.md](/home/raghu/frappe-bench/apps/clinic_flow/docs/git-workflow-guide.md:1) explains branch and commit hygiene
 - [docs/notes/README.md](/home/raghu/frappe-bench/apps/clinic_flow/docs/notes/README.md:1) explains lightweight session notes
